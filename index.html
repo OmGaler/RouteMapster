@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>RouteMapster</title>
+
+  <!-- Leaflet CSS (required) -->
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  />
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&display=swap');
+
+    :root {
+      --bg: #f5f2ea;
+      --panel: #ffffff;
+      --panel-border: #e6ded2;
+      --ink: #1f2937;
+      --muted: #6b7280;
+      --accent: #0f766e;
+      --accent-soft: rgba(15, 118, 110, 0.12);
+      --route-regular: #ef4444;
+      --route-24hr: #10b981;
+      --route-night: #f59e0b;
+      --route-school: #3b82f6;
+      --route-prefix: #ec4899;
+      --shadow: 0 12px 30px rgba(15, 23, 42, 0.12);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      font-family: "Space Grotesk", "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      overflow: hidden;
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(circle at 12% 18%, rgba(239, 68, 68, 0.12), transparent 48%),
+        radial-gradient(circle at 85% 10%, rgba(59, 130, 246, 0.12), transparent 42%),
+        radial-gradient(circle at 80% 75%, rgba(16, 185, 129, 0.12), transparent 40%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    #app {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      grid-template-columns: 340px 1fr;
+      grid-template-rows: 1fr;
+      gap: 24px;
+      padding: 24px;
+      min-height: 100vh;
+      height: 100vh;
+    }
+
+    #sidebar {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      overflow-y: auto;
+      min-height: 0;
+      overscroll-behavior: contain;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-mark {
+      width: 44px;
+      height: 44px;
+      border-radius: 14px;
+      background: linear-gradient(135deg, #0f766e, #22c55e);
+      color: #f8fafc;
+      display: grid;
+      place-items: center;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      box-shadow: 0 10px 20px rgba(15, 118, 110, 0.3);
+    }
+
+    .brand-title {
+      font-size: 24px;
+      font-weight: 700;
+    }
+
+    .brand-subtitle {
+      color: var(--muted);
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    #controls {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      animation: rise 0.5s ease;
+    }
+
+    .section-title {
+      font-size: 11px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .field label {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--muted);
+    }
+
+    input[type="search"] {
+      border: 1px solid var(--panel-border);
+      border-radius: 12px;
+      padding: 10px 12px;
+      font-size: 14px;
+      background: #fdfbf7;
+    }
+
+    input[type="search"]:focus {
+      outline: 2px solid var(--accent-soft);
+      border-color: var(--accent);
+    }
+
+    .tag-input {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 8px;
+      border: 1px solid var(--panel-border);
+      border-radius: 12px;
+      background: #fdfbf7;
+    }
+
+    .tag-input:focus-within {
+      outline: 2px solid var(--accent-soft);
+      border-color: var(--accent);
+    }
+
+    .tag-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .tag-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+    }
+
+    .tag-remove {
+      border: none;
+      background: transparent;
+      color: inherit;
+      font-size: 14px;
+      line-height: 1;
+      cursor: pointer;
+    }
+
+    .tag-input input[type="search"] {
+      border: none;
+      padding: 6px 6px;
+      min-width: 140px;
+      background: transparent;
+      flex: 1 1 140px;
+    }
+
+    .tag-input input[type="search"]:focus {
+      outline: none;
+    }
+
+    button {
+      font-family: inherit;
+    }
+
+    #loadData {
+      border: none;
+      border-radius: 12px;
+      padding: 10px 14px;
+      font-weight: 600;
+      color: #f8fafc;
+      background: linear-gradient(135deg, #0f766e, #14b8a6);
+      box-shadow: 0 10px 20px rgba(15, 118, 110, 0.3);
+      cursor: pointer;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    #loadData:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 12px 26px rgba(15, 118, 110, 0.4);
+    }
+
+    .ghost-button {
+      border: 1px dashed var(--panel-border);
+      border-radius: 12px;
+      padding: 8px 12px;
+      background: #fffaf1;
+      color: var(--muted);
+      font-weight: 600;
+      cursor: pointer;
+      transition: border-color 0.2s ease, color 0.2s ease;
+    }
+
+    .ghost-button:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    button:disabled {
+      cursor: not-allowed;
+      opacity: 0.6;
+      box-shadow: none;
+    }
+
+    .toggle {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 8px 10px;
+      border-radius: 12px;
+      border: 1px solid var(--panel-border);
+      background: #f8f5ee;
+      font-size: 14px;
+    }
+
+    .toggle.is-disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .toggle span {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .toggle input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      accent-color: var(--accent);
+    }
+
+    input:disabled,
+    select:disabled,
+    textarea:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .status-card {
+      padding: 12px 14px;
+      border-radius: 16px;
+      background: #111827;
+      color: #f8fafc;
+      font-size: 13px;
+      box-shadow: var(--shadow);
+    }
+
+    .module {
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      border-radius: 18px;
+      box-shadow: 0 10px 22px rgba(15, 23, 42, 0.08);
+      overflow: hidden;
+      transition: box-shadow 0.2s ease, transform 0.2s ease;
+    }
+
+    .module[open] {
+      box-shadow: var(--shadow);
+      transform: translateY(-1px);
+    }
+
+    .module summary {
+      list-style: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 10px;
+      padding: 14px 16px;
+      font-weight: 600;
+      background: #fbf8f1;
+    }
+
+    .module summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .module summary::after {
+      content: "+";
+      width: 24px;
+      height: 24px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      display: grid;
+      place-items: center;
+      font-weight: 700;
+    }
+
+    .module[open] summary::after {
+      content: "-";
+    }
+
+    .module-title {
+      font-size: 15px;
+    }
+
+    .module-tag {
+      margin-left: auto;
+      font-size: 10px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--muted);
+      border: 1px solid var(--panel-border);
+      border-radius: 999px;
+      padding: 3px 8px;
+      background: #fffaf1;
+    }
+
+    .module-tag.planned {
+      color: #b45309;
+      border-color: rgba(180, 83, 9, 0.3);
+      background: rgba(251, 191, 36, 0.12);
+    }
+
+    .module-body {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      padding: 14px 16px 16px;
+    }
+
+    .module-section {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding-bottom: 12px;
+      border-bottom: 1px dashed var(--panel-border);
+    }
+
+    .module-section:last-child {
+      border-bottom: none;
+      padding-bottom: 0;
+    }
+
+    .module-disabled {
+      opacity: 0.7;
+    }
+
+    .module-note {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .swatch {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      display: inline-block;
+    }
+
+    .swatch.regular { background: var(--route-regular); }
+    .swatch.twentyfour { background: var(--route-24hr); }
+    .swatch.night { background: var(--route-night); }
+    .swatch.school { background: var(--route-school); }
+    .swatch.prefix { background: var(--route-prefix); }
+
+    #mapArea {
+      display: flex;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    #mapContainer {
+      flex: 1;
+      min-height: 0;
+      height: 100%;
+      border-radius: 24px;
+      overflow: hidden;
+      background: #e8eee8;
+      box-shadow: var(--shadow);
+      animation: fadeIn 0.6s ease;
+    }
+
+    #map {
+      width: 100%;
+      height: 100%;
+      min-height: 600px;
+    }
+
+    .leaflet-container {
+      font-family: "Space Grotesk", "Segoe UI", sans-serif;
+    }
+
+    .leaflet-tooltip.garage-label {
+      background: transparent;
+      border: none;
+      box-shadow: none;
+      padding: 0;
+      pointer-events: none;
+    }
+
+    .leaflet-tooltip.garage-label .garage-code {
+      background: #0f172a;
+      color: #f8fafc;
+      border-radius: 999px;
+      box-shadow: 0 2px 6px rgba(15, 23, 42, 0.35);
+      display: inline-block;
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 0.4px;
+      margin: 0 4px 4px 0;
+      padding: 2px 8px;
+      white-space: nowrap;
+    }
+
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @media (max-width: 900px) {
+      body {
+        overflow: auto;
+      }
+
+      #app {
+        grid-template-columns: 1fr;
+        height: auto;
+        padding: 16px;
+      }
+
+      #sidebar {
+        overflow: visible;
+      }
+
+      #mapArea {
+        overflow: visible;
+      }
+
+      #map {
+        min-height: 420px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div id="app">
+    <aside id="sidebar">
+      <div class="brand">
+        <div class="brand-mark">RM</div>
+        <div>
+          <div class="brand-title">RouteMapster</div>
+          <div class="brand-subtitle">Garage-led route explorer</div>
+        </div>
+      </div>
+
+      <div id="selectedInfo" class="status-card">Ready</div>
+
+      <div id="controls">
+        <details class="module" data-module="routes" open>
+          <summary>
+            <span class="module-title">Bus routes</span>
+            <span class="module-tag">Core</span>
+          </summary>
+          <div class="module-body">
+            <div class="module-section">
+              <div class="section-title">Data intake</div>
+              <button id="loadData">Load data</button>
+              <div class="module-note">Placeholder loader for TfL route data.</div>
+            </div>
+
+            <div class="module-section">
+              <div class="section-title">Route search</div>
+              <div class="field">
+                <label for="routeFilterEntry">Filter routes</label>
+                <div class="tag-input" id="routeFilterInput">
+                  <div class="tag-list" id="routeFilterTags"></div>
+                  <input id="routeFilterEntry" type="search" placeholder="Type a route and hit space or enter" autocomplete="off" />
+                </div>
+                <button id="clearRouteFilter" class="ghost-button" type="button">Clear filter</button>
+              </div>
+            </div>
+
+            <div class="module-section">
+              <div class="section-title">Network filters</div>
+              <label class="toggle">
+                <span>Show all routes</span>
+                <input type="checkbox" id="showAllRoutes" checked />
+              </label>
+              <label class="toggle">
+                <span><span class="swatch regular"></span>Regular routes</span>
+                <input type="checkbox" id="showNetworkRegularRoutes" checked />
+              </label>
+              <label class="toggle">
+                <span><span class="swatch prefix"></span>Prefix routes</span>
+                <input type="checkbox" id="showNetworkPrefixRoutes" checked />
+              </label>
+              <label class="toggle">
+                <span><span class="swatch twentyfour"></span>24 hr routes only</span>
+                <input type="checkbox" id="showNetwork24hrRoutes" checked />
+              </label>
+              <label class="toggle">
+                <span><span class="swatch night"></span>Night routes</span>
+                <input type="checkbox" id="showNetworkNightRoutes" checked />
+              </label>
+              <label class="toggle">
+                <span><span class="swatch school"></span>School routes</span>
+                <input type="checkbox" id="showNetworkSchoolRoutes" checked />
+              </label>
+            </div>
+
+            <div class="module-section module-disabled">
+              <div class="section-title">Route families</div>
+              <label class="toggle">
+                <span>Group by family</span>
+                <input type="checkbox" id="showRouteFamilies" disabled />
+              </label>
+              <label class="toggle">
+                <span>Highlight shared trunks</span>
+                <input type="checkbox" id="showFamilyTrunks" disabled />
+              </label>
+            </div>
+
+            <div class="module-section module-disabled">
+              <div class="section-title">Similar routes</div>
+              <label class="toggle">
+                <span>Cluster overlapping routes</span>
+                <input type="checkbox" id="showSimilarRoutes" disabled />
+              </label>
+              <div class="field">
+                <label for="similarityThreshold">Overlap threshold</label>
+                <input id="similarityThreshold" type="range" min="10" max="90" value="50" disabled />
+              </div>
+            </div>
+
+            <div class="module-section module-disabled">
+              <div class="section-title">Deck type</div>
+              <label class="toggle">
+                <span>Single deck only</span>
+                <input type="checkbox" id="showSingleDecker" disabled />
+              </label>
+              <label class="toggle">
+                <span>Double deck only</span>
+                <input type="checkbox" id="showDoubleDecker" disabled />
+              </label>
+            </div>
+          </div>
+        </details>
+
+        <details class="module" data-module="stops">
+          <summary>
+            <span class="module-title">Bus stops</span>
+            <span class="module-tag planned">Planned</span>
+          </summary>
+          <div class="module-body">
+            <div class="module-note">Not implemented yet.</div>
+
+            <div class="module-section module-disabled">
+              <div class="section-title">By postcode</div>
+              <div class="field">
+                <label for="stopPostcode">Postcode lookup</label>
+                <input id="stopPostcode" type="search" placeholder="e.g. SE1 2AA" disabled />
+              </div>
+              <button id="findStopsByPostcode" disabled>Find stops</button>
+            </div>
+
+            <div class="module-section module-disabled">
+              <div class="section-title">Centrality</div>
+              <div class="field">
+                <label for="centralityRadius">Centrality radius</label>
+                <input id="centralityRadius" type="range" min="1" max="10" value="5" disabled />
+              </div>
+              <label class="toggle">
+                <span>Highlight central hubs</span>
+                <input type="checkbox" id="highlightCentralStops" disabled />
+              </label>
+            </div>
+          </div>
+        </details>
+
+        <details class="module" data-module="garages">
+          <summary>
+            <span class="module-title">Garages</span>
+            <span class="module-tag">Live</span>
+          </summary>
+          <div class="module-body">
+            <div class="module-section">
+              <div class="section-title">Garage visibility</div>
+              <label class="toggle">
+                <span>Show garages</span>
+                <input type="checkbox" id="showGarages" />
+              </label>
+              <label class="toggle">
+                <span>Scale markers by network %</span>
+                <input type="checkbox" id="scaleGarageMarkers" checked />
+              </label>
+              <label class="toggle">
+                <span>Show garage codes</span>
+                <input type="checkbox" id="showGarageLabels" checked />
+              </label>
+            </div>
+
+            <div class="module-section">
+              <div class="section-title">Routes from selected garage</div>
+              <label class="toggle">
+                <span><span class="swatch regular"></span>Regular routes</span>
+                <input type="checkbox" id="showRegularRoutes" checked />
+              </label>
+              <label class="toggle">
+                <span><span class="swatch night"></span>Night routes</span>
+                <input type="checkbox" id="showNightRoutes" checked />
+              </label>
+              <label class="toggle">
+                <span><span class="swatch school"></span>School routes</span>
+                <input type="checkbox" id="showSchoolRoutes" checked />
+              </label>
+            </div>
+          </div>
+        </details>
+
+        <details class="module" data-module="frequencies">
+          <summary>
+            <span class="module-title">Frequencies</span>
+            <span class="module-tag planned">Planned</span>
+          </summary>
+          <div class="module-body">
+            <div class="module-note">UI only, data coming later.</div>
+
+            <div class="module-section module-disabled">
+              <div class="section-title">Time bands</div>
+              <label class="toggle">
+                <span>Peak only</span>
+                <input type="checkbox" id="showPeakOnly" disabled />
+              </label>
+              <label class="toggle">
+                <span>Off-peak only</span>
+                <input type="checkbox" id="showOffPeakOnly" disabled />
+              </label>
+            </div>
+
+            <div class="module-section module-disabled">
+              <div class="section-title">Headway band</div>
+              <div class="field">
+                <label for="headwayBand">Target headway (mins)</label>
+                <input id="headwayBand" type="range" min="2" max="30" value="12" disabled />
+              </div>
+              <label class="toggle">
+                <span>Show frequency heatmap</span>
+                <input type="checkbox" id="showFrequencyHeatmap" disabled />
+              </label>
+            </div>
+          </div>
+        </details>
+      </div>
+    </aside>
+
+    <main id="mapArea">
+      <div id="mapContainer">
+        <div id="map"></div>
+      </div>
+    </main>
+  </div>
+
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js">
+  </script>
+
+  <script src="src/app.js"></script>
+
+</body>
+</html>
