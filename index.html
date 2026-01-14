@@ -63,6 +63,10 @@
       height: 100vh;
     }
 
+    #app.has-details {
+      grid-template-columns: 340px 1fr 320px;
+    }
+
     #sidebar {
       display: flex;
       flex-direction: column;
@@ -70,6 +74,19 @@
       overflow-y: auto;
       min-height: 0;
       overscroll-behavior: contain;
+    }
+
+    #rightpanel {
+      display: none;
+      flex-direction: column;
+      gap: 16px;
+      overflow-y: auto;
+      min-height: 0;
+      overscroll-behavior: contain;
+    }
+
+    #app.has-details #rightpanel {
+      display: flex;
     }
 
     .brand {
@@ -136,6 +153,21 @@
       padding: 10px 12px;
       font-size: 14px;
       background: #fdfbf7;
+    }
+
+    .select-field {
+      border: 1px solid var(--panel-border);
+      border-radius: 12px;
+      padding: 10px 12px;
+      font-size: 14px;
+      background: #fdfbf7;
+      font-family: inherit;
+      color: var(--ink);
+    }
+
+    .select-field:focus {
+      outline: 2px solid var(--accent-soft);
+      border-color: var(--accent);
     }
 
     input[type="search"]:focus {
@@ -229,11 +261,22 @@
       font-weight: 600;
       cursor: pointer;
       transition: border-color 0.2s ease, color 0.2s ease;
+      width: 100%;
     }
 
     .ghost-button:hover {
       border-color: var(--accent);
       color: var(--accent);
+    }
+
+    .ghost-button.compact {
+      width: auto;
+      flex: 1;
+    }
+
+    .button-row {
+      display: flex;
+      gap: 8px;
     }
 
     button:disabled {
@@ -252,6 +295,17 @@
       border: 1px solid var(--panel-border);
       background: #f8f5ee;
       font-size: 14px;
+    }
+
+    .toggle[data-route-type] {
+      cursor: grab;
+      user-select: none;
+      touch-action: none;
+    }
+
+    .toggle.is-dragging {
+      cursor: grabbing;
+      opacity: 0.7;
     }
 
     .toggle.is-disabled {
@@ -384,6 +438,43 @@
       color: var(--muted);
     }
 
+    .global-controls {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      padding: 12px;
+      border-radius: 16px;
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      box-shadow: 0 10px 22px rgba(15, 23, 42, 0.08);
+    }
+
+    .global-controls .section-title {
+      margin-bottom: 4px;
+    }
+
+    .clear-button {
+      border: 1px solid rgba(239, 68, 68, 0.4);
+      color: #b91c1c;
+      background: #fff5f5;
+    }
+
+    .clear-button:hover {
+      border-color: #b91c1c;
+      color: #991b1b;
+    }
+
+    .clear-button-soft {
+      border-color: rgba(239, 68, 68, 0.28);
+      color: #c2410c;
+      background: #fff7ed;
+    }
+
+    .clear-button-soft:hover {
+      border-color: rgba(239, 68, 68, 0.5);
+      color: #9a3412;
+    }
+
     .swatch {
       width: 10px;
       height: 10px;
@@ -420,6 +511,146 @@
       min-height: 600px;
     }
 
+    .info-panel {
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      border-radius: 18px;
+      box-shadow: 0 10px 22px rgba(15, 23, 42, 0.08);
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .info-title {
+      font-size: 20px;
+      font-weight: 700;
+      margin: 0;
+    }
+
+    .info-subtitle {
+      font-size: 13px;
+      color: var(--muted);
+      margin: 0;
+    }
+
+    .info-body {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      font-size: 15px;
+      color: var(--ink);
+    }
+
+    .info-section {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 12px;
+      border-radius: 14px;
+      background: #fbf8f1;
+      border: 1px solid var(--panel-border);
+    }
+
+    .info-label {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--muted);
+    }
+
+    .route-pill-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .route-pill {
+      background: var(--route-regular);
+      color: #fff;
+      border-radius: 999px;
+      padding: 3px 10px;
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+    }
+
+    .route-pill.route-pill--regular { background: var(--route-regular); }
+    .route-pill.route-pill--night { background: var(--route-night); }
+    .route-pill.route-pill--school { background: var(--route-school); }
+    .route-pill.route-pill--twentyfour { background: var(--route-24hr); }
+    .route-pill.route-pill--prefix { background: var(--route-prefix); }
+
+    .garage-route-category {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding-top: 8px;
+      margin-top: 8px;
+      border-top: 1px dashed var(--panel-border);
+    }
+
+    .garage-route-category:first-child {
+      border-top: none;
+      padding-top: 0;
+      margin-top: 0;
+    }
+
+    .info-empty {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .loading-modal {
+      position: fixed;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: rgba(15, 23, 42, 0.35);
+      z-index: 20;
+    }
+
+    .loading-modal.is-visible {
+      display: flex;
+    }
+
+    .loading-card {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 16px 20px;
+      border-radius: 18px;
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      box-shadow: var(--shadow);
+    }
+
+    .loading-logo {
+      width: 48px;
+      height: 48px;
+      border-radius: 14px;
+      background: var(--accent-soft);
+      display: grid;
+      place-items: center;
+      color: var(--accent);
+      font-weight: 700;
+      letter-spacing: 0.08em;
+    }
+
+    .loading-text {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .loading-text strong {
+      color: var(--ink);
+      font-size: 14px;
+    }
+
     .leaflet-container {
       font-family: "Space Grotesk", "Segoe UI", sans-serif;
     }
@@ -446,6 +677,52 @@
       white-space: nowrap;
     }
 
+    .leaflet-popup.hover-popup .leaflet-popup-content-wrapper {
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      border-radius: 12px;
+      box-shadow: 0 10px 22px rgba(15, 23, 42, 0.12);
+      color: var(--ink);
+      padding: 0;
+    }
+
+    .leaflet-popup.hover-popup .leaflet-popup-content {
+      margin: 8px 10px;
+      font-size: 12px;
+    }
+
+    .leaflet-popup.hover-popup .leaflet-popup-tip {
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+    }
+
+    .leaflet-popup.hover-popup hr {
+      border: none;
+      border-top: 1px solid var(--panel-border);
+      margin: 6px 0;
+    }
+
+    .hover-popup__content {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      max-width: 240px;
+    }
+
+    .hover-popup__title {
+      font-weight: 600;
+      font-size: 12px;
+    }
+
+    .hover-popup__meta {
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .hover-popup__routes .route-pill-group {
+      gap: 4px;
+    }
+
     @keyframes rise {
       from { opacity: 0; transform: translateY(12px); }
       to { opacity: 1; transform: translateY(0); }
@@ -467,7 +744,15 @@
         padding: 16px;
       }
 
+      #app.has-details {
+        grid-template-columns: 1fr;
+      }
+
       #sidebar {
+        overflow: visible;
+      }
+
+      #rightpanel {
         overflow: visible;
       }
 
@@ -495,6 +780,17 @@
 
       <div id="selectedInfo" class="status-card">Ready</div>
 
+      <div class="global-controls">
+        <div class="section-title">Global controls</div>
+        <button id="clearAllLayers" class="ghost-button clear-button" type="button">Clear all layers</button>
+        <button id="clearAllRoutes" class="ghost-button clear-button clear-button-soft" type="button">Clear all routes</button>
+        <label class="toggle">
+          <span>Colour routes by type</span>
+          <input type="checkbox" id="colourRoutesByType" checked />
+        </label>
+        <div class="module-note">When off, routes render in red.</div>
+      </div>
+
       <div id="controls">
         <details class="module" data-module="routes" open>
           <summary>
@@ -508,7 +804,7 @@
               <div class="module-note">Placeholder loader for TfL route data.</div>
             </div>
 
-            <div class="module-section">
+            <div class="module-section" id="networkFilters">
               <div class="section-title">Route search</div>
               <div class="field">
                 <label for="routeFilterEntry">Filter routes</label>
@@ -516,6 +812,10 @@
                   <div class="tag-list" id="routeFilterTags"></div>
                   <input id="routeFilterEntry" type="search" placeholder="Type a route and hit space or enter" autocomplete="off" />
                 </div>
+                <label class="toggle">
+                  <span>Exact match only</span>
+                  <input type="checkbox" id="showExactRouteMatch" />
+                </label>
                 <button id="clearRouteFilter" class="ghost-button" type="button">Clear filter</button>
               </div>
             </div>
@@ -526,23 +826,23 @@
                 <span>Show all routes</span>
                 <input type="checkbox" id="showAllRoutes" checked />
               </label>
-              <label class="toggle">
+              <label class="toggle" data-route-type="regular">
                 <span><span class="swatch regular"></span>Regular routes</span>
                 <input type="checkbox" id="showNetworkRegularRoutes" checked />
               </label>
-              <label class="toggle">
+              <label class="toggle" data-route-type="prefix">
                 <span><span class="swatch prefix"></span>Prefix routes</span>
                 <input type="checkbox" id="showNetworkPrefixRoutes" checked />
               </label>
-              <label class="toggle">
+              <label class="toggle" data-route-type="twentyfour">
                 <span><span class="swatch twentyfour"></span>24 hr routes only</span>
                 <input type="checkbox" id="showNetwork24hrRoutes" checked />
               </label>
-              <label class="toggle">
+              <label class="toggle" data-route-type="night">
                 <span><span class="swatch night"></span>Night routes</span>
                 <input type="checkbox" id="showNetworkNightRoutes" checked />
               </label>
-              <label class="toggle">
+              <label class="toggle" data-route-type="school">
                 <span><span class="swatch school"></span>School routes</span>
                 <input type="checkbox" id="showNetworkSchoolRoutes" checked />
               </label>
@@ -589,30 +889,77 @@
         <details class="module" data-module="stops">
           <summary>
             <span class="module-title">Bus stops</span>
-            <span class="module-tag planned">Planned</span>
+            <span class="module-tag">Live</span>
           </summary>
           <div class="module-body">
-            <div class="module-note">Not implemented yet.</div>
-
-            <div class="module-section module-disabled">
-              <div class="section-title">By postcode</div>
-              <div class="field">
-                <label for="stopPostcode">Postcode lookup</label>
-                <input id="stopPostcode" type="search" placeholder="e.g. SE1 2AA" disabled />
-              </div>
-              <button id="findStopsByPostcode" disabled>Find stops</button>
+            <div class="module-section">
+              <div class="section-title">Visibility</div>
+              <label class="toggle">
+                <span>Show bus stops</span>
+                <input type="checkbox" id="showBusStops" />
+              </label>
+              <div class="module-note">Hover or click a stop to see routes.</div>
             </div>
 
-            <div class="module-section module-disabled">
-              <div class="section-title">Centrality</div>
+            <div class="module-section">
+              <div class="section-title">Postcode district</div>
               <div class="field">
-                <label for="centralityRadius">Centrality radius</label>
-                <input id="centralityRadius" type="range" min="1" max="10" value="5" disabled />
+                <label for="busStopDistrict">Filter by district</label>
+                <input id="busStopDistrict" type="search" placeholder="e.g. N1" autocomplete="off" />
               </div>
+              <div class="button-row">
+                <button id="applyBusStopFilter" class="ghost-button compact" type="button">Apply filter</button>
+                <button id="clearBusStopFilter" class="ghost-button compact" type="button">Clear filter</button>
+              </div>
+              <div id="busStopFilterStatus" class="module-note">Filter inactive.</div>
+            </div>
+          </div>
+        </details>
+
+        <details class="module" data-module="stands">
+          <summary>
+            <span class="module-title">Bus stands</span>
+            <span class="module-tag">Live</span>
+          </summary>
+          <div class="module-body">
+            <div class="module-section">
+              <div class="section-title">Visibility</div>
               <label class="toggle">
-                <span>Highlight central hubs</span>
-                <input type="checkbox" id="highlightCentralStops" disabled />
+                <span>Show bus stands</span>
+                <input type="checkbox" id="showBusStands" />
               </label>
+              <div class="module-note">Stops with no routes listed.</div>
+            </div>
+          </div>
+        </details>
+
+        <details class="module" data-module="stations">
+          <summary>
+            <span class="module-title">Bus stations</span>
+            <span class="module-tag">Live</span>
+          </summary>
+          <div class="module-body">
+            <div class="module-section">
+              <div class="section-title">Stations</div>
+              <label class="toggle">
+                <span>Show bus stations</span>
+                <input type="checkbox" id="showBusStations" />
+              </label>
+              <label class="toggle">
+                <span>Scale station dots by route count</span>
+                <input type="checkbox" id="scaleBusStationMarkers" />
+              </label>
+              <div class="module-note">Stations are clustered from stops labelled "bus station". Click one to see its routes.</div>
+            </div>
+
+            <div class="module-section">
+              <div class="section-title">Find a station</div>
+              <div class="field">
+                <label for="busStationSelect">Select station</label>
+                <select id="busStationSelect" class="select-field">
+                  <option value="">Choose a station</option>
+                </select>
+              </div>
             </div>
           </div>
         </details>
@@ -690,6 +1037,7 @@
             </div>
           </div>
         </details>
+
       </div>
     </aside>
 
@@ -698,6 +1046,34 @@
         <div id="map"></div>
       </div>
     </main>
+
+    <aside id="rightpanel">
+      <div class="info-panel">
+        <h2 id="infoTitle" class="info-title">Details</h2>
+        <p id="infoSubtitle" class="info-subtitle">Click a stop, station, or garage to view details.</p>
+        <div id="infoBody" class="info-body">
+          <div class="info-section">
+            <div class="info-label">Status</div>
+            <div class="info-empty">No feature selected yet.</div>
+          </div>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <div id="loadingModal" class="loading-modal" aria-hidden="true">
+    <div class="loading-card" role="status" aria-live="polite">
+      <div class="loading-logo">
+        <svg viewBox="0 0 48 48" width="32" height="32" aria-hidden="true">
+          <rect x="4" y="4" width="40" height="40" rx="10" fill="currentColor" opacity="0.15"></rect>
+          <text x="24" y="30" text-anchor="middle" font-size="16" fill="currentColor" font-family="Space Grotesk, sans-serif">RM</text>
+        </svg>
+      </div>
+      <div class="loading-text">
+        <strong>Loading route geometry</strong>
+        <span>Please wait while layers render.</span>
+      </div>
+    </div>
   </div>
 
   <script
