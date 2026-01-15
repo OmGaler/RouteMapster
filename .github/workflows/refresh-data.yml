@@ -1,0 +1,67 @@
+name: Refresh data
+
+on:
+  schedule:
+    - cron: "0 4 * * 0"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r scripts/requirements.txt
+
+      - name: Fetch TfL route geometry
+        run: python scripts/fetch_tfl_routes.py
+
+      - name: Process route geometry
+        run: python scripts/process_routes_xml_to_geojson.py
+
+      - name: Fetch bus stops
+        run: python scripts/fetch_bus_stops.py
+
+      - name: Fetch garages
+        run: python scripts/fetch_and_process_garages.py
+
+      - name: Commit changes
+        shell: bash
+        run: |
+          changes=$(git diff --name-only -- data/processed)
+          if [ -z "$changes" ]; then
+            echo "No processed data changes."
+            exit 0
+          fi
+          git config user.name "routemapster-bot"
+          git config user.email "routemapster-bot@users.noreply.github.com"
+          msg_parts=()
+          if echo "$changes" | grep -q '^data/processed/routes/'; then
+            msg_parts+=("TfL route geometry")
+          fi
+          if echo "$changes" | grep -q '^data/processed/stops\.geojson$'; then
+            msg_parts+=("TfL bus stops")
+          fi
+          if echo "$changes" | grep -q '^data/processed/garages\.geojson$'; then
+            msg_parts+=("London bus garages")
+          fi
+          if [ ${#msg_parts[@]} -eq 0 ]; then
+            msg="Update processed data"
+          else
+            msg="Update $(IFS=', '; echo "${msg_parts[*]}")"
+          fi
+          git add data/processed
+          git commit -m "$msg"
+          git push
