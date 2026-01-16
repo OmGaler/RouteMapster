@@ -14,6 +14,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -45,23 +47,12 @@ jobs:
             echo "No processed data changes."
             exit 0
           fi
+
           git config user.name "routemapster-bot"
           git config user.email "routemapster-bot@users.noreply.github.com"
-          msg_parts=()
-          if echo "$changes" | grep -q '^data/processed/routes/'; then
-            msg_parts+=("TfL route geometry")
-          fi
-          if echo "$changes" | grep -q '^data/processed/stops\.geojson$'; then
-            msg_parts+=("TfL bus stops")
-          fi
-          if echo "$changes" | grep -q '^data/processed/garages\.geojson$'; then
-            msg_parts+=("London bus garages")
-          fi
-          if [ ${#msg_parts[@]} -eq 0 ]; then
-            msg="Update processed data"
-          else
-            msg="Update $(IFS=', '; echo "${msg_parts[*]}")"
-          fi
+
+          summary=$(python scripts/changes.py)
+
           git add data/processed
-          git commit -m "$msg"
+          git commit -m "$summary"
           git push
