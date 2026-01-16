@@ -11,11 +11,13 @@ permissions:
 jobs:
   refresh:
     runs-on: ubuntu-latest
+    env:
+      TFL_APP_ID: ${{ secrets.TFL_APP_ID }}
+      TFL_APP_KEY: ${{ secrets.TFL_APP_KEY }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+
 
       - name: Set up Python
         uses: actions/setup-python@v5
