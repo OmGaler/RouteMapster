@@ -224,7 +224,10 @@ def load_postcode_cache(path: Path) -> Dict[str, str]:
 
 def save_postcode_cache(path: Path, cache: Dict[str, str]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(cache, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    path.write_text(
+        json.dumps(cache, ensure_ascii=True, separators=(",", ":"), sort_keys=True),
+        encoding="utf-8",
+    )
 
 
 def reverse_geocode_postcode(
