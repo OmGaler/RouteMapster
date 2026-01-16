@@ -380,12 +380,18 @@ def main() -> None:
     stops = fetch_all_bus_stop_points(session, app_id, app_key, cfg)
 
     # write raw
-    RAW_STOPS_PATH.write_text(json.dumps(stops, ensure_ascii=False), encoding="utf-8")
+    RAW_STOPS_PATH.write_text(
+        json.dumps(stops, ensure_ascii=True, separators=(",", ":"), sort_keys=True),
+        encoding="utf-8",
+    )
     print(f"Wrote raw StopPoints to {RAW_STOPS_PATH}", flush=True)
 
     # write processed
     fc = to_geojson(stops, session=session, cfg=cfg)
-    PROCESSED_PATH.write_text(json.dumps(fc, ensure_ascii=False), encoding="utf-8")
+    PROCESSED_PATH.write_text(
+        json.dumps(fc, ensure_ascii=True, separators=(",", ":"), sort_keys=True),
+        encoding="utf-8",
+    )
     print(f"Wrote {len(fc['features'])} processed stops to {PROCESSED_PATH}", flush=True)
 
 

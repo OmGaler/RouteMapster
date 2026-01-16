@@ -130,18 +130,23 @@ def get_garage_code(row: Dict[str, Any]) -> str:
 
 
 def load_existing_map(path: Path) -> Dict[str, Dict[str, Any]]:
+    """
+    Returns { GARAGE_CODE: {"properties": <dict>, "geometry": <dict>} }
+    """
     if not path.exists():
         return {}
     with path.open("r", encoding="utf-8") as handle:
         data = json.load(handle)
     features = data.get("features") or []
-    out = {}
+    out: Dict[str, Dict[str, Any]] = {}
     for feature in features:
         props = feature.get("properties") or {}
+        geom = feature.get("geometry") or {}
         code = str(props.get("TfL garage code") or props.get("LBR garage code") or "").strip().upper()
         if code:
-            out[code] = props
+            out[code] = {"properties": props, "geometry": geom}
     return out
+
 
 
 def compare_non_route_fields(rows: List[Dict[str, Any]], existing: Dict[str, Dict[str, Any]]) -> None:
@@ -149,7 +154,7 @@ def compare_non_route_fields(rows: List[Dict[str, Any]], existing: Dict[str, Dic
         code = get_garage_code(row)
         if not code or code not in existing:
             continue
-        prev = existing[code]
+        prev = existing[code]["properties"]
         for key, value in row.items():
             if key in ROUTE_FIELDS:
                 continue
@@ -165,21 +170,45 @@ def compare_non_route_fields(rows: List[Dict[str, Any]], existing: Dict[str, Dic
 def build_features(
     rows: List[Dict[str, Any]],
     cache: Dict[str, Dict[str, Any]],
+    existing_map: Dict[str, Dict[str, Any]],
     address_col: str,
     fallback_address_col: str,
     precision: int,
 ) -> List[Dict[str, Any]]:
-    features = []
+    features: List[Dict[str, Any]] = []
+
     for row in rows:
+        code = get_garage_code(row)
+        existing = existing_map.get(code)
+
+        # If we already have this garage in the processed GeoJSON:
+        # LOCK all non-route fields + geometry (preserves your manual fixes),
+        # and ONLY update the route fields from the new CSV.
+        if existing:
+            props = dict(existing["properties"])
+            for rf in ROUTE_FIELDS:
+                props[rf] = (row.get(rf) or "").strip()
+            features.append(
+                {
+                    "type": "Feature",
+                    "geometry": existing["geometry"],
+                    "properties": props,
+                }
+            )
+            continue
+
+        # Otherwise this is a genuinely new garage: geocode + create full props.
         addr = pick_address(row, address_col, fallback_address_col)
         postcode = extract_postcode(addr or "")
         if not postcode:
-            logging.warning("Skipping row without postcode: %s", row.get("Garage name") or row.get("TfL garage code"))
+            logging.warning("Skipping NEW row without postcode: %s", row.get("Garage name") or code)
             continue
+
         entry = cache.get(postcode)
         if not entry or entry.get("_failed"):
-            logging.warning("Skipping row with failed geocode: %s (%s)", row.get("Garage name"), postcode)
+            logging.warning("Skipping NEW row with failed geocode: %s (%s)", row.get("Garage name"), postcode)
             continue
+
         lon = round(float(entry["lon"]), precision)
         lat = round(float(entry["lat"]), precision)
         if lon == -0.0:
@@ -200,6 +229,7 @@ def build_features(
                 "properties": props,
             }
         )
+
     features.sort(key=lambda feat: get_garage_code(feat.get("properties", {})))
     return features
 
@@ -297,7 +327,14 @@ def main() -> int:
                 cache[pc] = {"_failed": True, "_reason": "postcode_not_found"}
         save_cache(cache_path, cache)
 
-    features = build_features(rows, cache, args.address_col, args.fallback_address_col, args.precision)
+    features = build_features(
+        rows,
+        cache,
+        existing_map,
+        args.address_col,
+        args.fallback_address_col,
+        args.precision,
+    )
 
     metadata = {
         "source": args.page_url,

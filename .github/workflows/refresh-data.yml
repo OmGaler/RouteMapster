@@ -52,7 +52,9 @@ jobs:
           git config user.email "routemapster-bot@users.noreply.github.com"
 
           summary=$(python scripts/changes.py)
+          echo "$summary" >> "$GITHUB_STEP_SUMMARY"
 
           git add data/processed
           git commit -m "$summary"
           git push
+
