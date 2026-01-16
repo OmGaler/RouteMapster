@@ -8,171 +8,28 @@ const LONDON_BOUNDS = {
 	maxLon: 0.35
 };
 
-const ROUTE_GEOMETRY_PREFIX = "Route_Geometry_";
-const ROUTE_GEOMETRY_MAX_AGE_DAYS = 14;
-const ROUTE_GEOMETRY_PROBE_ROUTES = ["1", "25", "73", "100"];
-const TFL_ROUTE_GEOMETRY_BASES = ["https://bus.data.tfl.gov.uk/"];
-const ROUTE_GEOMETRY_GEOJSON_PREFIX = "/data/route_geometry_";
-const ROUTE_GEOMETRY_GEOJSON_SUFFIX = ".geojson";
-const BUS_STOPS_GEOJSON_PATH = "/data/bus_stops_20260112.geojson";
+const ROUTE_GEOMETRY_DIR = "/data/processed/routes";
+const ROUTE_GEOMETRY_INDEX_PATH = "/data/processed/routes/index.json";
+const BUS_STOPS_GEOJSON_PATH = "/data/processed/stops.geojson";
+const GARAGES_GEOJSON_PATH = "/data/processed/garages.geojson";
+const VEHICLE_LOOKUP_PATH = "/data/vehicles.json";
 
 const ROUTE_COLOURS = {
 	regular: "#ef4444",
-	twentyFour: "#10b981",
+	twentyFour: "#16b5f0",
 	night: "#f59e0b",
 	school: "#3b82f6",
-	prefix: "#ec4899"
+	prefix: "#10b981"
 };
 const DEFAULT_ROUTE_DRAW_ORDER = ["regular", "prefix", "twentyfour", "night", "school"];
 
-let ROUTE_GEOMETRY_DIR = "/data/Route_Geometry_20251223";
-let ROUTE_GEOMETRY_DATE = ROUTE_GEOMETRY_DIR.split("_").pop();
-let ROUTE_GEOMETRY_GEOJSON_PATH = `${ROUTE_GEOMETRY_GEOJSON_PREFIX}${ROUTE_GEOMETRY_DATE}${ROUTE_GEOMETRY_GEOJSON_SUFFIX}`;
-
-async function initialiseRouteGeometryPath() {
-	const local = await fetchLatestRouteGeometryIndex("/data/");
-	if (local) {
-		applyRouteGeometryLocation(local.dirUrl, local.dateToken);
-	}
-	updateSelectedInfo("Using local route geometry GeoJSON.");
-}
-
-async function fetchLatestRouteGeometryIndex(baseUrl) {
-	try {
-		const response = await fetch(baseUrl, { cache: "no-store" });
-		if (!response.ok) {
-			return null;
-		}
-		const html = await response.text();
-		const parser = new DOMParser();
-		const doc = parser.parseFromString(html, "text/html");
-		const entry = selectLatestRouteGeometryEntry(doc);
-		if (!entry) {
-			return null;
-		}
-		return {
-			...entry,
-			dirUrl: buildRouteGeometryDirUrl(baseUrl, entry),
-			date: parseRouteGeometryDate(entry.dateToken)
-		};
-	} catch (error) {
-		console.warn("Could not fetch latest Route_Geometry index:", error);
-		return null;
-	}
-}
-
-function selectLatestRouteGeometryEntry(doc) {
-	const links = Array.from(doc.querySelectorAll("a"))
-		.map((link) => (link.getAttribute("href") || link.textContent || "").trim())
-		.filter(Boolean);
-
-	const entries = links
-		.map(parseRouteGeometryEntry)
-		.filter(Boolean)
-		.sort((a, b) => b.dateToken.localeCompare(a.dateToken));
-
-	return entries[0] || null;
-}
-
-function parseRouteGeometryEntry(raw) {
-	const cleaned = raw.split("?")[0].trim();
-	if (!cleaned.includes(ROUTE_GEOMETRY_PREFIX)) {
-		return null;
-	}
-	const match = cleaned.match(/Route_Geometry_(\d{8})/);
-	if (!match) {
-		return null;
-	}
-	return {
-		raw: cleaned,
-		dateToken: match[1],
-		isZip: cleaned.toLowerCase().endsWith(".zip")
-	};
-}
-
-function buildRouteGeometryDirUrl(baseUrl, entry) {
-	const normalisedBase = baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`;
-	const stripped = entry.raw.replace(/\/$/, "");
-	if (stripped.startsWith("http://") || stripped.startsWith("https://")) {
-		return stripped;
-	}
-	return `${normalisedBase}${stripped}`;
-}
-
-function parseRouteGeometryDate(dateToken) {
-	if (!dateToken || !/^\d{8}$/.test(dateToken)) {
-		return null;
-	}
-	const year = Number(dateToken.slice(0, 4));
-	const month = Number(dateToken.slice(4, 6));
-	const day = Number(dateToken.slice(6, 8));
-	const date = new Date(Date.UTC(year, month - 1, day));
-	return Number.isNaN(date.getTime()) ? null : date;
-}
-
-function isOlderThanDays(date, days) {
-	if (!date) {
-		return false;
-	}
-	const ageMs = Date.now() - date.getTime();
-	return ageMs > days * 24 * 60 * 60 * 1000;
-}
-
-function applyRouteGeometryLocation(dirUrl, dateToken) {
-	if (!dirUrl || !dateToken) {
+async function initialiseRouteGeometryIndex() {
+	const routeIds = await loadRouteGeometryRouteIds();
+	if (routeIds && routeIds.size) {
+		updateSelectedInfo(`Loaded ${routeIds.size} route geometries.`);
 		return;
 	}
-	ROUTE_GEOMETRY_DIR = dirUrl;
-	ROUTE_GEOMETRY_DATE = dateToken;
-	ROUTE_GEOMETRY_GEOJSON_PATH = `${ROUTE_GEOMETRY_GEOJSON_PREFIX}${ROUTE_GEOMETRY_DATE}${ROUTE_GEOMETRY_GEOJSON_SUFFIX}`;
-	appState.routeGeometryGeojson = null;
-	appState.routeGeometryIndex = null;
-	appState.routeGeometryGeojsonPromise = null;
-	appState.geometryRouteIds = undefined;
-	appState.routeGeometryCache.clear();
-}
-
-async function tryRefreshRouteGeometryFromTfL(localDate) {
-	for (const baseUrl of TFL_ROUTE_GEOMETRY_BASES) {
-		const remote = await fetchLatestRouteGeometryIndex(baseUrl);
-		if (!remote || !remote.date) {
-			continue;
-		}
-		if (localDate && remote.date <= localDate) {
-			updateSelectedInfo("Local route geometry is the latest available.");
-			return;
-		}
-		if (remote.isZip) {
-			updateSelectedInfo("Latest TfL route geometry is a zip. Using local copy.");
-			return;
-		}
-
-		const canUseRemote = await probeRouteGeometryFiles(remote.dirUrl, remote.dateToken);
-		if (!canUseRemote) {
-			continue;
-		}
-
-		applyRouteGeometryLocation(remote.dirUrl, remote.dateToken);
-		updateSelectedInfo(`Using TfL route geometry ${remote.dateToken}.`);
-		return;
-	}
-
-	updateSelectedInfo("Could not refresh route geometry from TfL. Using local copy.");
-}
-
-async function probeRouteGeometryFiles(dirUrl, dateToken) {
-	for (const routeId of ROUTE_GEOMETRY_PROBE_ROUTES) {
-		const probeUrl = `${dirUrl}/Route_Geometry_${routeId}_${dateToken}.xml`;
-		try {
-			const response = await fetch(probeUrl, { method: "GET" });
-			if (response.ok) {
-				return true;
-			}
-		} catch (error) {
-			continue;
-		}
-	}
-	return false;
+	updateSelectedInfo("Route geometry index unavailable.");
 }
 
 function initMap() {
@@ -201,6 +58,12 @@ const appState = {
 	busStopFilterDistrict: "",
 	busStandLayer: null,
 	busStandLoadToken: 0,
+	stopRoutesIndex: null,
+	stopRoutesFromLines: new Map(),
+	stopPointFetches: new Map(),
+	routeStopFetches: new Map(),
+	vehicleLookup: null,
+	vehicleLookupPromise: null,
 	busStationLayer: null,
 	busStationLoadToken: 0,
 	busStationData: null,
@@ -211,9 +74,6 @@ const appState = {
 	selectedFeature: null,
 	busStationHighlightLayer: null,
 	routeGeometryCache: new Map(),
-	routeGeometryGeojson: null,
-	routeGeometryIndex: null,
-	routeGeometryGeojsonPromise: null,
 	garageRouteLayer: null,
 	networkRouteLayer: null,
 	focusRouteLayer: null,
@@ -231,6 +91,12 @@ const appState = {
 
 function updateSelectedInfo(text) {
 	document.getElementById('selectedInfo').textContent = text;
+}
+
+function updateSelectedRouteCount(count) {
+	const total = Number.isFinite(count) ? count : 0;
+	const label = total === 1 ? "1 route selected" : `${total} routes selected`;
+	updateSelectedInfo(label);
 }
 
 function escapeHtml(value) {
@@ -428,11 +294,14 @@ async function addBusStopsLayer(map) {
 			fillColor: "#2563eb",
 			fillOpacity: 0.8
 		});
-		bindHoverPopup(marker, buildBusStopPopup(feature.properties || {}));
+		bindHoverPopup(marker, () => buildBusStopPopup(feature.properties || {}));
 		marker.on("click", () => {
 			const props = feature.properties || {};
 			setSelectedFeature("stop", props);
 			refreshSelectedInfoPanel().catch(() => {});
+			ensureStopPointRoutes(props)
+				.then(() => refreshSelectedInfoPanel().catch(() => {}))
+				.catch(() => {});
 		});
 		marker.addTo(layerGroup);
 	});
@@ -474,11 +343,14 @@ async function addBusStandsLayer(map) {
 			fillColor: "#94a3b8",
 			fillOpacity: 0.75
 		});
-		bindHoverPopup(marker, buildBusStopPopup(feature.properties || {}));
+		bindHoverPopup(marker, () => buildBusStopPopup(feature.properties || {}));
 		marker.on("click", () => {
 			const props = feature.properties || {};
 			setSelectedFeature("stop", props);
 			refreshSelectedInfoPanel().catch(() => {});
+			ensureStopPointRoutes(props)
+				.then(() => refreshSelectedInfoPanel().catch(() => {}))
+				.catch(() => {});
 		});
 		marker.addTo(layerGroup);
 	});
@@ -492,7 +364,7 @@ async function loadGaragesGeojson() {
 	if (appState.garagesGeojson) {
 		return appState.garagesGeojson;
 	}
-	const res = await fetch("/data/garages.geojson");
+	const res = await fetch(GARAGES_GEOJSON_PATH);
 	appState.garagesGeojson = await res.json();
 	return appState.garagesGeojson;
 }
@@ -503,6 +375,9 @@ async function loadBusStopsGeojson() {
 	}
 	const res = await fetch(BUS_STOPS_GEOJSON_PATH);
 	appState.busStopsGeojson = await res.json();
+	if (!appState.stopRoutesIndex) {
+		appState.stopRoutesIndex = buildStopRouteIndex(appState.busStopsGeojson);
+	}
 	return appState.busStopsGeojson;
 }
 
@@ -600,11 +475,14 @@ function getRoutePillClass(routeId, routeSets) {
 	if (normalised.startsWith("N")) {
 		return "night";
 	}
-	if (routeSets?.school?.has(normalised)) {
-		return "school";
-	}
-	if (routeSets?.twentyFour?.has(normalised)) {
+	const isRegular = routeSets?.regular?.has(normalised);
+	const isSchool = routeSets?.school?.has(normalised);
+	const isTwentyFour = routeSets?.twentyFour?.has(normalised);
+	if (isTwentyFour) {
 		return "twentyfour";
+	}
+	if (isSchool && !isRegular) {
+		return "school";
 	}
 	if (isPrefixRoute(normalised)) {
 		return "prefix";
@@ -628,6 +506,16 @@ function renderRoutePills(routes, routeSets) {
 	return `<div class="route-pill-group">${pills}</div>`;
 }
 
+function renderStopRoutePills(props, routes, routeSets) {
+	const hasInlineRoutes = props?.ROUTES !== null && props?.ROUTES !== undefined;
+	const stopId = getStopPointIdFromProps(props);
+	const hasCachedRoutes = stopId && appState.stopRoutesFromLines.has(stopId);
+	if (!hasInlineRoutes && !hasCachedRoutes && (!routes || routes.length === 0)) {
+		return '<div class="info-empty">Routes unavailable.</div>';
+	}
+	return renderRoutePills(routes, routeSets);
+}
+
 function formatStopRoutes(props) {
 	const tokens = getStopRouteTokens(props);
 	return formatRouteList(tokens);
@@ -640,7 +528,7 @@ function buildBusStopPopup(props) {
 	return `
 		<div class="hover-popup__content">
 			<div class="hover-popup__title">${escapeHtml(name)}</div>
-			<div class="hover-popup__routes">${renderRoutePills(routes, routeSets)}</div>
+			<div class="hover-popup__routes">${renderStopRoutePills(props, routes, routeSets)}</div>
 		</div>
 	`;
 }
@@ -671,7 +559,7 @@ function buildBusStopInfoHtml(props, routeSets) {
 			</div>
 			<div class="info-section">
 				<div class="info-label">Routes serving</div>
-				${renderRoutePills(routes, routeSets)}
+				${renderStopRoutePills(props, routes, routeSets)}
 			</div>
 		`
 	};
@@ -684,8 +572,124 @@ function isExcludedStopRoute(routeId) {
 	return /^UL/i.test(routeId) || /^Y/i.test(routeId);
 }
 
+function getStopPointIdFromProps(props) {
+	const atco = String(props?.NAPTAN_ATCO || "").trim();
+	if (atco) {
+		return atco;
+	}
+	const liveUrl = String(props?.LIVE_BUS_ARRIVAL || "");
+	const match = liveUrl.match(/\/bus\/stop\/([^/]+)\//i);
+	if (match && match[1]) {
+		return match[1];
+	}
+	const stopCode = String(props?.STOP_CODE || "").trim();
+	if (/^\d{8,}$/.test(stopCode)) {
+		return stopCode;
+	}
+	return "";
+}
+
+function addRouteToStopCache(stopId, routeId) {
+	if (!stopId || !routeId) {
+		return;
+	}
+	const key = String(routeId).toUpperCase();
+	let set = appState.stopRoutesFromLines.get(stopId);
+	if (!set) {
+		set = new Set();
+		appState.stopRoutesFromLines.set(stopId, set);
+	}
+	set.add(key);
+	if (appState.stopRoutesIndex) {
+		appState.stopRoutesIndex.add(key);
+	}
+}
+
 function getStopRouteTokens(props) {
-	return extractRouteTokens(props?.ROUTES).filter((routeId) => !isExcludedStopRoute(routeId));
+	const tokens = new Set(extractRouteTokens(props?.ROUTES).filter((routeId) => !isExcludedStopRoute(routeId)));
+	const stopId = getStopPointIdFromProps(props);
+	if (stopId && appState.stopRoutesFromLines.has(stopId)) {
+		appState.stopRoutesFromLines.get(stopId).forEach((routeId) => {
+			if (!isExcludedStopRoute(routeId)) {
+				tokens.add(routeId);
+			}
+		});
+	}
+	return Array.from(tokens);
+}
+
+function buildStopRouteIndex(geojson) {
+	const features = Array.isArray(geojson?.features) ? geojson.features : [];
+	const tokens = new Set();
+	features.forEach((feature) => {
+		const props = feature?.properties || {};
+		extractRouteTokens(props.ROUTES).forEach((routeId) => {
+			if (!isExcludedStopRoute(routeId)) {
+				tokens.add(routeId);
+			}
+		});
+	});
+	return tokens;
+}
+
+async function ensureStopPointRoutes(props) {
+	const stopId = getStopPointIdFromProps(props);
+	if (!stopId || appState.stopPointFetches.has(stopId)) {
+		return;
+	}
+	if (appState.stopRoutesFromLines.has(stopId)) {
+		return;
+	}
+	const url = `https://api.tfl.gov.uk/StopPoint/${encodeURIComponent(stopId)}`;
+	const fetchPromise = fetch(url)
+		.then((res) => (res.ok ? res.json() : null))
+		.then((data) => {
+			if (!data || !Array.isArray(data.lines)) {
+				return;
+			}
+			data.lines.forEach((line) => {
+				const id = String(line?.id || line?.name || "").trim();
+				if (!id || isExcludedStopRoute(id)) {
+					return;
+				}
+				addRouteToStopCache(stopId, id);
+			});
+		})
+		.catch(() => {});
+	appState.stopPointFetches.set(stopId, fetchPromise);
+	await fetchPromise;
+}
+
+async function ensureRouteStopData(routeId) {
+	const normalised = String(routeId || "").trim().toUpperCase();
+	if (!normalised || isExcludedStopRoute(normalised)) {
+		return;
+	}
+	if (appState.stopRoutesIndex?.has(normalised)) {
+		return;
+	}
+	if (appState.routeStopFetches.has(normalised)) {
+		return appState.routeStopFetches.get(normalised);
+	}
+	const url = `https://api.tfl.gov.uk/Line/${encodeURIComponent(normalised)}/StopPoints`;
+	const fetchPromise = fetch(url)
+		.then((res) => (res.ok ? res.json() : null))
+		.then((data) => {
+			const stops = Array.isArray(data) ? data : data?.stopPoints;
+			if (!Array.isArray(stops)) {
+				return;
+			}
+			stops.forEach((stop) => {
+				const stopId = String(stop?.id || stop?.naptanId || stop?.NaptanId || "").trim();
+				if (!stopId) {
+					return;
+				}
+				addRouteToStopCache(stopId, normalised);
+			});
+		})
+		.catch(() => {});
+	appState.routeStopFetches.set(normalised, fetchPromise);
+	return fetchPromise;
 }
 
 function hasStopRoutes(props) {
@@ -1010,6 +1014,86 @@ function buildRouteFilterTokens(query) {
 	return Array.from(tokens);
 }
 
+async function loadVehicleLookup() {
+	if (appState.vehicleLookup) {
+		return appState.vehicleLookup;
+	}
+	if (appState.vehicleLookupPromise) {
+		return appState.vehicleLookupPromise;
+	}
+	appState.vehicleLookupPromise = fetch(VEHICLE_LOOKUP_PATH, { cache: "no-store" })
+		.then((res) => {
+			if (!res.ok) {
+				return null;
+			}
+			return res.json();
+		})
+		.then((data) => {
+			if (!data || typeof data !== "object") {
+				appState.vehicleLookup = null;
+				return null;
+			}
+			const lookup = {};
+			Object.entries(data).forEach(([key, value]) => {
+				const normalisedKey = String(key || "").trim().toUpperCase();
+				const normalisedValue = String(value || "").trim().toUpperCase();
+				if (!normalisedKey) {
+					return;
+				}
+				if (normalisedValue !== "SD" && normalisedValue !== "DD") {
+					return;
+				}
+				lookup[normalisedKey] = normalisedValue;
+			});
+			appState.vehicleLookup = lookup;
+			return lookup;
+		})
+		.catch(() => {
+			appState.vehicleLookup = null;
+			return null;
+		})
+		.finally(() => {
+			appState.vehicleLookupPromise = null;
+		});
+	return appState.vehicleLookupPromise;
+}
+
+function getDeckFilterMode() {
+	const all = isRouteTypeEnabled("showAllDeckers");
+	const single = isRouteTypeEnabled("showSingleDecker");
+	const double = isRouteTypeEnabled("showDoubleDecker");
+	if (all || (!single && !double)) {
+		return "all";
+	}
+	if (single) {
+		return "single";
+	}
+	if (double) {
+		return "double";
+	}
+	return "all";
+}
+
+function matchesDeckFilter(routeId) {
+	const mode = getDeckFilterMode();
+	if (mode === "all") {
+		return true;
+	}
+	const lookup = appState.vehicleLookup;
+	if (!lookup) {
+		return true;
+	}
+	const key = String(routeId || "").trim().toUpperCase();
+	if (!key) {
+		return false;
+	}
+	const type = lookup[key];
+	if (!type) {
+		return false;
+	}
+	return mode === "single" ? type === "SD" : type === "DD";
+}
+
 function routeMatchesFilter(routeId, filterTokens, exactMatch) {
 	if (!filterTokens || filterTokens.length === 0) {
 		return true;
@@ -1037,7 +1121,9 @@ function routeMatchesFilter(routeId, filterTokens, exactMatch) {
 
 function filterRouteSet(routes, filterTokens) {
 	const exactMatch = isRouteTypeEnabled("showExactRouteMatch");
-	return Array.from(routes).filter((routeId) => routeMatchesFilter(routeId, filterTokens, exactMatch));
+	return Array.from(routes).filter((routeId) => {
+		return routeMatchesFilter(routeId, filterTokens, exactMatch) && matchesDeckFilter(routeId);
+	});
 }
 
 function isPrefixRoute(routeId) {
@@ -1102,28 +1188,6 @@ async function loadNetworkRouteSets() {
 	return appState.networkRouteSets;
 }
 
-function normaliseRouteGeometryDirUrl(dirUrl) {
-	if (!dirUrl) {
-		return "";
-	}
-	return dirUrl.endsWith("/") ? dirUrl : `${dirUrl}/`;
-}
-
-function parseRouteGeometryIndex(html) {
-	const parser = new DOMParser();
-	const doc = parser.parseFromString(html, "text/html");
-	const routeIds = new Set();
-	Array.from(doc.querySelectorAll("a")).forEach((link) => {
-		const raw = (link.getAttribute("href") || link.textContent || "").trim();
-		const cleaned = raw.split("?")[0].split("#")[0];
-		const match = cleaned.match(/Route_Geometry_([A-Za-z0-9]+)_\d{8}\.xml/i);
-		if (match && match[1]) {
-			routeIds.add(match[1].toUpperCase());
-		}
-	});
-	return routeIds;
-}
-
 function extractRouteGeometrySegments(geometry) {
 	if (!geometry || !geometry.type) {
 		return [];
@@ -1150,53 +1214,14 @@ function extractRouteGeometrySegments(geometry) {
 	return [];
 }
 
-function buildRouteGeometryIndex(geojson) {
-	const index = new Map();
+function extractRouteGeometryFromCollection(geojson) {
+	const segments = [];
 	const features = Array.isArray(geojson?.features) ? geojson.features : [];
 	features.forEach((feature) => {
-		const props = feature?.properties || {};
-		const rawRouteId = props.routeId || feature?.id || props.ROUTE_ID || "";
-		const routeId = String(rawRouteId).trim().toUpperCase();
-		if (!routeId) {
-			return;
-		}
-		const segments = extractRouteGeometrySegments(feature.geometry);
-		if (segments.length === 0) {
-			return;
-		}
-		index.set(routeId, segments);
+		const featureSegments = extractRouteGeometrySegments(feature?.geometry);
+		featureSegments.forEach((segment) => segments.push(segment));
 	});
-	return index;
-}
-
-async function loadRouteGeometryGeojson() {
-	if (appState.routeGeometryGeojson) {
-		return appState.routeGeometryGeojson;
-	}
-	if (appState.routeGeometryGeojsonPromise) {
-		return appState.routeGeometryGeojsonPromise;
-	}
-	appState.routeGeometryGeojsonPromise = fetch(ROUTE_GEOMETRY_GEOJSON_PATH, { cache: "no-store" })
-		.then((res) => {
-			if (!res.ok) {
-				return null;
-			}
-			return res.json();
-		})
-		.then((geojson) => {
-			if (!geojson) {
-				appState.routeGeometryGeojson = null;
-				appState.routeGeometryIndex = null;
-				return null;
-			}
-			appState.routeGeometryGeojson = geojson;
-			appState.routeGeometryIndex = buildRouteGeometryIndex(geojson);
-			return geojson;
-		})
-		.finally(() => {
-			appState.routeGeometryGeojsonPromise = null;
-		});
-	return appState.routeGeometryGeojsonPromise;
+	return segments;
 }
 
 async function loadRouteGeometryRouteIds() {
@@ -1207,26 +1232,14 @@ async function loadRouteGeometryRouteIds() {
 		return null;
 	}
 	try {
-		const geojson = await loadRouteGeometryGeojson();
-		if (appState.routeGeometryIndex) {
-			const routeIds = new Set(appState.routeGeometryIndex.keys());
-			appState.geometryRouteIds = routeIds.size > 0 ? routeIds : null;
-			return appState.geometryRouteIds;
-		}
-		if (!geojson) {
+		const res = await fetch(ROUTE_GEOMETRY_INDEX_PATH, { cache: "no-store" });
+		if (!res.ok) {
 			appState.geometryRouteIds = null;
 			return null;
 		}
-		const routeIds = new Set();
-		const features = Array.isArray(geojson.features) ? geojson.features : [];
-		features.forEach((feature) => {
-			const props = feature?.properties || {};
-			const rawRouteId = props.routeId || feature?.id || props.ROUTE_ID || "";
-			const routeId = String(rawRouteId).trim().toUpperCase();
-			if (routeId) {
-				routeIds.add(routeId);
-			}
-		});
+		const data = await res.json();
+		const routes = Array.isArray(data?.routes) ? data.routes : [];
+		const routeIds = new Set(routes.map((routeId) => String(routeId).trim().toUpperCase()).filter(Boolean));
 		appState.geometryRouteIds = routeIds.size > 0 ? routeIds : null;
 		return appState.geometryRouteIds;
 	} catch (error) {
@@ -1245,15 +1258,32 @@ async function renderGarageRoutes(loadToken) {
 	}
 	const categories = getSelectedRouteCategories();
 	if (categories.length === 0) {
+		updateSelectedRouteCount(0);
 		return;
 	}
+
+	const filteredCategories = categories.map((category) => {
+		const filteredRoutes = filterRouteSet(category.routes, appState.routeFilterTokens);
+		return { ...category, filteredRoutes };
+	});
+	const selectedRoutes = new Set();
+	filteredCategories.forEach((category) => {
+		category.filteredRoutes.forEach((routeId) => selectedRoutes.add(routeId));
+	});
+	if (selectedRoutes.size === 0) {
+		updateSelectedRouteCount(0);
+		return;
+	}
+	updateSelectedRouteCount(selectedRoutes.size);
 
 	const layerGroup = L.layerGroup().addTo(appState.map);
 	appState.garageRouteLayer = layerGroup;
 
-	const tasks = categories.flatMap((category) => {
-		const filteredRoutes = filterRouteSet(category.routes, appState.routeFilterTokens);
-		return filteredRoutes.map((routeId) => {
+	const tasks = filteredCategories.flatMap((category) => {
+		if (category.filteredRoutes.length === 0) {
+			return [];
+		}
+		return category.filteredRoutes.map((routeId) => {
 			return loadRouteGeometry(routeId)
 				.then((segments) => {
 					if (loadToken !== appState.routeLoadToken) {
@@ -1376,16 +1406,29 @@ async function renderNetworkRoutes(loadToken) {
 	}
 	if (categories.length === 0) {
 		appState.showNetworkRoutes = false;
+		updateSelectedRouteCount(0);
 		return;
 	}
+
+	const filteredCategories = categories.map((category) => {
+		const filteredRoutes = filterRouteSet(category.routes, appState.routeFilterTokens);
+		return { ...category, filteredRoutes };
+	});
+	const selectedRoutes = new Set();
+	filteredCategories.forEach((category) => {
+		category.filteredRoutes.forEach((routeId) => selectedRoutes.add(routeId));
+	});
+	updateSelectedRouteCount(selectedRoutes.size);
 
 	appState.showNetworkRoutes = true;
 	const layerGroup = L.layerGroup().addTo(appState.map);
 	appState.networkRouteLayer = layerGroup;
 
-	const tasks = categories.flatMap((category) => {
-		const filteredRoutes = filterRouteSet(category.routes, appState.routeFilterTokens);
-		return filteredRoutes.map((routeId) => {
+	const tasks = filteredCategories.flatMap((category) => {
+		if (category.filteredRoutes.length === 0) {
+			return [];
+		}
+		return category.filteredRoutes.map((routeId) => {
 			return loadRouteGeometry(routeId)
 				.then((segments) => {
 					if (loadToken !== appState.networkRouteLoadToken) {
@@ -1415,49 +1458,18 @@ async function loadRouteGeometry(routeId) {
 	if (appState.routeGeometryCache.has(normalised)) {
 		return appState.routeGeometryCache.get(normalised);
 	}
-	await loadRouteGeometryGeojson();
-	const segments = appState.routeGeometryIndex?.get(normalised) || null;
+	let segments = null;
+	try {
+		const response = await fetch(`${ROUTE_GEOMETRY_DIR}/${encodeURIComponent(normalised)}.geojson`, { cache: "no-store" });
+		if (response.ok) {
+			const geojson = await response.json();
+			const extracted = extractRouteGeometryFromCollection(geojson);
+			segments = extracted.length > 0 ? extracted : null;
+		}
+	} catch (error) {
+		segments = null;
+	}
 	appState.routeGeometryCache.set(normalised, segments);
-	return segments;
-}
-
-function buildRouteGeometryPath(routeId) {
-	return `${ROUTE_GEOMETRY_DIR}/Route_Geometry_${routeId}_${ROUTE_GEOMETRY_DATE}.xml`;
-}
-
-function parseRouteGeometryXml(xmlText) {
-	const parser = new DOMParser();
-	const doc = parser.parseFromString(xmlText, 'application/xml');
-	const nodes = Array.from(doc.getElementsByTagName('Route_Geometry'));
-	const groups = new Map();
-
-	nodes.forEach((node) => {
-		const seq = Number(node.getAttribute('aSequence_No') || 0);
-		const run = node.getAttribute('aLBSL_Run_No') || '';
-		const directionNode = node.getElementsByTagName('Direction')[0];
-		const direction = directionNode ? directionNode.textContent.trim() : '';
-		const latNode = node.getElementsByTagName('Location_Latitude')[0];
-		const lonNode = node.getElementsByTagName('Location_Longitude')[0];
-		const lat = latNode ? Number.parseFloat(latNode.textContent) : NaN;
-		const lon = lonNode ? Number.parseFloat(lonNode.textContent) : NaN;
-		if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
-			return;
-		}
-		const key = `${run}-${direction}`;
-		if (!groups.has(key)) {
-			groups.set(key, []);
-		}
-		groups.get(key).push({ seq, lat, lon });
-	});
-
-	const segments = [];
-	groups.forEach((points) => {
-		points.sort((a, b) => a.seq - b.seq);
-		const latlngs = points.map((point) => [point.lat, point.lon]);
-		if (latlngs.length > 1) {
-			segments.push(latlngs);
-		}
-	});
 	return segments;
 }
 
@@ -1500,7 +1512,8 @@ function bindHoverPopup(layer, html) {
 	if (!layer || !html) {
 		return;
 	}
-	layer.bindPopup(html, {
+	const getContent = typeof html === "function" ? html : () => html;
+	layer.bindPopup(getContent(), {
 		className: "hover-popup",
 		closeButton: false,
 		autoClose: false,
@@ -1509,6 +1522,7 @@ function bindHoverPopup(layer, html) {
 		offset: [0, -12]
 	});
 	layer.on("mouseover", () => {
+		layer.setPopupContent(getContent());
 		layer.openPopup();
 	});
 	layer.on("mouseout", () => {
@@ -1862,6 +1876,13 @@ async function focusRoute(routeId) {
 	if (!normalised) {
 		return;
 	}
+	ensureRouteStopData(normalised)
+		.then(() => {
+			if (appState.selectedFeature?.type === "stop") {
+				refreshSelectedInfoPanel().catch(() => {});
+			}
+		})
+		.catch(() => {});
 	clearFocusedRouteLayer();
 	appState.focusRouteId = normalised;
 	appState.focusRouteLoadToken += 1;
@@ -1923,11 +1944,14 @@ function getBusStationRouteColour(routeId, routeSets) {
 	if (normalised.startsWith("N")) {
 		return ROUTE_COLOURS.night;
 	}
-	if (routeSets.school?.has(normalised)) {
-		return ROUTE_COLOURS.school;
-	}
-	if (routeSets.twentyFour?.has(normalised)) {
+	const isRegular = routeSets.regular?.has(normalised);
+	const isSchool = routeSets.school?.has(normalised);
+	const isTwentyFour = routeSets.twentyFour?.has(normalised);
+	if (isTwentyFour) {
 		return ROUTE_COLOURS.twentyFour;
+	}
+	if (isSchool && !isRegular) {
+		return ROUTE_COLOURS.school;
 	}
 	if (isPrefixRoute(normalised)) {
 		return ROUTE_COLOURS.prefix;
@@ -2068,7 +2092,9 @@ async function renderBusStationRoutes(loadToken) {
 		return;
 	}
 	const filteredRoutes = filterRouteSet(appState.activeBusStationRoutes, appState.routeFilterTokens);
-	if (filteredRoutes.length === 0) {
+	const selectedRoutes = new Set(filteredRoutes);
+	updateSelectedRouteCount(selectedRoutes.size);
+	if (selectedRoutes.size === 0) {
 		return;
 	}
 
@@ -2349,6 +2375,34 @@ function setupUI() {
 		});
 	});
 
+	const deckFilterIds = ["showAllDeckers", "showSingleDecker", "showDoubleDecker"];
+	const handleDeckFilterChange = () => {
+		loadVehicleLookup()
+			.then(() => {
+				if (appState.activeGarageRoutes) {
+					appState.routeLoadToken += 1;
+					renderGarageRoutes(appState.routeLoadToken);
+				}
+				if (appState.activeBusStationRoutes) {
+					appState.busStationRouteLoadToken += 1;
+					renderBusStationRoutes(appState.busStationRouteLoadToken);
+				}
+				if (appState.showNetworkRoutes) {
+					appState.networkRouteLoadToken += 1;
+					renderNetworkRoutes(appState.networkRouteLoadToken);
+				}
+			})
+			.catch(() => {});
+	};
+
+	deckFilterIds.forEach((id) => {
+		const checkbox = document.getElementById(id);
+		if (!checkbox) {
+			return;
+		}
+		checkbox.addEventListener("change", handleDeckFilterChange);
+	});
+
 	const resetRouteCheckboxes = () => {
 		const ids = [
 			"showAllRoutes",
@@ -2357,6 +2411,9 @@ function setupUI() {
 			"showNetwork24hrRoutes",
 			"showNetworkNightRoutes",
 			"showNetworkSchoolRoutes",
+			"showAllDeckers",
+			"showSingleDecker",
+			"showDoubleDecker",
 			"showRegularRoutes",
 			"showNightRoutes",
 			"showSchoolRoutes"
@@ -2366,7 +2423,7 @@ function setupUI() {
 			if (!checkbox) {
 				return;
 			}
-			checkbox.checked = false;
+			checkbox.checked = id === "showAllDeckers";
 			checkbox.disabled = false;
 			delete checkbox.dataset.prevChecked;
 			const label = checkbox.closest("label");
@@ -2507,6 +2564,9 @@ function setupRouteFilterInput() {
 		} else {
 			updateSelectedInfo("No filter");
 		}
+		tokens.forEach((token) => {
+			ensureRouteStopData(token).catch(() => {});
+		});
 		if (appState.activeGarageRoutes) {
 			appState.routeLoadToken += 1;
 			renderGarageRoutes(appState.routeLoadToken);
@@ -2812,7 +2872,7 @@ async function start() {
 	setLoadingModalVisible(true);
 	try {
 		appState.map = initMap();
-		await initialiseRouteGeometryPath();
+		await initialiseRouteGeometryIndex();
 		setupUI();
 		resetInfoPanel();
 		appState.networkRouteLoadToken += 1;
