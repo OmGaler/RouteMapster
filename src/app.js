@@ -99,6 +99,22 @@ function updateSelectedRouteCount(count) {
 	updateSelectedInfo(label);
 }
 
+function getStopName(props) {
+	return props?.NAME || props?.STOP_NAME || "";
+}
+
+function getStopDisplayName(props) {
+	return getStopName(props) || props?.STOP_CODE || props?.NAPTAN_ID || props?.NAPTAN_ATCO || "Bus stop";
+}
+
+function getStopRoadName(props) {
+	return props?.ROAD_NAME || "";
+}
+
+function getStopCode(props) {
+	return props?.STOP_CODE || props?.NAPTAN_ID || props?.NAPTAN_ATCO || "";
+}
+
 function escapeHtml(value) {
 	return String(value || "")
 		.replace(/&/g, "&amp;")
@@ -469,6 +485,9 @@ function parsePrefixNumber(value) {
 
 function getRoutePillClass(routeId, routeSets) {
 	const normalised = String(routeId || "").toUpperCase();
+	if (isSuperloopRoute(normalised)) {
+		return "superloop";
+	}
 	if (!appState.useRouteTypeColours) {
 		return "regular";
 	}
@@ -522,7 +541,7 @@ function formatStopRoutes(props) {
 }
 
 function buildBusStopPopup(props) {
-	const name = props?.STOP_NAME || props?.STOP_CODE || "Bus stop";
+	const name = getStopDisplayName(props);
 	const routes = getStopRouteTokens(props);
 	const routeSets = appState.useRouteTypeColours ? appState.networkRouteSets : null;
 	return `
@@ -534,10 +553,10 @@ function buildBusStopPopup(props) {
 }
 
 function buildBusStopInfoHtml(props, routeSets) {
-	const name = props?.STOP_NAME || props?.STOP_CODE || "Bus stop";
-	const road = props?.ROAD_NAME || "";
+	const name = getStopDisplayName(props);
+	const road = getStopRoadName(props);
 	const postcode = props?.POSTCODE || "";
-	const stopCode = props?.STOP_CODE || "";
+	const stopCode = getStopCode(props);
 	const details = [
 		road ? `Road: ${escapeHtml(road)}` : "",
 		postcode ? `Postcode: ${escapeHtml(postcode)}` : "",
@@ -573,7 +592,7 @@ function isExcludedStopRoute(routeId) {
 }
 
 function getStopPointIdFromProps(props) {
-	const atco = String(props?.NAPTAN_ATCO || "").trim();
+	const atco = String(props?.NAPTAN_ATCO || props?.NAPTAN_ID || "").trim();
 	if (atco) {
 		return atco;
 	}
@@ -582,7 +601,7 @@ function getStopPointIdFromProps(props) {
 	if (match && match[1]) {
 		return match[1];
 	}
-	const stopCode = String(props?.STOP_CODE || "").trim();
+	const stopCode = String(props?.STOP_CODE || props?.NAPTAN_ID || "").trim();
 	if (/^\d{8,}$/.test(stopCode)) {
 		return stopCode;
 	}
@@ -962,6 +981,10 @@ function getGarageCodes(features) {
 
 function selectGarageRoutes(features) {
 	appState.activeGarageRoutes = buildGarageRouteSets(features);
+	if (appState.focusRouteId) {
+		clearFocusedRoute();
+		return;
+	}
 	appState.routeLoadToken += 1;
 	renderGarageRoutes(appState.routeLoadToken);
 }
@@ -1144,6 +1167,10 @@ function isPrefixRoute(routeId) {
 		return false;
 	}
 	return true;
+}
+
+function isSuperloopRoute(routeId) {
+	return String(routeId || "").toUpperCase().startsWith("SL");
 }
 
 function collectPrefixRoutes(prefixRoutes, routes) {
@@ -1534,14 +1561,14 @@ function bindHoverPopup(layer, html) {
 }
 
 function isBusStationStop(props) {
-	const stopName = props?.STOP_NAME || "";
-	const roadName = props?.ROAD_NAME || "";
+	const stopName = getStopName(props);
+	const roadName = getStopRoadName(props);
 	return /bus station/i.test(stopName) || /bus station/i.test(roadName);
 }
 
 function isBusStationCoreStop(props) {
-	const stopName = String(props?.STOP_NAME || "");
-	const roadName = String(props?.ROAD_NAME || "");
+	const stopName = String(getStopName(props) || "");
+	const roadName = String(getStopRoadName(props) || "");
 	if (/bus station/i.test(roadName)) {
 		return true;
 	}
@@ -1552,8 +1579,8 @@ function isBusStationCoreStop(props) {
 }
 
 function shouldExcludeStationStop(props) {
-	const stopName = String(props?.STOP_NAME || "");
-	const roadName = String(props?.ROAD_NAME || "");
+	const stopName = String(getStopName(props) || "");
+	const roadName = String(getStopRoadName(props) || "");
 	return stopName.includes("/") && !/bus station/i.test(roadName);
 }
 
@@ -1591,8 +1618,8 @@ function formatStationName(value) {
 }
 
 function deriveBusStationName(props) {
-	const stopName = props?.STOP_NAME || "";
-	const roadName = props?.ROAD_NAME || "";
+	const stopName = getStopName(props);
+	const roadName = getStopRoadName(props);
 	if (/bus station/i.test(roadName)) {
 		return formatStationName(roadName);
 	}
@@ -1620,6 +1647,9 @@ function getStationBaseName(name) {
 function getStopIdentity(feature) {
 	const props = feature?.properties || {};
 	const coords = feature?.geometry?.coordinates;
+	if (props.NAPTAN_ID) {
+		return String(props.NAPTAN_ID);
+	}
 	if (props.NAPTAN_ATCO) {
 		return String(props.NAPTAN_ATCO);
 	}
@@ -1732,7 +1762,7 @@ function buildBusStationClusters(geojson) {
 			if (isBusStationCoreStop(props) || shouldExcludeStationStop(props)) {
 				return;
 			}
-			const stopName = String(props?.STOP_NAME || "").trim();
+			const stopName = String(getStopName(props) || "").trim();
 			if (!stopName || !/station/i.test(stopName)) {
 				return;
 			}
@@ -2169,11 +2199,6 @@ function setupUI() {
 	setupBusStopFilterInput();
 	setupBusStationSelect();
 	setupNetworkFilterDrag();
-
-	document.getElementById('loadData').addEventListener('click', () => {
-		// Placeholder: the real loader will fetch TfL data
-		loadPlaceholderData();
-	});
 
 	document.getElementById('showGarages').addEventListener('change', (e) => {
 		if (e.target.checked) {
@@ -2849,23 +2874,6 @@ function setupModuleAccordion() {
 			});
 		});
 	});
-}
-
-function loadPlaceholderData() {
-	// Add a sample route polyline and few stops to the map for layout testing.
-	const sampleLine = [[51.5074, -0.1278], [51.515, -0.12], [51.52, -0.1]];
-	const poly = L.polyline(sampleLine, { color: 'blue' }).addTo(appState.map);
-
-	const stops = [
-		{ id: 'S1', name: 'Stop 1', lat: 51.5074, lon: -0.1278 },
-		{ id: 'S2', name: 'Stop 2', lat: 51.515, lon: -0.12 }
-	];
-
-	stops.forEach(s => {
-		L.circleMarker([s.lat, s.lon], { radius: 6 }).bindPopup(s.name).addTo(appState.map);
-	});
-
-	document.getElementById('selectedInfo').textContent = 'Sample route loaded';
 }
 
 async function start() {

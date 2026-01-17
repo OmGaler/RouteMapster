@@ -22,10 +22,10 @@
       --accent: #0f766e;
       --accent-soft: rgba(15, 118, 110, 0.12);
       --route-regular: #ef4444;
-      --route-24hr: #10b981;
+      --route-24hr: #16b5f0;
       --route-night: #f59e0b;
       --route-school: #3b82f6;
-      --route-prefix: #ec4899;
+      --route-prefix: #10b981;
       --shadow: 0 12px 30px rgba(15, 23, 42, 0.12);
     }
 
@@ -96,16 +96,22 @@
     }
 
     .brand-mark {
-      width: 44px;
-      height: 44px;
-      border-radius: 14px;
-      background: linear-gradient(135deg, #0f766e, #22c55e);
-      color: #f8fafc;
+      width: 52px;
+      height: 52px;
+      border-radius: 16px;
+      background: #ffffff;
+      border: 1px solid var(--panel-border);
       display: grid;
       place-items: center;
-      font-weight: 700;
-      letter-spacing: 0.08em;
-      box-shadow: 0 10px 20px rgba(15, 118, 110, 0.3);
+      padding: 6px;
+      box-shadow: 0 10px 20px rgba(15, 23, 42, 0.12);
+    }
+
+    .brand-mark img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: block;
     }
 
     .brand-title {
@@ -233,23 +239,6 @@
 
     button {
       font-family: inherit;
-    }
-
-    #loadData {
-      border: none;
-      border-radius: 12px;
-      padding: 10px 14px;
-      font-weight: 600;
-      color: #f8fafc;
-      background: linear-gradient(135deg, #0f766e, #14b8a6);
-      box-shadow: 0 10px 20px rgba(15, 118, 110, 0.3);
-      cursor: pointer;
-      transition: transform 0.2s ease, box-shadow 0.2s ease;
-    }
-
-    #loadData:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 12px 26px rgba(15, 118, 110, 0.4);
     }
 
     .ghost-button {
@@ -580,6 +569,11 @@
     .route-pill.route-pill--school { background: var(--route-school); }
     .route-pill.route-pill--twentyfour { background: var(--route-24hr); }
     .route-pill.route-pill--prefix { background: var(--route-prefix); }
+    .route-pill.route-pill--superloop {
+      background: #ffffff;
+      color: var(--route-regular);
+      border: 1px solid var(--route-regular);
+    }
 
     .garage-route-category {
       display: flex;
@@ -618,37 +612,46 @@
     .loading-card {
       display: flex;
       align-items: center;
-      gap: 14px;
-      padding: 16px 20px;
-      border-radius: 18px;
+      gap: 20px;
+      padding: 28px 34px;
+      border-radius: 22px;
       background: var(--panel);
       border: 1px solid var(--panel-border);
       box-shadow: var(--shadow);
+      width: 90vw;
+      max-width: 420px;
     }
 
     .loading-logo {
-      width: 48px;
-      height: 48px;
-      border-radius: 14px;
-      background: var(--accent-soft);
+      width: 84px;
+      height: 84px;
+      border-radius: 20px;
+      background: #ffffff;
+      border: 1px solid var(--panel-border);
       display: grid;
       place-items: center;
-      color: var(--accent);
-      font-weight: 700;
-      letter-spacing: 0.08em;
+      padding: 10px;
+      box-shadow: 0 12px 26px rgba(15, 23, 42, 0.15);
+    }
+
+    .loading-logo img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: block;
     }
 
     .loading-text {
       display: flex;
       flex-direction: column;
       gap: 4px;
-      font-size: 13px;
+      font-size: 15px;
       color: var(--muted);
     }
 
     .loading-text strong {
       color: var(--ink);
-      font-size: 14px;
+      font-size: 18px;
     }
 
     .leaflet-container {
@@ -720,6 +723,8 @@
     }
 
     .hover-popup__routes .route-pill-group {
+      display: flex;
+      flex-wrap: wrap;
       gap: 4px;
     }
 
@@ -771,7 +776,9 @@
   <div id="app">
     <aside id="sidebar">
       <div class="brand">
-        <div class="brand-mark">RM</div>
+        <div class="brand-mark">
+          <img src="assets/routemapster.svg" alt="RouteMapster logo" />
+        </div>
         <div>
           <div class="brand-title">RouteMapster</div>
           <div class="brand-subtitle">Garage-led route explorer</div>
@@ -798,12 +805,6 @@
             <span class="module-tag">Core</span>
           </summary>
           <div class="module-body">
-            <div class="module-section">
-              <div class="section-title">Data intake</div>
-              <button id="loadData">Load data</button>
-              <div class="module-note">Placeholder loader for TfL route data.</div>
-            </div>
-
             <div class="module-section" id="networkFilters">
               <div class="section-title">Route search</div>
               <div class="field">
@@ -1064,10 +1065,7 @@
   <div id="loadingModal" class="loading-modal" aria-hidden="true">
     <div class="loading-card" role="status" aria-live="polite">
       <div class="loading-logo">
-        <svg viewBox="0 0 48 48" width="32" height="32" aria-hidden="true">
-          <rect x="4" y="4" width="40" height="40" rx="10" fill="currentColor" opacity="0.15"></rect>
-          <text x="24" y="30" text-anchor="middle" font-size="16" fill="currentColor" font-family="Space Grotesk, sans-serif">RM</text>
-        </svg>
+        <img src="assets/routemapster.svg" alt="RouteMapster logo" />
       </div>
       <div class="loading-text">
         <strong>Loading route geometry</strong>
