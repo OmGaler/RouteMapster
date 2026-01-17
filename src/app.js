@@ -80,6 +80,7 @@ const appState = {
 	focusRouteId: null,
 	focusRouteLoadToken: 0,
 	showNetworkRoutes: true,
+	suppressNetworkRoutes: false,
 	activeGarageRoutes: null,
 	routeLoadToken: 0,
 	networkRouteLoadToken: 0,
@@ -985,6 +986,11 @@ function selectGarageRoutes(features) {
 		clearFocusedRoute();
 		return;
 	}
+	if (!appState.suppressNetworkRoutes) {
+		appState.suppressNetworkRoutes = true;
+		appState.networkRouteLoadToken += 1;
+		clearNetworkRoutes();
+	}
 	appState.routeLoadToken += 1;
 	renderGarageRoutes(appState.routeLoadToken);
 }
@@ -998,6 +1004,7 @@ function buildGarageRouteSets(features) {
 		addRouteTokens(regular, p["TfL main network routes"]);
 		addRouteTokens(night, p["TfL night routes"]);
 		addRouteTokens(school, p["TfL school/mobility routes"]);
+		addRouteTokens(regular, p["Other routes"]);
 	});
 	return { regular, night, school };
 }
@@ -1420,7 +1427,7 @@ async function getSelectedNetworkCategories() {
 }
 
 async function renderNetworkRoutes(loadToken) {
-	if (appState.focusRouteId) {
+	if (appState.focusRouteId || appState.suppressNetworkRoutes) {
 		return;
 	}
 	clearNetworkRoutes();
@@ -2210,6 +2217,11 @@ function setupUI() {
 		clearGarageMarkers();
 		clearGarageRoutes();
 		appState.activeGarageRoutes = null;
+		if (appState.suppressNetworkRoutes) {
+			appState.suppressNetworkRoutes = false;
+			appState.networkRouteLoadToken += 1;
+			renderNetworkRoutes(appState.networkRouteLoadToken);
+		}
 		updateSelectedInfo('Garages hidden.');
 		if (appState.selectedFeature?.type === "garage") {
 			resetInfoPanel();
@@ -2490,6 +2502,7 @@ function setupUI() {
 			appState.showNetworkRoutes = false;
 			appState.activeGarageRoutes = null;
 			appState.activeBusStationRoutes = null;
+			appState.suppressNetworkRoutes = false;
 			updateSelectedInfo("All layers cleared.");
 			setBusStationSelectValue("");
 			resetInfoPanel();
@@ -2512,6 +2525,7 @@ function setupUI() {
 			appState.activeGarageRoutes = null;
 			appState.activeBusStationRoutes = null;
 			appState.showNetworkRoutes = false;
+			appState.suppressNetworkRoutes = false;
 			updateSelectedInfo("All routes cleared.");
 		});
 	}
