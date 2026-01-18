@@ -14,10 +14,10 @@ jobs:
     env:
       TFL_APP_ID: ${{ secrets.TFL_APP_ID }}
       TFL_APP_KEY: ${{ secrets.TFL_APP_KEY }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -44,9 +44,12 @@ jobs:
       - name: Commit changes
         shell: bash
         run: |
-          changes=$(git diff --name-only -- data/processed)
+          set -euo pipefail
+
+          # Detect changes in exactly what we intend to commit
+          changes=$(git status --porcelain -- data/processed data/raw/stops/postcode_cache.json)
           if [ -z "$changes" ]; then
-            echo "No processed data changes."
+            echo "No data changes."
             exit 0
           fi
 
@@ -54,9 +57,10 @@ jobs:
           git config user.email "routemapster-bot@users.noreply.github.com"
 
           summary=$(python scripts/changes.py)
-          echo "$summary" >> "$GITHUB_STEP_SUMMARY"
+          msg="Data update: $summary"
+
+          echo "$msg" >> "$GITHUB_STEP_SUMMARY"
 
           git add data/processed data/raw/stops/postcode_cache.json
-          git commit -m "$summary"
+          git commit -m "$msg"
           git push
-

@@ -13,10 +13,8 @@ import csv
 import json
 import logging
 import re
-from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
-from urllib.parse import urljoin
 
 import requests
 
@@ -29,7 +27,6 @@ from geojsonify_garages import (
     pick_address,
     save_cache,
 )
-
 
 GARAGES_PAGE = "http://www.londonbusroutes.net/garages.htm"
 GARAGES_CSV = "http://www.londonbusroutes.net/garages.csv"
@@ -62,19 +59,32 @@ ROUTE_FIELDS = {
     "Other routes",
 }
 
+# For garages already present in the processed GeoJSON, we mostly "lock" properties to preserve
+# manual fixes — BUT these specific fields should track upstream changes too.
+NON_ROUTE_FIELDS_TO_UPDATE = {
+    "PVR",
+    "Proportion of network",
+}
+
 
 def setup_logging(verbose: bool) -> None:
     level = logging.DEBUG if verbose else logging.INFO
-    logging.basicConfig(level=level, format="%(asctime)s | %(levelname)s | %(message)s", datefmt="%H:%M:%S")
+    logging.basicConfig(
+        level=level,
+        format="%(asctime)s | %(levelname)s | %(message)s",
+        datefmt="%H:%M:%S",
+    )
 
 
 def parse_date_from_text(text: str) -> Optional[str]:
     if not text:
         return None
+
     match = re.findall(r"(20\d{2})[-_/]?(\d{2})[-_/]?(\d{2})", text)
     if match:
         year, month, day = match[-1]
         return f"{year}{month}{day}"
+
     match = re.findall(r"(\d{1,2})\s+([A-Za-z]+)\s+(20\d{2})", text)
     if match:
         day_str, month_name, year_str = match[-1]
@@ -107,6 +117,7 @@ def parse_date_from_text(text: str) -> Optional[str]:
         month = months.get(month_name.lower())
         if month:
             return f"{int(year_str):04d}{month:02d}{int(day_str):02d}"
+
     return None
 
 
@@ -135,8 +146,10 @@ def load_existing_map(path: Path) -> Dict[str, Dict[str, Any]]:
     """
     if not path.exists():
         return {}
+
     with path.open("r", encoding="utf-8") as handle:
         data = json.load(handle)
+
     features = data.get("features") or []
     out: Dict[str, Dict[str, Any]] = {}
     for feature in features:
@@ -148,8 +161,8 @@ def load_existing_map(path: Path) -> Dict[str, Dict[str, Any]]:
     return out
 
 
-
 def compare_non_route_fields(rows: List[Dict[str, Any]], existing: Dict[str, Dict[str, Any]]) -> None:
+    # Warn only for fields we *intend* to remain locked.
     for row in rows:
         code = get_garage_code(row)
         if not code or code not in existing:
@@ -157,6 +170,9 @@ def compare_non_route_fields(rows: List[Dict[str, Any]], existing: Dict[str, Dic
         prev = existing[code]["properties"]
         for key, value in row.items():
             if key in ROUTE_FIELDS:
+                continue
+            if key in NON_ROUTE_FIELDS_TO_UPDATE:
+                # These are expected to change and will be updated.
                 continue
             if key not in GARAGE_PROPERTIES:
                 continue
@@ -182,12 +198,20 @@ def build_features(
         existing = existing_map.get(code)
 
         # If we already have this garage in the processed GeoJSON:
-        # LOCK all non-route fields + geometry (preserves your manual fixes),
-        # and ONLY update the route fields from the new CSV.
+        # LOCK geometry + most non-route fields (preserve manual fixes),
+        # update route allocations, and also refresh selected upstream fields (PVR / % network).
         if existing:
             props = dict(existing["properties"])
+
+            # Always refresh route fields from upstream CSV
             for rf in ROUTE_FIELDS:
                 props[rf] = (row.get(rf) or "").strip()
+
+            # Refresh selected non-route fields from upstream CSV
+            for k in NON_ROUTE_FIELDS_TO_UPDATE:
+                if k in row:
+                    props[k] = (row.get(k) or "").strip()
+
             features.append(
                 {
                     "type": "Feature",
@@ -313,6 +337,7 @@ def main() -> int:
                 cache.setdefault(pc, {"_failed": True, "_reason": f"bulk_lookup_error: {exc}"})
             save_cache(cache_path, cache)
             continue
+
         for pc, res in results.items():
             if res:
                 cache[pc] = {
@@ -325,6 +350,7 @@ def main() -> int:
                 }
             else:
                 cache[pc] = {"_failed": True, "_reason": "postcode_not_found"}
+
         save_cache(cache_path, cache)
 
     features = build_features(
