@@ -1,5 +1,5 @@
-
 data/raw/
+!data/raw/stops/
 !data/raw/stops/postcode_cache.json
 
 data/Route_Geometry_*/
@@ -10,4 +10,3 @@ data/bus_stops_*.geojson
 __pycache__/
 .env
 .env.*
-.svg
