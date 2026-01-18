@@ -61,6 +61,7 @@ jobs:
 
           echo "$msg" >> "$GITHUB_STEP_SUMMARY"
 
-          git add data/processed data/raw/stops/postcode_cache.json
+          git add data/processed
+          git add -f data/raw/stops/postcode_cache.json
           git commit -m "$msg"
           git push

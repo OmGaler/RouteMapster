@@ -21,7 +21,8 @@ const ROUTE_COLOURS = {
 	school: "#3b82f6",
 	prefix: "#10b981"
 };
-const DEFAULT_ROUTE_DRAW_ORDER = ["regular", "prefix", "twentyfour", "night", "school"];
+const DEFAULT_ROUTE_DRAW_ORDER = ["regular", "twentyfour", "prefix", "night", "school"];
+// const DEFAULT_ROUTE_DRAW_ORDER = ["school", "night", "prefix", "twentyfour", "regular"];
 
 async function initialiseRouteGeometryIndex() {
 	const routeIds = await loadRouteGeometryRouteIds();
@@ -488,6 +489,9 @@ function getRoutePillClass(routeId, routeSets) {
 	const normalised = String(routeId || "").toUpperCase();
 	if (isSuperloopRoute(normalised)) {
 		return "superloop";
+	}
+	if (isBakerloopRoute(normalised)) {
+		return "bakerloop";
 	}
 	if (!appState.useRouteTypeColours) {
 		return "regular";
@@ -1178,6 +1182,10 @@ function isPrefixRoute(routeId) {
 
 function isSuperloopRoute(routeId) {
 	return String(routeId || "").toUpperCase().startsWith("SL");
+}
+
+function isBakerloopRoute(routeId) {
+	return String(routeId || "").toUpperCase().startsWith("BL");
 }
 
 function collectPrefixRoutes(prefixRoutes, routes) {
