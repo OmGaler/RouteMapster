@@ -1340,7 +1340,8 @@ async function renderGarageRoutes(loadToken) {
 							weight: 4,
 							opacity: 0.85
 						}).addTo(layerGroup);
-						line.bindTooltip(routeId, { sticky: true });
+						line._routeId = routeId;
+						bindRouteHoverPopup(line, layerGroup);
 					});
 				})
 				.catch(() => {});
@@ -1485,7 +1486,8 @@ async function renderNetworkRoutes(loadToken) {
 							weight: 3,
 							opacity: 0.7
 						}).addTo(layerGroup);
-						line.bindTooltip(routeId, { sticky: true });
+						line._routeId = routeId;
+						bindRouteHoverPopup(line, layerGroup);
 					});
 				})
 				.catch(() => {});
@@ -1555,7 +1557,8 @@ function bindHoverPopup(layer, html) {
 		return;
 	}
 	const getContent = typeof html === "function" ? html : () => html;
-	layer.bindPopup(getContent(), {
+	const initialContent = getContent();
+	layer.bindPopup(initialContent || "", {
 		className: "hover-popup",
 		closeButton: false,
 		autoClose: false,
@@ -1563,15 +1566,97 @@ function bindHoverPopup(layer, html) {
 		autoPan: false,
 		offset: [0, -12]
 	});
-	layer.on("mouseover", () => {
-		layer.setPopupContent(getContent());
-		layer.openPopup();
+	layer.on("mouseover", (event) => {
+		const content = getContent(event);
+		if (content !== undefined) {
+			layer.setPopupContent(content);
+		}
+		layer.openPopup(event?.latlng);
 	});
 	layer.on("mouseout", () => {
 		layer.closePopup();
 	});
 	layer.on("click", () => {
 		layer.closePopup();
+	});
+}
+
+function collectPolylineSegments(latlngs, segments) {
+	if (!Array.isArray(latlngs) || latlngs.length === 0) {
+		return;
+	}
+	const first = latlngs[0];
+	if (first && typeof first.lat === "number" && typeof first.lng === "number") {
+		segments.push(latlngs);
+		return;
+	}
+	latlngs.forEach((segment) => collectPolylineSegments(segment, segments));
+}
+
+function isPointNearLatLngSegment(point, latlngs, map, tolerance) {
+	if (!Array.isArray(latlngs) || latlngs.length < 2) {
+		return false;
+	}
+	let prev = map.latLngToLayerPoint(latlngs[0]);
+	for (let i = 1; i < latlngs.length; i += 1) {
+		const next = map.latLngToLayerPoint(latlngs[i]);
+		const distance = L.LineUtil.pointToSegmentDistance(point, prev, next);
+		if (distance <= tolerance) {
+			return true;
+		}
+		prev = next;
+	}
+	return false;
+}
+
+function isPointNearPolyline(point, line, map, tolerance) {
+	const segments = [];
+	collectPolylineSegments(line.getLatLngs(), segments);
+	return segments.some((segment) => isPointNearLatLngSegment(point, segment, map, tolerance));
+}
+
+function collectRoutesNearLatLng(layerGroup, latlng, seedRouteId) {
+	const routes = new Set();
+	if (seedRouteId) {
+		routes.add(seedRouteId);
+	}
+	if (!layerGroup || !latlng || !appState.map) {
+		return sortRouteIds(Array.from(routes));
+	}
+	const map = appState.map;
+	const point = map.latLngToLayerPoint(latlng);
+	const tolerance = 8;
+	layerGroup.eachLayer((layer) => {
+		if (!layer || typeof layer.getLatLngs !== "function" || !layer._routeId) {
+			return;
+		}
+		if (layer.getBounds && !layer.getBounds().contains(latlng)) {
+			return;
+		}
+		if (isPointNearPolyline(point, layer, map, tolerance)) {
+			routes.add(layer._routeId);
+		}
+	});
+	return sortRouteIds(Array.from(routes));
+}
+
+function buildRouteGeometryHoverHtml(routes, routeSets) {
+	return `
+		<div class="hover-popup__content">
+			<div class="hover-popup__title">Routes here</div>
+			<div class="hover-popup__routes">${renderRoutePills(routes, routeSets)}</div>
+		</div>
+	`;
+}
+
+function bindRouteHoverPopup(line, layerGroup) {
+	if (!line) {
+		return;
+	}
+	bindHoverPopup(line, (event) => {
+		const routes = collectRoutesNearLatLng(layerGroup, event?.latlng, line._routeId);
+		const routeSets = appState.useRouteTypeColours ? appState.networkRouteSets : null;
+		return buildRouteGeometryHoverHtml(routes, routeSets);
 	});
 }
 
@@ -1954,7 +2039,8 @@ async function focusRoute(routeId) {
 			weight: 4,
 			opacity: 0.9
 		}).addTo(layerGroup);
-		line.bindTooltip(normalised, { sticky: true });
+		line._routeId = normalised;
+		bindRouteHoverPopup(line, layerGroup);
 	});
 	updateSelectedInfo(`Focused route: ${normalised}`);
 }
@@ -2162,7 +2248,8 @@ async function renderBusStationRoutes(loadToken) {
 						weight: 4,
 						opacity: 0.85
 					}).addTo(layerGroup);
-					line.bindTooltip(routeId, { sticky: true });
+					line._routeId = routeId;
+					bindRouteHoverPopup(line, layerGroup);
 				});
 			})
 			.catch(() => {});

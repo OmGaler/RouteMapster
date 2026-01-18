@@ -308,7 +308,8 @@
       gap: 8px;
     }
 
-    .toggle input[type="checkbox"] {
+    .toggle input[type="checkbox"],
+    .toggle input[type="radio"] {
       width: 18px;
       height: 18px;
       accent-color: var(--accent);
@@ -878,15 +879,19 @@
               </div>
             </div>
 
-            <div class="module-section module-disabled">
+            <div class="module-section">
               <div class="section-title">Deck type</div>
               <label class="toggle">
+                <span>Display all</span>
+                <input type="radio" id="showAllDeckers" name="deckFilter" checked />
+              </label>
+              <label class="toggle">
                 <span>Single deck only</span>
-                <input type="checkbox" id="showSingleDecker" disabled />
+                <input type="radio" id="showSingleDecker" name="deckFilter" />
               </label>
               <label class="toggle">
                 <span>Double deck only</span>
-                <input type="checkbox" id="showDoubleDecker" disabled />
+                <input type="radio" id="showDoubleDecker" name="deckFilter" />
               </label>
             </div>
           </div>
