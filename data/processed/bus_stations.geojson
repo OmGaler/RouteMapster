@@ -14,7 +14,7 @@
         "name": "Addington Village Interchange",
         "display_name": "Addington Village Bus Station",
         "postcode": "CR0 9BA",
-        "stops": []
+        "stops": ["490003101A", "490003101B", "490003101C", "490003101D", "490003101E"]
       }
     },
     {
@@ -30,7 +30,7 @@
         "name": "Aldgate bus station",
         "display_name": "Aldgate Bus Station",
         "postcode": "EC3N 1BD",
-        "stops": []
+        "stops": ["490003184L"]
       }
     },
     {
@@ -46,7 +46,7 @@
         "name": "Beckton bus station",
         "display_name": "Beckton Bus Station",
         "postcode": "E6 5PA",
-        "stops": []
+        "stops": ["490006317A", "490006317B", "490006317C", "490006317D"]
       }
     },
     {
@@ -94,7 +94,7 @@
         "name": "Canada Water bus station",
         "display_name": "Canada Water Bus Station",
         "postcode": "SE16 7ED",
-        "stops": []
+        "stops": ["490004733C", "490000037S", "490004733B", "490004733D"]
       }
     },
     {
@@ -110,7 +110,7 @@
         "name": "Canning Town bus station",
         "display_name": "Canning Town Bus Station",
         "postcode": "E16 1DQ",
-        "stops": []
+        "stops": ["490000039A", "490000039G", "490000039F", "490000039D", "490000039E", "490000039C", "490000039B"]
       }
     },
     {
@@ -126,7 +126,7 @@
         "name": "Chingford bus station",
         "display_name": "Chingford Bus Station",
         "postcode": "E4 6AL",
-        "stops": []
+        "stops": ["490001063C", "490001063B", "490001063D", "490001063F"]
       }
     },
     {
@@ -142,7 +142,7 @@
         "name": "Crystal Palace bus station",
         "display_name": "Crystal Palace Bus Station",
         "postcode": "SE19 2AZ",
-        "stops": []
+        "stops": ["490005869A", "490005869C", "490005869D"]
       }
     },
     {
@@ -158,7 +158,7 @@
         "name": "East Croydon bus station",
         "display_name": "East Croydon Bus Station",
         "postcode": "CR0 0XJ",
-        "stops": []
+        "stops": ["490001089E1", "490001089E2", "490001089E3"]
       }
     },
     {
@@ -190,7 +190,7 @@
         "name": "Edmonton Green bus station",
         "display_name": "Edmonton Green Bus Station",
         "postcode": "N9 0TZ",
-        "stops": []
+        "stops": ["490009983F", "490009983A", "490009983G", "490009983E", "490009983B", "490009983C"]
       }
     },
     {
@@ -206,7 +206,7 @@
         "name": "Eltham bus station",
         "display_name": "Eltham Bus Station",
         "postcode": "SE9 1DY",
-        "stops": []
+        "stops": ["490001097S", "490001097A", "490001097D", "490001097C"]
       }
     },
     {
@@ -222,7 +222,7 @@
         "name": "Euston bus station",
         "display_name": "Euston Bus Station",
         "postcode": "NW1 2EF",
-        "stops": []
+        "stops": ["490000077F", "490000077C", "490000077D", "490000077G", "490000077AP", "490000077E"]
       }
     },
     {
@@ -238,7 +238,7 @@
         "name": "Finsbury Park interchange bus station",
         "display_name": "Finsbury Park Interchange Bus Station",
         "postcode": "N4 2DH",
-        "stops": []
+        "stops": ["490000083H", "490000083G", "490000083AP"]
       }
     },
     {
@@ -254,7 +254,7 @@
         "name": "Golders Green bus station",
         "display_name": "Golders Green Bus Station",
         "postcode": "NW11 7RN",
-        "stops": []
+        "stops": ["490000087B", "490000087GB", "490000087GI", "490000087GH", "490000087GF", "490015497GC", "490000087GJ", "490015496GW"]
       }
     },
     {
@@ -270,7 +270,7 @@
         "name": "Grove Park bus station",
         "display_name": "Grove Park Bus Station",
         "postcode": "SE12 9TT",
-        "stops": []
+        "stops": ["490007565A", "490001124B", "490015553F", "490015256D"]
       }
     },
     {
@@ -286,7 +286,7 @@
         "name": "Hammersmith Lower bus station",
         "display_name": "Hammersmith Lower Bus Station",
         "postcode": "W6 9YA",
-        "stops": []
+        "stops": ["490007705K", "490007705Z2", "490007705J"]
       }
     },
     {
@@ -302,7 +302,7 @@
         "name": "Hammersmith Upper bus station",
         "display_name": "Hammersmith Upper Bus Station",
         "postcode": "W6 8AB",
-        "stops": []
+        "stops": ["490007705A", "490007705G", "490007705C", "490007705D", "490007705B"]
       }
     },
     {
@@ -334,7 +334,7 @@
         "name": "Heathrow Central bus station",
         "display_name": "Heathrow Central Bus Station",
         "postcode": "TW6 1BP",
-        "stops": []
+        "stops": ["4900801619", "4900801618", "490008016S"]
       }
     },
     {
@@ -350,7 +350,7 @@
         "name": "Hounslow bus station",
         "display_name": "Hounslow Bus Station",
         "postcode": "TW3 2HD",
-        "stops": []
+        "stops": ["490008392Z1", "490008393W", "490008393W1", "490015241S"]
       }
     },
     {
@@ -366,7 +366,7 @@
         "name": "Kingston Cromwell Road bus station",
         "display_name": "Kingston Cromwell Road Bus Station",
         "postcode": "KT2 6RD",
-        "stops": []
+        "stops": ["490005800A1", "4900058QA17", "490005800A2", "490005800A3"]
       }
     },
     {
@@ -382,7 +382,7 @@
         "name": "Kingston Fairfield bus station",
         "display_name": "Kingston Fairfield Bus Station",
         "postcode": "KT2 6SN",
-        "stops": []
+        "stops": ["490006705B", "490006705B2"]
       }
     },
     {
@@ -414,7 +414,7 @@
         "name": "London Bridge bus station",
         "display_name": "London Bridge Bus Station",
         "postcode": "SE1 9SP",
-        "stops": []
+        "stops": ["490019954J", "490000139A", "490000139B", "490019954L"]
       }
     },
     {
@@ -430,7 +430,7 @@
         "name": "Mill Hill Broadway bus station",
         "display_name": "Mill Hill Broadway Bus Station",
         "postcode": "NW7 2HN",
-        "stops": []
+        "stops": ["490001193D", "490001193C", "490001193B"]
       }
     },
     {
@@ -446,7 +446,7 @@
         "name": "Morden bus station",
         "display_name": "Morden Bus Station",
         "postcode": "SM4 5HT",
-        "stops": []
+        "stops": ["490000151A", "490000151L", "490000151C", "490000151B", "490000151K"]
       }
     },
     {
@@ -462,7 +462,7 @@
         "name": "Mortlake bus station",
         "display_name": "Mortlake Bus Station",
         "postcode": "SW14 8PN",
-        "stops": []
+        "stops": ["490006144N", "490010047N"]
       }
     },
     {
@@ -478,7 +478,23 @@
         "name": "North Finchley bus station",
         "display_name": "North Finchley Bus Station",
         "postcode": "N12 9QR",
-        "stops": []
+        "stops": ["490015443S", "490015443P", "490015443N", "490015518E"]
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          51.50024,
+          0.00335
+        ]
+      },
+      "properties": {
+        "name": "North Greenwich bus station",
+        "display_name": "North Greenwich Bus Station",
+        "postcode": "SE10 0PH",
+        "stops": ["490010374A", "490010374B", "490010374C", "490010374D", "490010374E"]
       }
     },
     {
@@ -494,7 +510,7 @@
         "name": "Orpington bus station",
         "display_name": "Orpington Bus Station",
         "postcode": "BR6 0SX",
-        "stops": []
+        "stops": ["490001220D", "490001220E", "490001220F", "490001220G"]
       }
     },
     {
@@ -510,7 +526,7 @@
         "name": "Peckham bus station",
         "display_name": "Peckham Bus Station",
         "postcode": "SE15 5SJ",
-        "stops": []
+        "stops": ["490010877W", "490010877E", "490010877H"]
       }
     },
     {
@@ -526,7 +542,7 @@
         "name": "Prince Regent bus station",
         "display_name": "Prince Regent Bus Station",
         "postcode": "E16 3JH",
-        "stops": []
+        "stops": ["490011204Q", "490011204S", "490011204R", "490011204T"]
       }
     },
     {
@@ -558,7 +574,7 @@
         "name": "Richmond bus station",
         "display_name": "Richmond Bus Station",
         "postcode": "TW9 1AW",
-        "stops": []
+        "stops": ["490011556W", "490011556H", "490011556J"]
       }
     },
     {
@@ -590,7 +606,7 @@
         "name": "South Harrow bus station",
         "display_name": "South Harrow Bus Station",
         "postcode": "HA2 0AQ",
-        "stops": []
+        "stops": ["490012306W", "490000211A", "490000211B"]
       }
     },
     {
@@ -606,7 +622,7 @@
         "name": "Southgate bus station",
         "display_name": "Southgate Bus Station",
         "postcode": "N14 5BH",
-        "stops": []
+        "stops": ["490000210F", "490000210C", "490000210B", "490000210G", "490000210H"]
       }
     },
     {
@@ -638,7 +654,7 @@
         "name": "Stratford bus station",
         "display_name": "Stratford Bus Station",
         "postcode": "E15 1DA",
-        "stops": []
+        "stops": ["490012904D", "490012904T", "490012904N", "490012904B", "490012904C", "490012904A", "490012904Q"]
       }
     },
     {
@@ -654,7 +670,7 @@
         "name": "Stratford City bus station",
         "display_name": "Stratford City Bus Station",
         "postcode": "E20 1GR",
-        "stops": []
+        "stops": ["490019793T", "490019793W", "490019793S", "490019793X"]
       }
     },
     {
@@ -670,7 +686,7 @@
         "name": "Tenison Way bus station",
         "display_name": "Waterloo, Tenison Way Bus Station",
         "postcode": "SE1 7RX",
-        "stops": []
+        "stops": ["490000254J", "490000254K", "490000254H"]
       }
     },
     {
@@ -686,7 +702,7 @@
         "name": "Tottenham Hale bus station",
         "display_name": "Tottenham Hale Bus Station",
         "postcode": "N17 9LP",
-        "stops": []
+        "stops": ["49009917SW", "490009917Y", "490009917A", "490009917T", "490009917B", "490009917D"]
       }
     },
     {
@@ -702,7 +718,7 @@
         "name": "Turnpike Lane bus station",
         "display_name": "Turnpike Lane Bus Station",
         "postcode": "N15 3EA",
-        "stops": []
+        "stops": ["490013852N", "490013852R", "490013852S", "490013852T"]
       }
     },
     {
@@ -718,7 +734,7 @@
         "name": "Vauxhall bus station",
         "display_name": "Vauxhall Bus Station",
         "postcode": "SW8 1SJ",
-        "stops": []
+        "stops": ["490000247A", "490000247B", "490000247C", "490000247D", "490000247E", "490000247F", "490000247G1", "490000247H", "490000247J"]
       }
     },
     {
@@ -734,7 +750,7 @@
         "name": "Victoria bus station",
         "display_name": "Victoria Bus Station",
         "postcode": "SW1V 1JR",
-        "stops": []
+        "stops": ["490014050A", "490014050B", "490014050C", "490014050D", "490000248YZ", "490002139ZZ"]
       }
     },
     {
@@ -766,7 +782,7 @@
         "name": "Walthamstow bus station",
         "display_name": "Walthamstow Bus Station",
         "postcode": "E17 7JN",
-        "stops": []
+        "stops": ["490014164A", "490000249B", "490014164C", "490014164D", "490000249E", "490014164N"]
       }
     },
     {
@@ -782,7 +798,7 @@
         "name": "Wells Terrace bus station",
         "display_name": "Finsbury Park Wells Terrace Bus Station",
         "postcode": "N4 2AL",
-        "stops": []
+        "stops": ["490000083B", "490000083C", "490000083A"]
       }
     },
     {
@@ -798,7 +814,7 @@
         "name": "West Croydon bus station",
         "display_name": "West Croydon Bus Station",
         "postcode": "CR0 2YT",
-        "stops": []
+        "stops": ["490014420X", "490014420Y", "490014420Z", "490014420V", "490014420W", "490014420B8"]
       }
     },
     {
@@ -814,7 +830,7 @@
         "name": "White City bus station",
         "display_name": "White City Bus Station",
         "postcode": "W12 7RY",
-        "stops": []
+        "stops": ["490003375WK", "490003375WL", "490003375WH", "490003375WJ", "490003375AP", "490018981ZW"]
       }
     },
     {
@@ -830,7 +846,7 @@
         "name": "Wimbledon bus station",
         "display_name": "Wimbledon Bus Station",
         "postcode": "SW19 1UE",
-        "stops": []
+        "stops": ["490014731H", "490014731G", "490014731F", "490014731E"]
       }
     }
   ]
