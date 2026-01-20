@@ -24,6 +24,30 @@ const ROUTE_COLOURS = {
 };
 const DEFAULT_ROUTE_DRAW_ORDER = ["regular", "twentyfour", "prefix", "night", "school"];
 // const DEFAULT_ROUTE_DRAW_ORDER = ["school", "night", "prefix", "twentyfour", "regular"];
+const ROUTE_PANE = "routes-pane";
+const STOP_PANE = "stops-pane";
+const STATION_PANE = "stations-pane";
+const GARAGE_PANE = "garages-pane";
+const HIGHLIGHT_PANE = "highlight-pane";
+const MAP_PANE_ORDER = [
+	{ name: ROUTE_PANE, zIndex: 410 },
+	{ name: STOP_PANE, zIndex: 420 },
+	{ name: STATION_PANE, zIndex: 430 },
+	{ name: GARAGE_PANE, zIndex: 440 },
+	{ name: HIGHLIGHT_PANE, zIndex: 450 }
+];
+
+function configureMapPanes(map) {
+	if (!map) {
+		return;
+	}
+	MAP_PANE_ORDER.forEach(({ name, zIndex }) => {
+		const pane = map.createPane(name);
+		if (pane) {
+			pane.style.zIndex = String(zIndex);
+		}
+	});
+}
 
 async function initialiseRouteGeometryIndex() {
 	const routeIds = await loadRouteGeometryRouteIds();
@@ -41,6 +65,7 @@ function initMap() {
 		attribution: '&copy; OpenStreetMap contributors',
 		opacity: 0.85
 	}).addTo(map);
+	configureMapPanes(map);
 
 	return map;
 }
@@ -227,7 +252,12 @@ async function addGaragesLayer(map) {
   groups.forEach((group) => {
     const groupPercent = getGarageGroupPercent(group.features);
     const radius = getGarageMarkerRadius(groupPercent, scaleEnabled, maxPercent);
-    const marker = L.circleMarker(group.latlng, { radius, weight: 1, fillOpacity: 0.9 });
+    const marker = L.circleMarker(group.latlng, {
+      radius,
+      weight: 1,
+      fillOpacity: 0.9,
+      pane: GARAGE_PANE
+    });
     const hoverHtml = buildGarageHoverHtml(group.features);
     bindHoverPopup(marker, hoverHtml);
     marker.on('click', () => {
@@ -312,7 +342,8 @@ async function addBusStopsLayer(map) {
 			weight: 1,
 			color: "#1d4ed8",
 			fillColor: "#2563eb",
-			fillOpacity: 0.8
+			fillOpacity: 0.8,
+			pane: STOP_PANE
 		});
 		bindHoverPopup(marker, () => buildBusStopPopup(feature.properties || {}));
 		marker.on("click", () => {
@@ -361,7 +392,8 @@ async function addBusStandsLayer(map) {
 			weight: 1,
 			color: "#475569",
 			fillColor: "#94a3b8",
-			fillOpacity: 0.75
+			fillOpacity: 0.75,
+			pane: STOP_PANE
 		});
 		bindHoverPopup(marker, () => buildBusStopPopup(feature.properties || {}));
 		marker.on("click", () => {
@@ -527,7 +559,8 @@ function getRoutePillClass(routeId, routeSets) {
 
 function renderRoutePills(routes, routeSets) {
 	const list = Array.isArray(routes) ? routes : Array.from(routes || []);
-	const unique = Array.from(new Set(list.map((route) => String(route)).filter(Boolean)));
+	const unique = Array.from(new Set(list.map((route) => String(route)).filter(Boolean)))
+		.filter((route) => !isExcludedRoute(route));
 	if (unique.length === 0) {
 		return '<div class="info-empty">No routes listed.</div>';
 	}
@@ -600,11 +633,15 @@ function buildBusStopInfoHtml(props, routeSets) {
 	};
 }
 
-function isExcludedStopRoute(routeId) {
+function isExcludedRoute(routeId) {
 	if (!routeId) {
 		return false;
 	}
-	return /^UL/i.test(routeId) || /^Y/i.test(routeId);
+	const value = String(routeId).trim().toUpperCase();
+	if (!value) {
+		return false;
+	}
+	return value.startsWith("UL") || value.startsWith("Y");
 }
 
 function getStopPointIdFromProps(props) {
@@ -629,6 +666,9 @@ function addRouteToStopCache(stopId, routeId) {
 		return;
 	}
 	const key = String(routeId).toUpperCase();
+	if (isExcludedRoute(key)) {
+		return;
+	}
 	let set = appState.stopRoutesFromLines.get(stopId);
 	if (!set) {
 		set = new Set();
@@ -641,11 +681,11 @@ function addRouteToStopCache(stopId, routeId) {
 }
 
 function getStopRouteTokens(props) {
-	const tokens = new Set(extractRouteTokens(props?.ROUTES).filter((routeId) => !isExcludedStopRoute(routeId)));
+	const tokens = new Set(extractRouteTokens(props?.ROUTES).filter((routeId) => !isExcludedRoute(routeId)));
 	const stopId = getStopPointIdFromProps(props);
 	if (stopId && appState.stopRoutesFromLines.has(stopId)) {
 		appState.stopRoutesFromLines.get(stopId).forEach((routeId) => {
-			if (!isExcludedStopRoute(routeId)) {
+			if (!isExcludedRoute(routeId)) {
 				tokens.add(routeId);
 			}
 		});
@@ -659,7 +699,7 @@ function buildStopRouteIndex(geojson) {
 	features.forEach((feature) => {
 		const props = feature?.properties || {};
 		extractRouteTokens(props.ROUTES).forEach((routeId) => {
-			if (!isExcludedStopRoute(routeId)) {
+			if (!isExcludedRoute(routeId)) {
 				tokens.add(routeId);
 			}
 		});
@@ -683,8 +723,12 @@ async function ensureStopPointRoutes(props) {
 				return;
 			}
 			data.lines.forEach((line) => {
+				const mode = String(line?.modeName || "").toLowerCase();
+				if (mode && mode !== "bus") {
+					return;
+				}
 				const id = String(line?.id || line?.name || "").trim();
-				if (!id || isExcludedStopRoute(id)) {
+				if (!id || isExcludedRoute(id)) {
 					return;
 				}
 				addRouteToStopCache(stopId, id);
@@ -697,7 +741,7 @@ async function ensureStopPointRoutes(props) {
 
 async function ensureRouteStopData(routeId) {
 	const normalised = String(routeId || "").trim().toUpperCase();
-	if (!normalised || isExcludedStopRoute(normalised)) {
+	if (!normalised || isExcludedRoute(normalised)) {
 		return;
 	}
 	if (appState.stopRoutesIndex?.has(normalised)) {
@@ -1037,9 +1081,14 @@ function addRouteTokens(set, value) {
 		.filter(Boolean)
 		.forEach((token) => {
 			const cleaned = token.replace(/[^A-Za-z0-9]/g, '');
-			if (cleaned) {
-				set.add(cleaned.toUpperCase());
+			if (!cleaned) {
+				return;
 			}
+			const normalised = cleaned.toUpperCase();
+			if (isExcludedRoute(normalised)) {
+				return;
+			}
+			set.add(normalised);
 		});
 }
 
@@ -1053,7 +1102,8 @@ function extractRouteTokens(value) {
 		.filter(Boolean)
 		.map((token) => token.replace(/[^A-Za-z0-9]/g, ''))
 		.filter(Boolean)
-		.map((token) => token.toUpperCase());
+		.map((token) => token.toUpperCase())
+		.filter((token) => !isExcludedRoute(token));
 }
 
 function buildRouteFilterTokens(query) {
@@ -1170,6 +1220,9 @@ function routeMatchesFilter(routeId, filterTokens, exactMatch) {
 function filterRouteSet(routes, filterTokens) {
 	const exactMatch = isRouteTypeEnabled("showExactRouteMatch");
 	return Array.from(routes).filter((routeId) => {
+		if (isExcludedRoute(routeId)) {
+			return false;
+		}
 		return routeMatchesFilter(routeId, filterTokens, exactMatch) && matchesDeckFilter(routeId);
 	});
 }
@@ -1295,7 +1348,11 @@ async function loadRouteGeometryRouteIds() {
 		}
 		const data = await res.json();
 		const routes = Array.isArray(data?.routes) ? data.routes : [];
-		const routeIds = new Set(routes.map((routeId) => String(routeId).trim().toUpperCase()).filter(Boolean));
+		const routeIds = new Set(
+			routes
+				.map((routeId) => String(routeId).trim().toUpperCase())
+				.filter((routeId) => routeId && !isExcludedRoute(routeId))
+		);
 		appState.geometryRouteIds = routeIds.size > 0 ? routeIds : null;
 		return appState.geometryRouteIds;
 	} catch (error) {
@@ -1352,7 +1409,8 @@ async function renderGarageRoutes(loadToken) {
 						const line = L.polyline(segment, {
 							color: resolveRouteColour(category.color),
 							weight: 4,
-							opacity: 0.85
+							opacity: 0.85,
+							pane: ROUTE_PANE
 						}).addTo(layerGroup);
 						line._routeId = routeId;
 						bindRouteHoverPopup(line, layerGroup);
@@ -1498,7 +1556,8 @@ async function renderNetworkRoutes(loadToken) {
 						const line = L.polyline(segment, {
 							color: resolveRouteColour(category.color),
 							weight: 3,
-							opacity: 0.7
+							opacity: 0.7,
+							pane: ROUTE_PANE
 						}).addTo(layerGroup);
 						line._routeId = routeId;
 						bindRouteHoverPopup(line, layerGroup);
@@ -1513,6 +1572,9 @@ async function renderNetworkRoutes(loadToken) {
 
 async function loadRouteGeometry(routeId) {
 	const normalised = String(routeId || "").toUpperCase();
+	if (!normalised || isExcludedRoute(normalised)) {
+		return null;
+	}
 	if (appState.routeGeometryCache.has(normalised)) {
 		return appState.routeGeometryCache.get(normalised);
 	}
@@ -1778,6 +1840,10 @@ function parseBusStationCoordinates(coords) {
 	return { lat: second, lon: first };
 }
 
+function getStopRouteTokensFromProps(props) {
+	return extractRouteTokens(props?.ROUTES);
+}
+
 function buildStopRoutesLookup(geojson) {
 	const lookup = new Map();
 	const features = Array.isArray(geojson?.features) ? geojson.features : [];
@@ -1787,7 +1853,7 @@ function buildStopRoutesLookup(geojson) {
 		if (!stopId) {
 			return;
 		}
-		const routes = getStopRouteTokens(props);
+		const routes = getStopRouteTokensFromProps(props);
 		if (!routes || routes.length === 0) {
 			return;
 		}
@@ -1801,21 +1867,62 @@ function buildStopRoutesLookup(geojson) {
 	return lookup;
 }
 
+function buildStopCoordinateLookup(geojson) {
+	const lookup = new Map();
+	const features = Array.isArray(geojson?.features) ? geojson.features : [];
+	features.forEach((feature) => {
+		const props = feature?.properties || {};
+		const stopId = getStopPointIdFromProps(props);
+		if (!stopId || lookup.has(stopId)) {
+			return;
+		}
+		const coords = feature?.geometry?.coordinates;
+		if (!Array.isArray(coords) || coords.length < 2) {
+			return;
+		}
+		const lon = Number(coords[0]);
+		const lat = Number(coords[1]);
+		if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+			return;
+		}
+		lookup.set(stopId, { lat, lon });
+	});
+	return lookup;
+}
+
+function getStationCoordsFromStops(stopIds, stopCoordLookup) {
+	if (!stopIds || stopIds.size === 0 || !stopCoordLookup) {
+		return null;
+	}
+	let latSum = 0;
+	let lonSum = 0;
+	let count = 0;
+	stopIds.forEach((stopId) => {
+		const coords = stopCoordLookup.get(stopId);
+		if (!coords) {
+			return;
+		}
+		latSum += coords.lat;
+		lonSum += coords.lon;
+		count += 1;
+	});
+	if (count === 0) {
+		return null;
+	}
+	return { lat: latSum / count, lon: lonSum / count };
+}
+
 function buildBusStationsFromAnchors(stationGeojson, busStopsGeojson) {
 	const features = Array.isArray(stationGeojson?.features) ? stationGeojson.features : [];
 	if (features.length === 0) {
 		return [];
 	}
 	const stopRoutesLookup = buildStopRoutesLookup(busStopsGeojson);
+	const stopCoordLookup = buildStopCoordinateLookup(busStopsGeojson);
 	return features
 		.map((feature, index) => {
 			const props = feature?.properties || {};
 			const name = getBusStationDisplayName(props);
-			const coords = feature?.geometry?.coordinates;
-			const parsed = parseBusStationCoordinates(coords);
-			if (!parsed) {
-				return null;
-			}
 			const stopIds = new Set(getBusStationStopIds(props));
 			const routes = new Set();
 			stopIds.forEach((stopId) => {
@@ -1825,6 +1932,14 @@ function buildBusStationsFromAnchors(stationGeojson, busStopsGeojson) {
 				}
 				stopRoutes.forEach((routeId) => routes.add(routeId));
 			});
+			const coords = feature?.geometry?.coordinates;
+			const parsed = parseBusStationCoordinates(coords);
+			const stopCoords = getStationCoordsFromStops(stopIds, stopCoordLookup);
+			const lat = stopCoords?.lat ?? parsed?.lat;
+			const lon = stopCoords?.lon ?? parsed?.lon;
+			if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+				return null;
+			}
 			const keyBase = buildBusStationKey(name);
 			const key = keyBase || `station-${index + 1}`;
 			return {
@@ -1834,9 +1949,9 @@ function buildBusStationsFromAnchors(stationGeojson, busStopsGeojson) {
 				stopCount: stopIds.size,
 				routes,
 				routeCount: routes.size,
-				lat: parsed.lat,
-				lon: parsed.lon,
-				latlng: L.latLng(parsed.lat, parsed.lon),
+				lat,
+				lon,
+				latlng: L.latLng(lat, lon),
 				postcode: String(props?.postcode || "").trim()
 			};
 		})
@@ -1896,7 +2011,7 @@ function addBusStationStop(station, feature) {
 	station.lonSum += lon;
 	station.stopCount += 1;
 	const props = feature?.properties || {};
-	getStopRouteTokens(props).forEach((routeId) => station.routes.add(routeId));
+	getStopRouteTokensFromProps(props).forEach((routeId) => station.routes.add(routeId));
 }
 
 function getDistanceSq(lat1, lon1, lat2, lon2) {
@@ -2036,7 +2151,7 @@ function buildBusStationPopup(station) {
 function buildBusStationInfoHtml(station, routeSets) {
 	const routes = Array.from(station.routes || []);
 	const stopCount = Number.isFinite(station.stopCount) ? station.stopCount : 0;
-	const subtitle = stopCount > 0 ? `${stopCount} stops listed` : "Bus station";
+	const subtitle = stopCount > 0 ? `${stopCount} stops` : "Bus station";
 	return {
 		title: station.name || "Bus station",
 		subtitle,
@@ -2074,7 +2189,8 @@ function highlightBusStation(station) {
 		weight: 3,
 		color: "#f97316",
 		fillColor: "#fdba74",
-		fillOpacity: 0.35
+		fillOpacity: 0.35,
+		pane: HIGHLIGHT_PANE
 	}).addTo(layer);
 	layer.addTo(appState.map);
 	appState.busStationHighlightLayer = layer;
@@ -2116,7 +2232,7 @@ async function focusRoute(routeId) {
 		return;
 	}
 	const normalised = String(routeId || "").trim().toUpperCase();
-	if (!normalised) {
+	if (!normalised || isExcludedRoute(normalised)) {
 		return;
 	}
 	ensureRouteStopData(normalised)
@@ -2150,7 +2266,8 @@ async function focusRoute(routeId) {
 		const line = L.polyline(segment, {
 			color,
 			weight: 4,
-			opacity: 0.9
+			opacity: 0.9,
+			pane: ROUTE_PANE
 		}).addTo(layerGroup);
 		line._routeId = normalised;
 		bindRouteHoverPopup(line, layerGroup);
@@ -2283,7 +2400,8 @@ async function addBusStationsLayer(map) {
 			weight: 2,
 			color: "#0f766e",
 			fillColor: "#14b8a6",
-			fillOpacity: 0.85
+			fillOpacity: 0.85,
+			pane: STATION_PANE
 		});
 		bindHoverPopup(marker, buildBusStationPopup(station));
 		marker.on("click", () => {
@@ -2371,7 +2489,8 @@ async function renderBusStationRoutes(loadToken) {
 					const line = L.polyline(segment, {
 						color: getBusStationRouteColour(routeId, routeSets),
 						weight: 4,
-						opacity: 0.85
+						opacity: 0.85,
+						pane: ROUTE_PANE
 					}).addTo(layerGroup);
 					line._routeId = routeId;
 					bindRouteHoverPopup(line, layerGroup);
