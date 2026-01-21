@@ -38,6 +38,9 @@ jobs:
       - name: Fetch bus stops
         run: python scripts/fetch_bus_stops.py
 
+      - name: Build timetable frequency cache
+        run: python scripts/build_frequency_cache.py
+
       - name: Fetch garages
         run: python scripts/fetch_and_process_garages.py
 
