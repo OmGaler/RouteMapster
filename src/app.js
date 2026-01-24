@@ -14,6 +14,7 @@ const BUS_STOPS_GEOJSON_PATH = "/data/processed/stops.geojson";
 const BUS_STATIONS_GEOJSON_PATH = "/data/processed/bus_stations.geojson";
 const GARAGES_GEOJSON_PATH = "/data/processed/garages.geojson";
 const VEHICLE_LOOKUP_PATH = "/data/vehicles.json";
+const FREQUENCY_DATA_PATH = "/data/processed/frequencies.json";
 
 const ROUTE_COLOURS = {
 	regular: "#ef4444",
@@ -25,12 +26,14 @@ const ROUTE_COLOURS = {
 const DEFAULT_ROUTE_DRAW_ORDER = ["regular", "twentyfour", "prefix", "night", "school"];
 // const DEFAULT_ROUTE_DRAW_ORDER = ["school", "night", "prefix", "twentyfour", "regular"];
 const ROUTE_PANE = "routes-pane";
+const FREQUENCY_PANE = "frequency-pane";
 const STOP_PANE = "stops-pane";
 const STATION_PANE = "stations-pane";
 const GARAGE_PANE = "garages-pane";
 const HIGHLIGHT_PANE = "highlight-pane";
 const MAP_PANE_ORDER = [
 	{ name: ROUTE_PANE, zIndex: 410 },
+	{ name: FREQUENCY_PANE, zIndex: 415 },
 	{ name: STOP_PANE, zIndex: 420 },
 	{ name: STATION_PANE, zIndex: 430 },
 	{ name: GARAGE_PANE, zIndex: 440 },
@@ -104,6 +107,7 @@ const appState = {
 	routeGeometryCache: new Map(),
 	garageRouteLayer: null,
 	networkRouteLayer: null,
+	frequencyLayer: null,
 	focusRouteLayer: null,
 	focusRouteId: null,
 	focusRouteLoadToken: 0,
@@ -115,6 +119,11 @@ const appState = {
 	networkRouteSets: null,
 	geometryRouteIds: undefined,
 	routeFilterTokens: [],
+	frequencyData: null,
+	frequencyLoadPromise: null,
+	frequencyLoadToken: 0,
+	frequencyBand: "peak_am",
+	showFrequencyLayer: false,
 	geocodeLastAt: 0
 };
 
@@ -1361,6 +1370,78 @@ async function loadRouteGeometryRouteIds() {
 	}
 }
 
+async function loadFrequencyData() {
+	if (appState.frequencyData) {
+		return appState.frequencyData;
+	}
+	if (appState.frequencyLoadPromise) {
+		return appState.frequencyLoadPromise;
+	}
+	appState.frequencyLoadPromise = fetch(FREQUENCY_DATA_PATH, { cache: "no-store" })
+		.then((response) => response.ok ? response.json() : null)
+		.then((data) => {
+			appState.frequencyData = data && typeof data === "object" ? data : null;
+			return appState.frequencyData;
+		})
+		.catch(() => {
+			appState.frequencyData = null;
+			return null;
+		})
+		.finally(() => {
+			appState.frequencyLoadPromise = null;
+		});
+	return appState.frequencyLoadPromise;
+}
+
+function getFrequencyValue(routeId, band) {
+	if (!routeId || !band || !appState.frequencyData) {
+		return null;
+	}
+	const key = String(routeId).trim().toUpperCase();
+	if (!key) {
+		return null;
+	}
+	const entry = appState.frequencyData[key];
+	if (!entry || typeof entry !== "object") {
+		return null;
+	}
+	const value = Number(entry[band]);
+	return Number.isFinite(value) ? value : null;
+}
+
+function getFrequencyPerHour(headwayMinutes) {
+	if (!Number.isFinite(headwayMinutes) || headwayMinutes <= 0) {
+		return 0;
+	}
+	return 60 / headwayMinutes;
+}
+
+function quantizeLatLng(value) {
+	return Number(value).toFixed(5);
+}
+
+function buildSegmentKey(a, b) {
+	const aKey = `${quantizeLatLng(a[0])},${quantizeLatLng(a[1])}`;
+	const bKey = `${quantizeLatLng(b[0])},${quantizeLatLng(b[1])}`;
+	return aKey < bKey ? `${aKey}|${bKey}` : `${bKey}|${aKey}`;
+}
+
+function clearFrequencyLayer() {
+	if (appState.frequencyLayer && appState.map) {
+		appState.map.removeLayer(appState.frequencyLayer);
+		appState.frequencyLayer = null;
+	}
+}
+
+function refreshFrequencyLayer() {
+	if (!appState.showFrequencyLayer) {
+		clearFrequencyLayer();
+		return;
+	}
+	appState.frequencyLoadToken += 1;
+	renderFrequencyLayer(appState.frequencyLoadToken);
+}
+
 async function renderGarageRoutes(loadToken) {
 	if (appState.focusRouteId) {
 		return;
@@ -1442,6 +1523,7 @@ function clearNetworkRoutes() {
 		appState.map.removeLayer(appState.networkRouteLayer);
 		appState.networkRouteLayer = null;
 	}
+	clearFrequencyLayer();
 }
 
 async function getSelectedNetworkCategories() {
@@ -1507,8 +1589,122 @@ async function getSelectedNetworkCategories() {
 	return orderRouteCategories(categories);
 }
 
+async function renderFrequencyLayer(loadToken) {
+	if (!appState.showFrequencyLayer || appState.focusRouteId || appState.suppressNetworkRoutes) {
+		clearFrequencyLayer();
+		return;
+	}
+	clearFrequencyLayer();
+	if (!appState.map) {
+		return;
+	}
+
+	const categories = await getSelectedNetworkCategories();
+	if (loadToken !== appState.frequencyLoadToken) {
+		return;
+	}
+	if (categories.length === 0) {
+		return;
+	}
+
+	await loadFrequencyData();
+	if (loadToken !== appState.frequencyLoadToken) {
+		return;
+	}
+	if (!appState.frequencyData) {
+		return;
+	}
+
+	const filteredCategories = categories.map((category) => {
+		const filteredRoutes = filterRouteSet(category.routes, appState.routeFilterTokens);
+		return { ...category, filteredRoutes };
+	});
+	const selectedRoutes = new Set();
+	filteredCategories.forEach((category) => {
+		category.filteredRoutes.forEach((routeId) => selectedRoutes.add(routeId));
+	});
+	if (selectedRoutes.size === 0) {
+		return;
+	}
+
+	const segmentTotals = new Map();
+	const band = appState.frequencyBand;
+
+	const tasks = Array.from(selectedRoutes).map((routeId) => {
+		const headway = getFrequencyValue(routeId, band);
+		const perHour = getFrequencyPerHour(headway);
+		if (perHour <= 0) {
+			return Promise.resolve();
+		}
+		return loadRouteGeometry(routeId)
+			.then((segments) => {
+				if (loadToken !== appState.frequencyLoadToken) {
+					return;
+				}
+				if (!segments || segments.length === 0) {
+					return;
+				}
+				segments.forEach((segment) => {
+					for (let i = 1; i < segment.length; i += 1) {
+						const start = segment[i - 1];
+						const end = segment[i];
+						if (!Array.isArray(start) || !Array.isArray(end)) {
+							continue;
+						}
+						const key = buildSegmentKey(start, end);
+						const entry = segmentTotals.get(key);
+						if (entry) {
+							entry.total += perHour;
+						} else {
+							segmentTotals.set(key, { points: [start, end], total: perHour });
+						}
+					}
+				});
+			})
+			.catch(() => {});
+	});
+
+	await Promise.all(tasks);
+	if (loadToken !== appState.frequencyLoadToken) {
+		return;
+	}
+	if (segmentTotals.size === 0) {
+		return;
+	}
+
+	let maxTotal = 0;
+	segmentTotals.forEach((entry) => {
+		if (entry.total > maxTotal) {
+			maxTotal = entry.total;
+		}
+	});
+	if (maxTotal <= 0) {
+		return;
+	}
+
+	const minWeight = 2;
+	const maxWeight = 12;
+	const layerGroup = L.layerGroup().addTo(appState.map);
+	appState.frequencyLayer = layerGroup;
+
+	segmentTotals.forEach((entry) => {
+		const scale = Math.sqrt(entry.total / maxTotal);
+		const weight = minWeight + (maxWeight - minWeight) * scale;
+		L.polyline(entry.points, {
+			color: "#1f2937",
+			weight,
+			opacity: 0.55,
+			pane: FREQUENCY_PANE,
+			lineCap: "round",
+			lineJoin: "round",
+			interactive: false
+		}).addTo(layerGroup);
+	});
+}
+
 async function renderNetworkRoutes(loadToken) {
 	if (appState.focusRouteId || appState.suppressNetworkRoutes) {
+		clearNetworkRoutes();
 		return;
 	}
 	clearNetworkRoutes();
@@ -1522,6 +1718,7 @@ async function renderNetworkRoutes(loadToken) {
 	if (categories.length === 0) {
 		appState.showNetworkRoutes = false;
 		updateSelectedRouteCount(0);
+		refreshFrequencyLayer();
 		return;
 	}
 
@@ -1568,6 +1765,7 @@ async function renderNetworkRoutes(loadToken) {
 	});
 
 	await Promise.all(tasks);
+	refreshFrequencyLayer();
 }
 
 async function loadRouteGeometry(routeId) {
@@ -2541,6 +2739,7 @@ function getGarageMarkerRadius(value, scaleEnabled, maxPercent) {
 
 function setupUI() {
 	setupModuleAccordion();
+	setupFrequencyModule();
 	setupRouteFilterInput();
 	setupBusStopFilterInput();
 	setupBusStationSelect();
@@ -2834,6 +3033,11 @@ function setupUI() {
 					checkbox.checked = false;
 				}
 			});
+			const frequencyToggle = document.getElementById("showFrequencyOverlay");
+			if (frequencyToggle) {
+				frequencyToggle.checked = false;
+			}
+			appState.showFrequencyLayer = false;
 
 			clearGarageMarkers();
 			clearGarageRoutes();
@@ -2843,6 +3047,7 @@ function setupUI() {
 			clearBusStationHighlight();
 			clearBusStationRoutes();
 			clearNetworkRoutes();
+			clearFrequencyLayer();
 			appState.showNetworkRoutes = false;
 			appState.activeGarageRoutes = null;
 			appState.activeBusStationRoutes = null;
@@ -2866,6 +3071,7 @@ function setupUI() {
 			clearGarageRoutes();
 			clearBusStationRoutes();
 			clearNetworkRoutes();
+			clearFrequencyLayer();
 			appState.activeGarageRoutes = null;
 			appState.activeBusStationRoutes = null;
 			appState.showNetworkRoutes = false;
@@ -3231,6 +3437,27 @@ function setupModuleAccordion() {
 				}
 			});
 		});
+	});
+}
+
+function setupFrequencyModule() {
+	const bandSelect = document.getElementById("frequencyBand");
+	const overlayToggle = document.getElementById("showFrequencyOverlay");
+	if (!bandSelect || !overlayToggle) {
+		return;
+	}
+
+	appState.frequencyBand = bandSelect.value || "peak_am";
+	appState.showFrequencyLayer = overlayToggle.checked;
+
+	bandSelect.addEventListener("change", (event) => {
+		appState.frequencyBand = event.target.value || "peak_am";
+		refreshFrequencyLayer();
+	});
+
+	overlayToggle.addEventListener("change", (event) => {
+		appState.showFrequencyLayer = event.target.checked;
+		refreshFrequencyLayer();
 	});
 }
 

@@ -1,0 +1,3 @@
+-r requirements.txt
+pytest==8.2.2
+requests-mock==1.12.1

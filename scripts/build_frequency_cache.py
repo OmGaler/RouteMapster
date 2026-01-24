@@ -8,7 +8,7 @@ Usage:
     --stops data/processed/stops.geojson \
     --out data/processed/frequencies.json \
     --cache data/raw/timetable_cache.json \
-    --bands "am_peak=07:00-10:00,interpeak=10:00-16:00,pm_peak=16:00-19:00,evening=19:00-23:00,overnight=23:00-05:00" \
+    --bands "am_peak=07:00-10:00,interpeak=10:00-16:00,pm_peak=16:00-19:00,evening=19:00-00:00,overnight=00:00-05:00" \
     --days "weekday,saturday,sunday" \
     --max-lines 0 \
     --verbose
@@ -16,6 +16,11 @@ Usage:
 Expected inputs:
 - Stops GeoJSON with properties including NAPTAN_ID, NAME, and ROUTES.
 - Optional lines JSON array (or {"routes": [...]} or {"lines": [...]}).
+
+Output:
+- Simplified JSON mapping line id -> {peak_am, offpeak, peak_pm, overnight} in bph.
+- Values are taken from the first available day (weekday, then saturday, then sunday) and averaged across directions.
+- Offpeak prefers interpeak and falls back to evening if interpeak is missing.
 
 Notes:
 - Bands can wrap past midnight (e.g. overnight=23:00-05:00).
@@ -50,8 +55,8 @@ DEFAULT_BANDS = (
     "am_peak=07:00-10:00,"
     "interpeak=10:00-16:00,"
     "pm_peak=16:00-19:00,"
-    "evening=19:00-23:00,"
-    "overnight=23:00-05:00"
+    "evening=19:00-00:00,"
+    "overnight=00:00-05:00"
 )
 DEFAULT_DAYS = "weekday,saturday,sunday"
 DEFAULT_CACHE_MAX_AGE_DAYS = 30
@@ -611,6 +616,85 @@ def compute_day_headways(times: List[int], bands: Sequence[Band]) -> Dict[str, O
     return compute_band_headways(times, bands)
 
 
+def headway_to_bph(value: Optional[float]) -> Optional[float]:
+    if value is None:
+        return None
+    try:
+        minutes = float(value)
+    except (TypeError, ValueError):
+        return None
+    if minutes <= 0:
+        return None
+    return 60.0 / minutes
+
+
+def mean_or_none(values: Sequence[float]) -> Optional[float]:
+    if not values:
+        return None
+    return sum(values) / len(values)
+
+
+def normalize_bph(value: Optional[float]) -> float:
+    if value is None:
+        return 0
+    floored = math.floor(value)
+    half_step = floored + 0.5
+    if abs(value - half_step) < 1e-6:
+        return half_step
+    return int(round(value))
+
+
+def simplify_lines(
+    lines_out: Dict[str, Any], bands: Sequence[Band], days: Sequence[str]
+) -> Dict[str, Dict[str, float]]:
+    band_by_label = {band.label: band for band in bands}
+    simplified: Dict[str, Dict[str, float]] = {}
+
+    for line_id, line_data in lines_out.items():
+        if "directions" in line_data:
+            direction_entries = list(line_data["directions"].values())
+        else:
+            direction_entries = [line_data]
+
+        day_simple: Dict[str, Dict[str, Optional[float]]] = {}
+        for day in days:
+            band_bph: Dict[str, Optional[float]] = {}
+            for label in band_by_label.keys():
+                values: List[float] = []
+                for entry in direction_entries:
+                    metrics = entry.get(day) or {}
+                    bph = headway_to_bph(metrics.get(label))
+                    if bph is not None:
+                        values.append(bph)
+                band_bph[label] = mean_or_none(values)
+
+            # Combine interpeak + evening into a single offpeak bucket.
+            # Prefer interpeak for offpeak; fall back to evening if needed.
+            offpeak_bph = band_bph.get("interpeak")
+            if offpeak_bph is None:
+                offpeak_bph = band_bph.get("evening")
+            day_simple[day] = {
+                "peak_am": band_bph.get("am_peak"),
+                "offpeak": offpeak_bph,
+                "peak_pm": band_bph.get("pm_peak"),
+                "overnight": band_bph.get("overnight"),
+            }
+
+        aggregated: Dict[str, float] = {}
+        for key in ("peak_am", "offpeak", "peak_pm", "overnight"):
+            selected: Optional[float] = None
+            for day in days:
+                value = day_simple[day][key]
+                if value is not None:
+                    selected = value
+                    break
+            aggregated[key] = normalize_bph(selected)
+
+        simplified[line_id] = aggregated
+
+    return simplified
+
+
 def cache_key(line_id: str, stop_id: str) -> str:
     return f"{line_id.upper()}::{stop_id}"
 
@@ -839,26 +923,18 @@ def main() -> int:
         if chosen_entry is None:
             errors[line_id] = fail_reason or "failed to build timetable"
 
-    output = {
-        "generated_at": now_utc().isoformat().replace("+00:00", "Z"),
-        "source": "tfl_timetable_api",
-        "bands": [{"label": b.label, "start": b.start_str, "end": b.end_str} for b in bands],
-        "metric": "avg_headway_mins",
-        "lines": lines_out,
-    }
-    if errors:
-        output["errors"] = errors
+    simplified = simplify_lines(lines_out, bands, days)
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(
-        json.dumps(output, ensure_ascii=True, separators=(",", ":"), sort_keys=True),
+        json.dumps(simplified, ensure_ascii=True, separators=(",", ":"), sort_keys=True),
         encoding="utf-8",
     )
     save_cache(cache_path, cache)
 
     log(f"Wrote {len(lines_out)} lines to {out_path}", args.verbose, always=True)
     if errors:
-        log(f"{len(errors)} lines failed; see errors in output.", args.verbose, always=True)
+        log(f"{len(errors)} lines failed; see console output for details.", args.verbose, always=True)
     return 0
 
 

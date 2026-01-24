@@ -1018,32 +1018,29 @@
         <details class="module" data-module="frequencies">
           <summary>
             <span class="module-title">Frequencies</span>
-            <span class="module-tag planned">Planned</span>
+            <span class="module-tag">Live</span>
           </summary>
           <div class="module-body">
-            <div class="module-note">UI only, data coming later.</div>
+            <div class="module-note">Thickness reflects combined buses per hour on shared trunks.</div>
 
-            <div class="module-section module-disabled">
-              <div class="section-title">Time bands</div>
-              <label class="toggle">
-                <span>Peak only</span>
-                <input type="checkbox" id="showPeakOnly" disabled />
-              </label>
-              <label class="toggle">
-                <span>Off-peak only</span>
-                <input type="checkbox" id="showOffPeakOnly" disabled />
-              </label>
+            <div class="module-section">
+              <div class="section-title">Time band</div>
+              <div class="field">
+                <label for="frequencyBand">Select band</label>
+                <select id="frequencyBand" class="select-field">
+                  <option value="peak_am">Peak AM</option>
+                  <option value="peak_pm">Peak PM</option>
+                  <option value="offpeak">Off-peak</option>
+                  <option value="overnight">Overnight</option>
+                </select>
+              </div>
             </div>
 
-            <div class="module-section module-disabled">
-              <div class="section-title">Headway band</div>
-              <div class="field">
-                <label for="headwayBand">Target headway (mins)</label>
-                <input id="headwayBand" type="range" min="2" max="30" value="12" disabled />
-              </div>
+            <div class="module-section">
+              <div class="section-title">Trunk overlay</div>
               <label class="toggle">
-                <span>Show frequency heatmap</span>
-                <input type="checkbox" id="showFrequencyHeatmap" disabled />
+                <span>Show frequency trunks</span>
+                <input type="checkbox" id="showFrequencyOverlay" />
               </label>
             </div>
           </div>

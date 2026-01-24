@@ -165,6 +165,43 @@ def is_actual_bus_stop(sp: Dict[str, Any]) -> bool:
     return True
 
 
+def stoppoints_payload_to_features(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """
+    Pure helper for tests: normalize a StopPoints payload into GeoJSON Features.
+    """
+    features: List[Dict[str, Any]] = []
+    for sp in extract_stop_points(payload):
+        if not is_actual_bus_stop(sp):
+            continue
+
+        sid = sp.get("naptanId") or sp.get("id")
+        name = sp.get("commonName") or sp.get("name")
+        lat = sp.get("lat")
+        lon = sp.get("lon")
+        if not sid or not name or lat is None or lon is None:
+            continue
+
+        routes = extract_routes(sp)
+        postcode = additional_prop(sp, "Postcode") or additional_prop(sp, "postcode")
+
+        props = {
+            "NAPTAN_ID": str(sid),
+            "NAME": str(name),
+            "POSTCODE": postcode.strip() if postcode else "",
+            "ROUTES": ", ".join(sort_routes(routes)) if routes else "",
+        }
+        props = {k: v for k, v in props.items() if v}
+
+        features.append(
+            {
+                "type": "Feature",
+                "geometry": {"type": "Point", "coordinates": [float(lon), float(lat)]},
+                "properties": props,
+            }
+        )
+    return features
+
+
 def fetch_all_bus_stop_points(
     session: requests.Session,
     app_id: str,

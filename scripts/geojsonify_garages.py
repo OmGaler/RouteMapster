@@ -16,9 +16,9 @@ Usage:
 
 from __future__ import annotations
 
-import argparse, csv, json, logging, re, time, requests
+import argparse, csv, io, json, logging, re, time, requests
 from pathlib import Path
-from typing import Any, Dict, Optional, List
+from typing import Any, Dict, Optional, List, Callable
 
 
 POSTCODES_URL = "https://api.postcodes.io/postcodes"
@@ -65,6 +65,11 @@ def read_csv_rows(csv_path: Path) -> list[dict[str, Any]]:
     with csv_path.open("r", encoding="utf-8-sig", newline="") as f:
         reader = csv.DictReader(f)
         return list(reader)
+
+
+def read_csv_rows_from_text(csv_text: str) -> list[dict[str, Any]]:
+    reader = csv.DictReader(io.StringIO(csv_text))
+    return list(reader)
 
 
 def pick_address(row: Dict[str, Any], address_col: str, fallback_col: str) -> str:
@@ -215,6 +220,49 @@ def apply_route_fixes_to_rows(rows: List[Dict[str, Any]]) -> None:
                 row["route_data_warnings"] = warnings
 
 
+def garages_csv_to_features(
+    csv_text: str,
+    geocode_fn: Callable[[str], Optional[tuple[float, float, str]]],
+) -> List[Dict[str, Any]]:
+    rows = read_csv_rows_from_text(csv_text)
+    apply_route_fixes_to_rows(rows)
+
+    address_col = getattr(geocode_fn, "address_col", "Garage address")
+    fallback_col = getattr(geocode_fn, "fallback_address_col", "Company address")
+    meta_lookup = getattr(geocode_fn, "meta", {})
+
+    features: List[Dict[str, Any]] = []
+    for row in rows:
+        addr = pick_address(row, address_col, fallback_col)
+        if not addr:
+            continue
+
+        pc = extract_postcode(addr)
+        if not pc:
+            continue
+
+        geocode = geocode_fn(pc)
+        if not geocode:
+            continue
+
+        lon, lat, resolved_pc = geocode
+        props = dict(row)
+        props["_geocode_source"] = "postcodes.io"
+        props["_geocode_postcode"] = resolved_pc or pc
+
+        meta = meta_lookup.get(pc) if isinstance(meta_lookup, dict) else None
+        props["_geocode_admin_district"] = meta.get("admin_district") if isinstance(meta, dict) else None
+        props["_geocode_country"] = meta.get("country") if isinstance(meta, dict) else None
+
+        features.append(feature(float(lon), float(lat), props))
+
+    return features
+
+
+def features_to_feature_collection(features: List[Dict[str, Any]]) -> Dict[str, Any]:
+    return {"type": "FeatureCollection", "features": features}
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("input_csv", type=str, help="Input CSV path")
@@ -236,7 +284,8 @@ def main() -> int:
     cache_path = Path(args.cache)
     failed_path = Path(args.failed)
 
-    rows = read_csv_rows(in_path)
+    csv_text = in_path.read_text(encoding="utf-8-sig")
+    rows = read_csv_rows_from_text(csv_text)
     logging.info("Loaded %d rows from %s", len(rows), in_path)
 
     # ---- APPLY ROUTE FIXES HERE (prior to building GeoJSON) ----
@@ -290,8 +339,24 @@ def main() -> int:
 
         time.sleep(max(0.0, args.pause))
 
-    # Build features
-    features = []
+    geocode_memo: Dict[str, Optional[tuple[float, float, str]]] = {}
+
+    def geocode_fn(postcode: str) -> Optional[tuple[float, float, str]]:
+        if postcode in geocode_memo:
+            return geocode_memo[postcode]
+        entry = cache.get(postcode)
+        if not entry or entry.get("_failed"):
+            geocode_memo[postcode] = None
+            return None
+        result = (float(entry["lon"]), float(entry["lat"]), postcode)
+        geocode_memo[postcode] = result
+        return result
+
+    geocode_fn.meta = cache
+    geocode_fn.address_col = args.address_col
+    geocode_fn.fallback_address_col = args.fallback_address_col
+
+    features = garages_csv_to_features(csv_text, geocode_fn)
     failed_rows = []
 
     for i, (row, pc) in enumerate(zip(rows, row_postcodes), start=1):
@@ -318,16 +383,7 @@ def main() -> int:
         lat = entry["lat"]
         logging.info("[%d/%d] %s | OK | %s -> (%.6f, %.6f)", i, len(rows), garage_name, pc, lon, lat)
 
-        props = dict(row)
-        props["_geocode_source"] = "postcodes.io"
-        props["_geocode_postcode"] = pc
-        # Add a bit of useful metadata (optional)
-        props["_geocode_admin_district"] = entry.get("admin_district")
-        props["_geocode_country"] = entry.get("country")
-
-        features.append(feature(lon, lat, props))
-
-    geojson = {"type": "FeatureCollection", "features": features}
+    geojson = features_to_feature_collection(features)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with out_path.open("w", encoding="utf-8") as f:
         json.dump(geojson, f, ensure_ascii=False, indent=2)
