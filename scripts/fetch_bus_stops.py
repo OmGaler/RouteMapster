@@ -18,12 +18,24 @@ import os
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
+try:
+    from scripts.utils.route_ids import (
+        active_routes_from_geometry,
+        normalize_route_id,
+        reconcile_possible_ghost_night_route,
+    )
+except ModuleNotFoundError:  # pragma: no cover - script execution fallback
+    from utils.route_ids import (
+        active_routes_from_geometry,
+        normalize_route_id,
+        reconcile_possible_ghost_night_route,
+    )
 BASE_URL = "https://api.tfl.gov.uk"
 POSTCODES_IO_REVERSE_URL = "https://api.postcodes.io/postcodes"
 
@@ -123,20 +135,34 @@ def extract_stop_points(payload: Any) -> List[Dict[str, Any]]:
     return []
 
 
-def extract_routes(sp: Dict[str, Any]) -> Set[str]:
+def normalize_routes(raw_routes: Iterable[str], active_routes: Optional[Set[str]]) -> Set[str]:
     routes: Set[str] = set()
+    for raw in raw_routes:
+        normalized = normalize_route_id(raw)
+        if not normalized:
+            continue
+        if active_routes is not None:
+            normalized = reconcile_possible_ghost_night_route(normalized, active_routes)
+            if not normalized:
+                continue
+        routes.add(normalized)
+    return routes
+
+
+def extract_routes(sp: Dict[str, Any], active_routes: Optional[Set[str]] = None) -> Set[str]:
+    raw_routes: Set[str] = set()
     for line in sp.get("lines", []) or []:
         rid = line.get("id") or line.get("name")
         if rid:
-            routes.add(str(rid))
+            raw_routes.add(str(rid))
 
-    if not routes:
+    if not raw_routes:
         for lg in sp.get("lineGroups", []) or []:
             for ident in lg.get("lineIdentifier", []) or []:
                 if ident:
-                    routes.add(str(ident))
+                    raw_routes.add(str(ident))
 
-    return routes
+    return normalize_routes(raw_routes, active_routes)
 
 
 def additional_prop(sp: Dict[str, Any], key: str) -> Optional[str]:
@@ -165,10 +191,15 @@ def is_actual_bus_stop(sp: Dict[str, Any]) -> bool:
     return True
 
 
-def stoppoints_payload_to_features(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
+def stoppoints_payload_to_features(
+    payload: Dict[str, Any],
+    active_routes: Optional[Set[str]] = None,
+) -> List[Dict[str, Any]]:
     """
     Pure helper for tests: normalize a StopPoints payload into GeoJSON Features.
     """
+    if active_routes is None:
+        active_routes = active_routes_from_geometry()
     features: List[Dict[str, Any]] = []
     for sp in extract_stop_points(payload):
         if not is_actual_bus_stop(sp):
@@ -181,7 +212,7 @@ def stoppoints_payload_to_features(payload: Dict[str, Any]) -> List[Dict[str, An
         if not sid or not name or lat is None or lon is None:
             continue
 
-        routes = extract_routes(sp)
+        routes = extract_routes(sp, active_routes=active_routes)
         postcode = additional_prop(sp, "Postcode") or additional_prop(sp, "postcode")
 
         props = {
@@ -338,10 +369,13 @@ def to_geojson(
     stops: List[Dict[str, Any]],
     session: requests.Session,
     cfg: Config,
+    active_routes: Optional[Set[str]] = None,
 ) -> Dict[str, Any]:
     features: List[Dict[str, Any]] = []
 
     cache = load_postcode_cache(cfg.postcode_cache_path)
+    if active_routes is None:
+        active_routes = active_routes_from_geometry()
 
     total = len(stops)
     kept = 0
@@ -366,7 +400,7 @@ def to_geojson(
             dropped_no_postcode += 1
             continue
 
-        routes = extract_routes(sp)
+        routes = extract_routes(sp, active_routes=active_routes)
 
         props = {
             "NAPTAN_ID": str(sid),
@@ -427,7 +461,8 @@ def main() -> None:
     print(f"Wrote raw StopPoints to {RAW_STOPS_PATH}", flush=True)
 
     # write processed
-    fc = to_geojson(stops, session=session, cfg=cfg)
+    active_routes = active_routes_from_geometry()
+    fc = to_geojson(stops, session=session, cfg=cfg, active_routes=active_routes)
     PROCESSED_PATH.write_text(
         json.dumps(fc, ensure_ascii=True, separators=(",", ":"), sort_keys=True),
         encoding="utf-8",

@@ -5,8 +5,20 @@ import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
+try:
+    from scripts.utils.route_ids import normalize_route_id
+except ModuleNotFoundError:  # pragma: no cover - script execution fallback
+    from utils.route_ids import normalize_route_id
 
 ROUTE_PATTERN = re.compile(r"Route_Geometry_(.+)_(\d{8})\.xml$", re.IGNORECASE)
+
+
+def is_700_series(route_id: str) -> bool:
+    text = normalize_route_id(route_id)
+    if not text.isdigit():
+        return False
+    value = int(text)
+    return 700 <= value <= 799
 
 
 def parse_route_segments(path):
@@ -73,7 +85,9 @@ def convert(input_dir, output_path):
         match = ROUTE_PATTERN.match(path.name)
         if not match:
             continue
-        route_id = match.group(1).upper()
+        route_id = normalize_route_id(match.group(1))
+        if is_700_series(route_id):
+            continue
         date_token = match.group(2)
         segments = parse_route_segments(path)
         if not segments:

@@ -7,7 +7,6 @@ Geocode UK addresses primarily via postcodes.io (bulk, no API key) with caching.
 
 Also applies route data hygiene fixes before exporting:
   Fix 1: Copy numeric (plain) routes found in "TfL night routes" into "TfL main network routes".
-  Fix 2: If "N###" exists but "###" is missing globally from day-route columns, infer "###" into main routes (with warning).
 
 Usage:
   python geojsonify_garages.py input.csv output.geojson
@@ -19,6 +18,11 @@ from __future__ import annotations
 import argparse, csv, io, json, logging, re, time, requests
 from pathlib import Path
 from typing import Any, Dict, Optional, List, Callable
+
+try:
+    from scripts.utils.route_ids import normalize_route_id
+except ModuleNotFoundError:  # pragma: no cover - script execution fallback
+    from utils.route_ids import normalize_route_id
 
 
 POSTCODES_URL = "https://api.postcodes.io/postcodes"
@@ -136,7 +140,7 @@ def bulk_lookup_postcodes(
 def parse_routes(val: Any) -> List[str]:
     if not val:
         return []
-    return ROUTE_TOKEN_RE.findall(str(val))
+    return [normalize_route_id(token) for token in ROUTE_TOKEN_RE.findall(str(val))]
 
 
 def format_routes(routes: List[str]) -> str:
@@ -157,21 +161,10 @@ def apply_route_fixes_to_rows(rows: List[Dict[str, Any]]) -> None:
     """
     Mutates rows in-place:
       - Fix 1: numeric tokens in night routes are also added to main routes for that row
-      - Fix 2: if N### exists and ### is missing globally from day-route columns, add ### to main routes and warn
     """
 
     MAIN_COL = "TfL main network routes"
     NIGHT_COL = "TfL night routes"
-    SCHOOL_COL = "TfL school/mobility routes"
-    OTHER_COL = "Other routes"
-
-    # Build global set of "day" routes from day-ish columns across the whole CSV
-    global_day = set()
-    for row in rows:
-        global_day.update(parse_routes(row.get(MAIN_COL)))
-        global_day.update(parse_routes(row.get(SCHOOL_COL)))
-        global_day.update(parse_routes(row.get(OTHER_COL)))
-
     for row in rows:
         main = parse_routes(row.get(MAIN_COL))
         night = parse_routes(row.get(NIGHT_COL))
@@ -188,22 +181,6 @@ def apply_route_fixes_to_rows(rows: List[Dict[str, Any]]) -> None:
             numeric_sorted = sorted(numeric_to_copy, key=int)
             main_set.update(numeric_sorted)
             warnings.append(f"Copied numeric night routes into main: {', '.join(numeric_sorted)}")
-
-        # Fix 2: infer day route from N### if ### missing globally
-        inferred = []
-        for r in night_set:
-            if r.startswith("N") and r[1:].isdigit():
-                day = r[1:]
-                if day not in global_day and day not in main_set:
-                    main_set.add(day)
-                    inferred.append(day)
-
-        if inferred:
-            inferred_sorted = sorted(set(inferred), key=int)
-            warnings.append(
-                "Inferred missing day routes from N-routes (audit recommended): "
-                + ", ".join(inferred_sorted)
-            )
 
         # Write back to row
         row[MAIN_COL] = format_routes(list(main_set))
@@ -290,7 +267,7 @@ def main() -> int:
 
     # ---- APPLY ROUTE FIXES HERE (prior to building GeoJSON) ----
     apply_route_fixes_to_rows(rows)
-    logging.info("Applied route hygiene fixes to CSV rows (Fix 1 + Fix 2).")
+    logging.info("Applied route hygiene fixes to CSV rows (Fix 1).")
 
     cache = load_cache(cache_path)
     logging.info("Loaded %d cached geocodes from %s", len(cache), cache_path)

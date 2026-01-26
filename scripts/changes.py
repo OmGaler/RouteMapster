@@ -6,6 +6,10 @@ import subprocess
 from pathlib import Path
 from typing import Dict, Set, List, Tuple, Optional
 
+try:
+    from scripts.utils.route_ids import normalize_route_id
+except ModuleNotFoundError:  # pragma: no cover - script execution fallback
+    from utils.route_ids import normalize_route_id
 ROUTES_DIR = Path("data/processed/routes")
 GARAGES_FILE = Path("data/processed/garages.geojson")
 
@@ -48,7 +52,12 @@ def parse_route_tokens(val: object) -> List[str]:
     if not val:
         return []
     s = str(val).replace(",", " ")
-    return [t.strip() for t in s.split() if t.strip()]
+    tokens: List[str] = []
+    for raw in s.split():
+        normalized = normalize_route_id(raw)
+        if normalized:
+            tokens.append(normalized)
+    return tokens
 
 def extract_allocations_from_garages(gj: dict) -> Dict[str, str]:
     """
@@ -69,7 +78,8 @@ def extract_allocations_from_garages(gj: dict) -> Dict[str, str]:
         tokens += parse_route_tokens(p.get("Other routes"))
 
         for r in tokens:
-            out[r.upper()] = garage
+            if r:
+                out[r] = garage
     return out
 
 # ---- ROUTE ADDS / REMOVES ----

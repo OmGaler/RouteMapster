@@ -45,6 +45,18 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
+try:
+    from scripts.utils.route_ids import (
+        active_routes_from_geometry,
+        normalize_route_id,
+        reconcile_possible_ghost_night_route,
+    )
+except ModuleNotFoundError:  # pragma: no cover - script execution fallback
+    from utils.route_ids import (
+        active_routes_from_geometry,
+        normalize_route_id,
+        reconcile_possible_ghost_night_route,
+    )
 BASE_URL = "https://api.tfl.gov.uk"
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -183,8 +195,8 @@ def parse_time_string(value: Any) -> Optional[int]:
     parts = text.split(":")
     hour = int(parts[0])
     minute = int(parts[1])
-    if hour == 24 and minute != 0:
-        return None
+    if hour == 24:
+        return (24 * 60) + minute
     return hour * 60 + minute
 
 
@@ -341,7 +353,17 @@ def collect_day_times(obj: Any, out: Dict[str, List[int]], depth: int = 0) -> No
 
 
 def normalize_times(times: Iterable[int]) -> List[int]:
-    return sorted({int(round(t)) for t in times if t >= 0})
+    normalized: List[int] = []
+    for value in times:
+        try:
+            minutes = int(round(value))
+        except (TypeError, ValueError):
+            continue
+        if minutes < 0:
+            continue
+        minutes = minutes % (24 * 60)
+        normalized.append(minutes)
+    return sorted(set(normalized))
 
 
 def matches_stop_id(node: Dict[str, Any], stop_id: str) -> bool:
@@ -424,15 +446,18 @@ def extract_direction_entries(payload: Dict[str, Any], stop_id: Optional[str]) -
             continue
         direction_raw = route.get("direction") or find_first_string(route, ["direction"])
         direction = normalize_direction(direction_raw)
+        direction_key = direction
+        if direction == "unknown":
+            direction_key = f"unknown_{len(directions) + 1}"
         towards = find_first_string(
             route,
             ["towards", "destination", "destinationName", "destinationStation", "destinationText"],
         )
         times_by_day = extract_times_by_day(route, stop_id)
-        existing = directions.get(direction)
+        existing = directions.get(direction_key)
         if not existing:
             existing = {"direction": direction, "towards": None, "times": {"weekday": [], "saturday": [], "sunday": []}}
-            directions[direction] = existing
+            directions[direction_key] = existing
         if towards and not existing["towards"]:
             existing["towards"] = towards
         for day, times in times_by_day.items():
@@ -445,16 +470,29 @@ def extract_direction_entries(payload: Dict[str, Any], stop_id: Optional[str]) -
     return entries
 
 
-def parse_routes_value(value: Any) -> Set[str]:
+def parse_routes_value(value: Any, active_routes: Optional[Set[str]] = None) -> Set[str]:
     if not value:
         return set()
     if isinstance(value, list):
-        return {str(item).strip().upper() for item in value if str(item).strip()}
-    text = str(value).replace(",", " ")
-    return {token.strip().upper() for token in text.split() if token.strip()}
+        tokens = [str(item).strip() for item in value if str(item).strip()]
+    else:
+        text = str(value).replace(",", " ")
+        tokens = [token.strip() for token in text.split() if token.strip()]
+
+    routes: Set[str] = set()
+    for token in tokens:
+        normalized = normalize_route_id(token)
+        if not normalized:
+            continue
+        if active_routes is not None:
+            normalized = reconcile_possible_ghost_night_route(normalized, active_routes)
+            if not normalized:
+                continue
+        routes.add(normalized)
+    return routes
 
 
-def load_stops(path: Path) -> List[StopRecord]:
+def load_stops(path: Path, active_routes: Optional[Set[str]] = None) -> List[StopRecord]:
     if not path.exists():
         raise FileNotFoundError(f"Stops file not found: {path}")
     payload = json.loads(path.read_text(encoding="utf-8"))
@@ -464,7 +502,10 @@ def load_stops(path: Path) -> List[StopRecord]:
         props = feature.get("properties", {}) if isinstance(feature, dict) else {}
         stop_id = props.get("NAPTAN_ID") or props.get("naptanId") or props.get("stopPointId")
         name = props.get("NAME") or props.get("name") or props.get("commonName")
-        routes = parse_routes_value(props.get("ROUTES") or props.get("routes") or "")
+        routes = parse_routes_value(
+            props.get("ROUTES") or props.get("routes") or "",
+            active_routes=active_routes,
+        )
         if not stop_id or not name:
             continue
         stops.append(
@@ -497,7 +538,7 @@ def score_stop(stop: StopRecord) -> int:
 
 
 def candidates_for_line(stops: Sequence[StopRecord], line_id: str) -> List[StopRecord]:
-    line_id = line_id.strip().upper()
+    line_id = normalize_route_id(line_id)
     candidates = [stop for stop in stops if line_id in stop.routes]
     candidates.sort(
         key=lambda stop: (score_stop(stop), stop.route_count, stop.name, stop.stop_id),
@@ -509,11 +550,21 @@ def candidates_for_line(stops: Sequence[StopRecord], line_id: str) -> List[StopR
 def load_lines_from_file(path: Path) -> List[str]:
     payload = json.loads(path.read_text(encoding="utf-8"))
     if isinstance(payload, list):
-        return [str(item).strip().upper() for item in payload if str(item).strip()]
+        out: List[str] = []
+        for item in payload:
+            normalized = normalize_route_id(item)
+            if normalized:
+                out.append(normalized)
+        return out
     if isinstance(payload, dict):
         for key in ("routes", "lines"):
             if isinstance(payload.get(key), list):
-                return [str(item).strip().upper() for item in payload[key] if str(item).strip()]
+                out: List[str] = []
+                for item in payload[key]:
+                    normalized = normalize_route_id(item)
+                    if normalized:
+                        out.append(normalized)
+                return out
     return []
 
 
@@ -529,8 +580,30 @@ def load_routes_index(path: Path) -> List[str]:
         return []
     payload = json.loads(path.read_text(encoding="utf-8"))
     if isinstance(payload, dict) and isinstance(payload.get("routes"), list):
-        return [str(item).strip().upper() for item in payload["routes"] if str(item).strip()]
+        out: List[str] = []
+        for item in payload["routes"]:
+            normalized = normalize_route_id(item)
+            if normalized:
+                out.append(normalized)
+        return out
     return []
+
+
+def is_school_series_route(line_id: str) -> bool:
+    text = normalize_route_id(line_id)
+    if not text.isdigit():
+        return False
+    value = int(text)
+    return 600 <= value <= 699 or 900 <= value <= 999
+
+
+def is_double_deck_variant(line_id: str) -> bool:
+    text = normalize_route_id(line_id)
+    return len(text) > 1 and text.endswith("D") and text[-2].isdigit()
+
+
+def should_skip_frequency(line_id: str) -> bool:
+    return is_school_series_route(line_id) or is_double_deck_variant(line_id)
 
 
 def parse_bands(value: str) -> List[Band]:
@@ -589,26 +662,48 @@ def parse_days(value: str) -> List[str]:
 
 
 def compute_band_headways(times: List[int], bands: Sequence[Band]) -> Dict[str, Optional[float]]:
-    label_headways: Dict[str, List[int]] = {band.label: [] for band in bands}
+    metrics: Dict[str, Optional[float]] = {}
     for band in bands:
         if band.wraps:
             band_times = [t for t in times if t >= band.start_min or t < band.end_min]
             ordered = sorted(t if t >= band.start_min else t + (24 * 60) for t in band_times)
+            band_minutes = (24 * 60 - band.start_min) + band.end_min
         else:
             band_times = [t for t in times if band.start_min <= t < band.end_min]
             ordered = sorted(band_times)
+            band_minutes = band.end_min - band.start_min
 
+        headways: List[int] = []
         if len(ordered) >= 2:
             headways = [ordered[i + 1] - ordered[i] for i in range(len(ordered) - 1)]
-            label_headways[band.label].extend(headways)
 
-    metrics: Dict[str, Optional[float]] = {}
-    for label, headways in label_headways.items():
-        if not headways:
-            metrics[label] = None
+        count_bph: Optional[float] = None
+        if band_minutes > 0 and band_times:
+            count_bph = len(band_times) / (band_minutes / 60)
+
+        headway_bph: Optional[float] = None
+        if headways:
+            avg = mean(headways)
+            if avg > 0:
+                headway_bph = 60.0 / avg
+
+        effective_bph: Optional[float]
+        if count_bph is None:
+            effective_bph = headway_bph
+        elif headway_bph is None:
+            effective_bph = count_bph
+        else:
+            if len(band_times) < 6 or headway_bph > count_bph * 1.25:
+                effective_bph = count_bph
+            else:
+                effective_bph = headway_bph
+
+        if not effective_bph:
+            metrics[band.label] = None
             continue
-        avg = mean(headways)
-        metrics[label] = math.floor(avg * 2 + 0.5) / 2
+
+        effective_headway = 60.0 / effective_bph
+        metrics[band.label] = math.floor(effective_headway * 2 + 0.5) / 2
     return metrics
 
 
@@ -637,11 +732,7 @@ def mean_or_none(values: Sequence[float]) -> Optional[float]:
 def normalize_bph(value: Optional[float]) -> float:
     if value is None:
         return 0
-    floored = math.floor(value)
-    half_step = floored + 0.5
-    if abs(value - half_step) < 1e-6:
-        return half_step
-    return int(round(value))
+    return max(0.0, round(value * 2) / 2)
 
 
 def simplify_lines(
@@ -690,13 +781,26 @@ def simplify_lines(
                     break
             aggregated[key] = normalize_bph(selected)
 
+        if normalize_route_id(line_id).startswith("N"):
+            overnight = aggregated.get("overnight", 0)
+            if overnight == 0:
+                fallback = max(aggregated.get("peak_am", 0), aggregated.get("offpeak", 0), aggregated.get("peak_pm", 0))
+                if fallback > 0:
+                    overnight = fallback
+            aggregated = {
+                "peak_am": 0,
+                "offpeak": 0,
+                "peak_pm": 0,
+                "overnight": overnight,
+            }
+
         simplified[line_id] = aggregated
 
     return simplified
 
 
 def cache_key(line_id: str, stop_id: str) -> str:
-    return f"{line_id.upper()}::{stop_id}"
+    return f"{normalize_route_id(line_id)}::{stop_id}"
 
 
 def load_cache(path: Path) -> Dict[str, Any]:
@@ -783,6 +887,7 @@ def main() -> int:
     parser.add_argument("--days", default=DEFAULT_DAYS, help="Comma-separated day types.")
     parser.add_argument("--max-lines", type=int, default=0, help="Process only first N lines (0 = all).")
     parser.add_argument("--refresh", action="store_true", help="Refresh cached timetables.")
+    parser.add_argument("--cache-only", action="store_true", help="Use cached timetables only (no API fetch).")
     parser.add_argument(
         "--cache-max-age-days",
         type=int,
@@ -793,15 +898,19 @@ def main() -> int:
     args = parser.parse_args()
 
     load_dotenv(".env")
-    app_id = require_env("TFL_APP_ID")
-    app_key = require_env("TFL_APP_KEY")
+    app_id = ""
+    app_key = ""
+    if not args.cache_only:
+        app_id = require_env("TFL_APP_ID")
+        app_key = require_env("TFL_APP_KEY")
 
     stops_path = resolve_path(args.stops)
     out_path = resolve_path(args.out)
     cache_path = resolve_path(args.cache)
 
+    active_routes = active_routes_from_geometry()
     try:
-        stops = load_stops(stops_path)
+        stops = load_stops(stops_path, active_routes=active_routes)
     except Exception as exc:
         raise SystemExit(f"Failed to load stops: {exc}")
 
@@ -822,6 +931,8 @@ def main() -> int:
     if not line_ids:
         raise SystemExit("No line IDs found.")
 
+    line_ids = [line_id for line_id in line_ids if line_id and not should_skip_frequency(line_id)]
+
     if args.max_lines and args.max_lines > 0:
         line_ids = line_ids[: args.max_lines]
 
@@ -836,15 +947,20 @@ def main() -> int:
 
     cache = load_cache(cache_path)
     entries = cache.setdefault("entries", {})
+    if args.cache_only and not args.lines:
+        line_ids = sorted({normalize_route_id(key.split("::")[0]) for key in entries.keys() if "::" in key})
+        line_ids = [line_id for line_id in line_ids if not should_skip_frequency(line_id)]
+        if not line_ids:
+            raise SystemExit("No cached line IDs found.")
 
-    session = make_session()
+    session = make_session() if not args.cache_only else None
 
     lines_out: Dict[str, Any] = {}
     errors: Dict[str, str] = {}
 
     total = len(line_ids)
     for idx, line_id in enumerate(line_ids, start=1):
-        line_id = line_id.strip().upper()
+        line_id = normalize_route_id(line_id)
         if not line_id:
             continue
         candidates = candidates_for_line(stops, line_id)
@@ -871,6 +987,10 @@ def main() -> int:
                 log(f"{line_id}: cache hit for {stop.stop_id}", args.verbose)
 
             if payload is None:
+                if args.cache_only:
+                    fail_reason = f"no cached timetable ({stop.stop_id})"
+                    log(f"{line_id}: {fail_reason}", args.verbose, always=True)
+                    continue
                 try:
                     payload = fetch_timetable(session, app_id, app_key, line_id, stop.stop_id)
                     entries[key] = {"fetched_at": now_utc().isoformat().replace("+00:00", "Z"), "payload": payload}

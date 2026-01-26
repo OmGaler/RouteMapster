@@ -2,21 +2,9 @@
 """
 scripts/check_route.py
 
-Given a route number/id:
-A) checks it exists:
-   - route exists if it has (1) route geometry AND (2) an allocation in garages.geojson
-   - if neither: "No active Route X found."
-   - if only one: prints which piece is missing
-B) regardless, prints what it can:
-   - Vehicle (SD/DD) from vehicles.json (if present)
-   - Operator + allocation (if present)
-   - Frequency bands from frequencies.json (if present)
-
-Exit codes:
-  0 = active (geometry + allocation)
-  2 = neither geometry nor allocation
-  3 = geometry only
-  4 = allocation only
+Adds route type summary:
+  - regular route / night route / school or mobility route / other route
+  - and "24hr route" if the route appears under both main + night allocations
 """
 
 from __future__ import annotations
@@ -27,6 +15,10 @@ import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+try:
+    from scripts.utils.route_ids import normalize_route_id
+except ModuleNotFoundError:  # pragma: no cover - script execution fallback
+    from utils.route_ids import normalize_route_id
 
 def repo_root() -> Path:
     return Path(__file__).resolve().parents[1]
@@ -38,24 +30,35 @@ def load_json(path: Path) -> Any:
 
 
 def norm_route(route: str) -> str:
-    return route.strip().lower()
+    return normalize_route_id(route)
 
 
 def display_route(route: str) -> str:
-    r = route.strip()
-    if any(c.isalpha() for c in r):
-        return "".join(c.upper() if c.isalpha() else c for c in r)
-    return r
+    return normalize_route_id(route)
 
 
 def route_geom_path(route: str, geom_dir: Path) -> Path:
-    return geom_dir / f"{route}.geojson"
+    return geom_dir / f"{normalize_route_id(route)}.geojson"
+
+
+def base_route(route: str) -> str:
+    r = normalize_route_id(route)
+    if r.endswith("D") and len(r) > 1 and r[-2].isdigit():
+        return r[:-1]
+    return r
+
+
+def is_school_frequency_exempt(route: str) -> bool:
+    r = base_route(route)
+    if not r.isdigit():
+        return False
+    value = int(r)
+    return 600 <= value <= 699 or 900 <= value <= 999
 
 
 def geom_is_present(geom_path: Path, route: str) -> Tuple[bool, Optional[Dict[str, Any]]]:
     if not geom_path.exists():
         return False, None
-
     try:
         obj = load_json(geom_path)
     except Exception:
@@ -63,7 +66,6 @@ def geom_is_present(geom_path: Path, route: str) -> Tuple[bool, Optional[Dict[st
 
     if not isinstance(obj, dict):
         return False, obj
-
     if obj.get("type") != "FeatureCollection":
         return False, obj
 
@@ -73,7 +75,7 @@ def geom_is_present(geom_path: Path, route: str) -> Tuple[bool, Optional[Dict[st
 
     meta = obj.get("metadata")
     if isinstance(meta, dict) and meta.get("routeId") is not None:
-        meta_id = str(meta.get("routeId")).strip().lower()
+        meta_id = normalize_route_id(meta.get("routeId"))
         if meta_id != route:
             return False, obj
 
@@ -86,18 +88,29 @@ ROUTE_TOKEN_RE = re.compile(r"[A-Za-z0-9]+")
 def parse_routes_field(value: Any) -> List[str]:
     if value is None:
         return []
-    s = str(value).strip().lower()
+    s = str(value).strip()
     if not s:
         return []
-    return [m.group(0).lower() for m in ROUTE_TOKEN_RE.finditer(s)]
+    return [normalize_route_id(m.group(0)) for m in ROUTE_TOKEN_RE.finditer(s)]
 
 
-def find_allocation(garages_obj: Any, route: str) -> Optional[Dict[str, str]]:
+def find_allocations(garages_obj: Any, route: str) -> List[Dict[str, str]]:
+    """
+    Returns ALL matches (not just first).
+
+    Each result:
+      {
+        "operator": "...",   # Group name
+        "garage": "...",     # Garage name
+        "code": "...",       # LBR garage code (fallback TfL garage code)
+        "bucket": "main|night|school/mobility|other"
+      }
+    """
     if not isinstance(garages_obj, dict):
-        return None
+        return []
     feats = garages_obj.get("features")
     if not isinstance(feats, list):
-        return None
+        return []
 
     buckets = [
         ("main", "TfL main network routes"),
@@ -105,6 +118,8 @@ def find_allocation(garages_obj: Any, route: str) -> Optional[Dict[str, str]]:
         ("school/mobility", "TfL school/mobility routes"),
         ("other", "Other routes"),
     ]
+
+    matches: List[Dict[str, str]] = []
 
     for feat in feats:
         if not isinstance(feat, dict):
@@ -119,9 +134,42 @@ def find_allocation(garages_obj: Any, route: str) -> Optional[Dict[str, str]]:
                 operator = str(props.get("Group name", "Unknown")).strip()
                 garage = str(props.get("Garage name", "Unknown")).strip()
                 code = str(props.get("LBR garage code") or props.get("TfL garage code") or "").strip()
-                return {"operator": operator, "garage": garage, "code": code, "bucket": bucket_key}
+                matches.append(
+                    {"operator": operator, "garage": garage, "code": code, "bucket": bucket_key}
+                )
 
-    return None
+    # de-dup identical rows
+    uniq: List[Dict[str, str]] = []
+    seen = set()
+    for m in matches:
+        key = (m["operator"], m["garage"], m["code"], m["bucket"])
+        if key not in seen:
+            seen.add(key)
+            uniq.append(m)
+    return uniq
+
+
+def bucket_to_type(bucket: str) -> str:
+    return {
+        "main": "regular route",
+        "night": "night route",
+        "school/mobility": "school or mobility route",
+        "other": "other route",
+    }.get(bucket, bucket)
+
+
+def derive_route_type(allocs: List[Dict[str, str]]) -> str:
+    """
+    Best-effort classification from which allocation lists the route appears in.
+
+    If appears in BOTH main + night -> "24hr route"
+    else return a comma-separated list of distinct types.
+    """
+    buckets = {a.get("bucket") for a in allocs if a.get("bucket")}
+    if "main" in buckets and "night" in buckets:
+        return "24hr route"
+    types = [bucket_to_type(b) for b in ("main", "night", "school/mobility", "other") if b in buckets]
+    return ", ".join(types) if types else "unknown"
 
 
 def load_vehicle(vehicles_path: Path, route: str) -> Optional[str]:
@@ -130,11 +178,12 @@ def load_vehicle(vehicles_path: Path, route: str) -> Optional[str]:
     obj = load_json(vehicles_path)
     if not isinstance(obj, dict):
         return None
-    v = obj.get(route) or obj.get(route.upper()) or obj.get(route.lower())
+    key = normalize_route_id(route)
+    v = obj.get(key) or obj.get(key.lower()) or obj.get(key.upper())
     if not v:
         return None
     vv = str(v).strip().upper()
-    return vv if vv in {"SD", "DD"} else vv
+    return vv if vv in {"SD", "DD"} else None
 
 
 def load_freqs(freqs_path: Path, route: str) -> Optional[Dict[str, Any]]:
@@ -143,7 +192,8 @@ def load_freqs(freqs_path: Path, route: str) -> Optional[Dict[str, Any]]:
     obj = load_json(freqs_path)
     if not isinstance(obj, dict):
         return None
-    entry = obj.get(route) or obj.get(route.upper()) or obj.get(route.lower())
+    key = normalize_route_id(route)
+    entry = obj.get(key) or obj.get(key.lower()) or obj.get(key.upper())
     if not isinstance(entry, dict):
         return None
 
@@ -152,6 +202,44 @@ def load_freqs(freqs_path: Path, route: str) -> Optional[Dict[str, Any]]:
         "pm peak": entry.get("peak_pm"),
         "day off-peak": entry.get("offpeak"),
         "overnight": entry.get("overnight"),
+    }
+
+
+def route_status(
+    route: str,
+    geom_dir: Path,
+    garages_path: Path,
+    freqs_path: Path,
+    vehicles_path: Path,
+) -> Dict[str, Any]:
+    norm = norm_route(route)
+    alloc_route = base_route(norm)
+    geom_path = route_geom_path(norm, geom_dir)
+    has_geom, _geom_obj = geom_is_present(geom_path, norm)
+
+    garages_obj = load_json(garages_path) if garages_path.exists() else None
+    allocs = find_allocations(garages_obj, alloc_route) if garages_obj is not None else []
+    has_alloc = len(allocs) > 0
+
+    vehicle = load_vehicle(vehicles_path, norm)
+    has_vehicle = vehicle is not None
+
+    freqs = load_freqs(freqs_path, alloc_route)
+    has_freq = freqs is not None
+    expects_freq = not is_school_frequency_exempt(norm)
+
+    return {
+        "route": norm,
+        "geom_path": geom_path,
+        "has_geom": has_geom,
+        "has_alloc": has_alloc,
+        "has_vehicle": has_vehicle,
+        "has_freq": has_freq,
+        "expects_freq": expects_freq,
+        "allocs": allocs,
+        "vehicle": vehicle or "Unknown",
+        "freqs": freqs,
+        "active": has_geom and has_alloc and has_vehicle and (has_freq or not expects_freq),
     }
 
 
@@ -172,42 +260,51 @@ def main() -> int:
     freqs_path = Path(args.freqs)
     vehicles_path = Path(args.vehicles)
 
-    # ---- gather facts ----
-    geom_path = route_geom_path(route, geom_dir)
-    has_geom, geom_obj = geom_is_present(geom_path, route)
+    status = route_status(route, geom_dir, garages_path, freqs_path, vehicles_path)
+    has_geom = status["has_geom"]
+    has_alloc = status["has_alloc"]
+    has_vehicle = status["has_vehicle"]
+    has_freq = status["has_freq"]
+    expects_freq = status["expects_freq"]
+    allocs = status["allocs"]
+    vehicle = status["vehicle"]
+    freqs = status["freqs"]
 
-    garages_obj = load_json(garages_path) if garages_path.exists() else None
-    alloc = find_allocation(garages_obj, route) if garages_obj is not None else None
-    has_alloc = alloc is not None
-
-    vehicle = load_vehicle(vehicles_path, route) or "Unknown"
-    freqs = load_freqs(freqs_path, route)
-
-    # ---- status line + notes ----
+    # ---- status + notes ----
     notes: List[str] = []
     if not has_geom:
         notes.append("no route geometry")
     if not has_alloc:
         notes.append("no allocation")
+    if not has_vehicle:
+        notes.append("no vehicle")
+    if expects_freq and not has_freq:
+        notes.append("no frequency")
 
-    active = has_geom and has_alloc
+    active = has_geom and has_alloc and has_vehicle and (has_freq or not expects_freq)
 
     if active:
         print(f"Route {route_disp} active")
     else:
-        # Match your earlier wording if neither present
         if not has_geom and not has_alloc:
             print(f"No active Route {route_disp} found.")
         else:
             print(f"Route {route_disp} inactive.")
         print("Note: " + ", ".join(notes))
 
-    # ---- print the rest no matter what ----
+    # ---- route type summary ----
+    route_type = derive_route_type(allocs) if allocs else "unknown"
+    print(f"Type: {route_type}")
+
+    # ---- rest of info ----
     print(f"Vehicle: {vehicle}")
 
-    if alloc:
-        code = f" ({alloc['code']})" if alloc.get("code") else ""
-        print(f"Allocation: operated by {alloc['operator']}, allocated to {alloc['garage']}{code}")
+    if allocs:
+        print("Allocation(s):")
+        for a in allocs:
+            code = f" ({a['code']})" if a.get("code") else ""
+            t = bucket_to_type(a.get("bucket", "unknown"))
+            print(f"  - {t}: operated by {a['operator']}, allocated to {a['garage']}{code}")
     else:
         print("Allocation: (missing)")
 
@@ -221,9 +318,11 @@ def main() -> int:
         print(f"  day off-peak: {show(freqs.get('day off-peak'))} bph")
         print(f"  overnight: {show(freqs.get('overnight'))} bph")
     else:
-        print("Frequency: (missing frequencies.json entry)")
+        if expects_freq:
+            print("Frequency: (missing frequencies.json entry)")
+        else:
+            print("Frequency: (skipped for school-route series)")
 
-    # (optional nice extra: show where geometry file would be)
     if not has_geom:
         print(f"Geometry file: (missing) expected at {geom_path}")
 
@@ -234,7 +333,9 @@ def main() -> int:
         return 2
     if has_geom and not has_alloc:
         return 3
-    return 4  # allocation only
+    if not has_geom and has_alloc:
+        return 4
+    return 5
 
 
 if __name__ == "__main__":

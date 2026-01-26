@@ -26,14 +26,12 @@ const ROUTE_COLOURS = {
 const DEFAULT_ROUTE_DRAW_ORDER = ["regular", "twentyfour", "prefix", "night", "school"];
 // const DEFAULT_ROUTE_DRAW_ORDER = ["school", "night", "prefix", "twentyfour", "regular"];
 const ROUTE_PANE = "routes-pane";
-const FREQUENCY_PANE = "frequency-pane";
 const STOP_PANE = "stops-pane";
 const STATION_PANE = "stations-pane";
 const GARAGE_PANE = "garages-pane";
 const HIGHLIGHT_PANE = "highlight-pane";
 const MAP_PANE_ORDER = [
 	{ name: ROUTE_PANE, zIndex: 410 },
-	{ name: FREQUENCY_PANE, zIndex: 415 },
 	{ name: STOP_PANE, zIndex: 420 },
 	{ name: STATION_PANE, zIndex: 430 },
 	{ name: GARAGE_PANE, zIndex: 440 },
@@ -107,7 +105,6 @@ const appState = {
 	routeGeometryCache: new Map(),
 	garageRouteLayer: null,
 	networkRouteLayer: null,
-	frequencyLayer: null,
 	focusRouteLayer: null,
 	focusRouteId: null,
 	focusRouteLoadToken: 0,
@@ -121,9 +118,10 @@ const appState = {
 	routeFilterTokens: [],
 	frequencyData: null,
 	frequencyLoadPromise: null,
-	frequencyLoadToken: 0,
 	frequencyBand: "peak_am",
 	showFrequencyLayer: false,
+	frequencySegmentTotals: null,
+	frequencyMaxTotal: 0,
 	geocodeLastAt: 0
 };
 
@@ -1413,7 +1411,7 @@ function getFrequencyPerHour(headwayMinutes) {
 	if (!Number.isFinite(headwayMinutes) || headwayMinutes <= 0) {
 		return 0;
 	}
-	return 60 / headwayMinutes;
+	return headwayMinutes;
 }
 
 function quantizeLatLng(value) {
@@ -1426,20 +1424,159 @@ function buildSegmentKey(a, b) {
 	return aKey < bKey ? `${aKey}|${bKey}` : `${bKey}|${aKey}`;
 }
 
-function clearFrequencyLayer() {
-	if (appState.frequencyLayer && appState.map) {
-		appState.map.removeLayer(appState.frequencyLayer);
-		appState.frequencyLayer = null;
+function getPolylineAverageTotal(segment, segmentTotals) {
+	if (!Array.isArray(segment) || segment.length < 2 || !segmentTotals) {
+		return null;
 	}
+	let sum = 0;
+	let count = 0;
+	for (let i = 1; i < segment.length; i += 1) {
+		const start = segment[i - 1];
+		const end = segment[i];
+		if (!Array.isArray(start) || !Array.isArray(end)) {
+			continue;
+		}
+		const key = buildSegmentKey(start, end);
+		const entry = segmentTotals.get(key);
+		if (!entry) {
+			continue;
+		}
+		sum += entry.total;
+		count += 1;
+	}
+	return count > 0 ? sum / count : null;
 }
 
-function refreshFrequencyLayer() {
-	if (!appState.showFrequencyLayer) {
-		clearFrequencyLayer();
-		return;
+function getFrequencyTotalAtLatLng(line, latlng) {
+	if (!line || !latlng || !appState.map || !appState.frequencySegmentTotals) {
+		return null;
 	}
-	appState.frequencyLoadToken += 1;
-	renderFrequencyLayer(appState.frequencyLoadToken);
+	const map = appState.map;
+	const point = map.latLngToLayerPoint(latlng);
+	const segments = [];
+	collectPolylineSegments(line.getLatLngs(), segments);
+
+	let bestTotal = null;
+	let bestDistance = Infinity;
+	segments.forEach((segment) => {
+		for (let i = 1; i < segment.length; i += 1) {
+			const start = segment[i - 1];
+			const end = segment[i];
+			if (!start || !end) {
+				continue;
+			}
+			const startPoint = map.latLngToLayerPoint(start);
+			const endPoint = map.latLngToLayerPoint(end);
+			const distance = L.LineUtil.pointToSegmentDistance(point, startPoint, endPoint);
+			if (distance >= bestDistance) {
+				continue;
+			}
+			const key = buildSegmentKey([start.lat, start.lng], [end.lat, end.lng]);
+			const entry = appState.frequencySegmentTotals.get(key);
+			if (!entry) {
+				continue;
+			}
+			bestDistance = distance;
+			bestTotal = entry.total;
+		}
+	});
+
+	return bestDistance <= 12 ? bestTotal : null;
+}
+
+function getFrequencyLineWeight(segment, context) {
+	if (!context || !context.segmentTotals || context.maxTotal <= 0) {
+		return null;
+	}
+	const total = getPolylineAverageTotal(segment, context.segmentTotals);
+	if (!Number.isFinite(total) || total <= 0) {
+		return null;
+	}
+	const t = Math.min(total / context.maxTotal, 1);
+	const scaled = Math.pow(t, 0.75);
+	const minWeight = 1.5;
+	const maxWeight = 24;
+	return minWeight + (maxWeight - minWeight) * scaled;
+}
+
+function formatFrequencyValue(total) {
+	if (!Number.isFinite(total) || total <= 0) {
+		return "";
+	}
+	const perHour = total;
+	const headway = 60 / perHour;
+	const headwayText = headway >= 1 ? `${headway.toFixed(1)} min` : `${Math.round(headway * 60)} sec`;
+	return `${perHour.toFixed(1)} buses/hr (${headwayText} headway)`;
+}
+
+async function buildFrequencyContext(routeIds) {
+	if (!appState.showFrequencyLayer) {
+		appState.frequencySegmentTotals = null;
+		appState.frequencyMaxTotal = 0;
+		return null;
+	}
+	await loadFrequencyData();
+	if (!appState.frequencyData) {
+		appState.frequencySegmentTotals = null;
+		appState.frequencyMaxTotal = 0;
+		return null;
+	}
+
+	const ids = Array.from(new Set(Array.from(routeIds || [])));
+	const segmentTotals = new Map();
+	const segmentsByRoute = new Map();
+	const band = appState.frequencyBand;
+
+	const tasks = ids.map((routeId) => {
+		return loadRouteGeometry(routeId)
+			.then((segments) => {
+				segmentsByRoute.set(routeId, segments || null);
+				const headway = getFrequencyValue(routeId, band);
+				const perHour = getFrequencyPerHour(headway);
+				if (perHour <= 0 || !segments || segments.length === 0) {
+					return;
+				}
+				const routeKeys = new Set();
+				segments.forEach((segment) => {
+					for (let i = 1; i < segment.length; i += 1) {
+						const start = segment[i - 1];
+						const end = segment[i];
+						if (!Array.isArray(start) || !Array.isArray(end)) {
+							continue;
+						}
+						routeKeys.add(buildSegmentKey(start, end));
+					}
+				});
+				routeKeys.forEach((key) => {
+					const entry = segmentTotals.get(key);
+					if (entry) {
+						entry.total += perHour;
+					} else {
+						segmentTotals.set(key, { total: perHour });
+					}
+				});
+			})
+			.catch(() => {
+				segmentsByRoute.set(routeId, null);
+			});
+	});
+
+	await Promise.all(tasks);
+
+	let maxTotal = 0;
+	segmentTotals.forEach((entry) => {
+		if (entry.total > maxTotal) {
+			maxTotal = entry.total;
+		}
+	});
+	appState.frequencySegmentTotals = segmentTotals.size > 0 ? segmentTotals : null;
+	appState.frequencyMaxTotal = maxTotal;
+
+	return {
+		segmentTotals: appState.frequencySegmentTotals,
+		maxTotal,
+		segmentsByRoute
+	};
 }
 
 async function renderGarageRoutes(loadToken) {
@@ -1470,15 +1607,31 @@ async function renderGarageRoutes(loadToken) {
 	}
 	updateSelectedRouteCount(selectedRoutes.size);
 
+	let frequencyContext = null;
+	if (appState.showFrequencyLayer) {
+		frequencyContext = await buildFrequencyContext(selectedRoutes);
+		if (loadToken !== appState.routeLoadToken) {
+			return;
+		}
+	} else {
+		appState.frequencySegmentTotals = null;
+		appState.frequencyMaxTotal = 0;
+	}
+
 	const layerGroup = L.layerGroup().addTo(appState.map);
 	appState.garageRouteLayer = layerGroup;
+	const hasFrequency = Boolean(frequencyContext?.segmentTotals && frequencyContext.maxTotal > 0);
+	const baseWeight = hasFrequency ? 1.8 : 4;
 
 	const tasks = filteredCategories.flatMap((category) => {
 		if (category.filteredRoutes.length === 0) {
 			return [];
 		}
 		return category.filteredRoutes.map((routeId) => {
-			return loadRouteGeometry(routeId)
+			const segmentPromise = frequencyContext?.segmentsByRoute?.has(routeId)
+				? Promise.resolve(frequencyContext.segmentsByRoute.get(routeId))
+				: loadRouteGeometry(routeId);
+			return segmentPromise
 				.then((segments) => {
 					if (loadToken !== appState.routeLoadToken) {
 						return;
@@ -1487,9 +1640,10 @@ async function renderGarageRoutes(loadToken) {
 						return;
 					}
 					segments.forEach((segment) => {
+						const weighted = hasFrequency ? getFrequencyLineWeight(segment, frequencyContext) : null;
 						const line = L.polyline(segment, {
 							color: resolveRouteColour(category.color),
-							weight: 4,
+							weight: weighted ?? baseWeight,
 							opacity: 0.85,
 							pane: ROUTE_PANE
 						}).addTo(layerGroup);
@@ -1523,7 +1677,6 @@ function clearNetworkRoutes() {
 		appState.map.removeLayer(appState.networkRouteLayer);
 		appState.networkRouteLayer = null;
 	}
-	clearFrequencyLayer();
 }
 
 async function getSelectedNetworkCategories() {
@@ -1589,119 +1742,6 @@ async function getSelectedNetworkCategories() {
 	return orderRouteCategories(categories);
 }
 
-async function renderFrequencyLayer(loadToken) {
-	if (!appState.showFrequencyLayer || appState.focusRouteId || appState.suppressNetworkRoutes) {
-		clearFrequencyLayer();
-		return;
-	}
-	clearFrequencyLayer();
-	if (!appState.map) {
-		return;
-	}
-
-	const categories = await getSelectedNetworkCategories();
-	if (loadToken !== appState.frequencyLoadToken) {
-		return;
-	}
-	if (categories.length === 0) {
-		return;
-	}
-
-	await loadFrequencyData();
-	if (loadToken !== appState.frequencyLoadToken) {
-		return;
-	}
-	if (!appState.frequencyData) {
-		return;
-	}
-
-	const filteredCategories = categories.map((category) => {
-		const filteredRoutes = filterRouteSet(category.routes, appState.routeFilterTokens);
-		return { ...category, filteredRoutes };
-	});
-	const selectedRoutes = new Set();
-	filteredCategories.forEach((category) => {
-		category.filteredRoutes.forEach((routeId) => selectedRoutes.add(routeId));
-	});
-	if (selectedRoutes.size === 0) {
-		return;
-	}
-
-	const segmentTotals = new Map();
-	const band = appState.frequencyBand;
-
-	const tasks = Array.from(selectedRoutes).map((routeId) => {
-		const headway = getFrequencyValue(routeId, band);
-		const perHour = getFrequencyPerHour(headway);
-		if (perHour <= 0) {
-			return Promise.resolve();
-		}
-		return loadRouteGeometry(routeId)
-			.then((segments) => {
-				if (loadToken !== appState.frequencyLoadToken) {
-					return;
-				}
-				if (!segments || segments.length === 0) {
-					return;
-				}
-				segments.forEach((segment) => {
-					for (let i = 1; i < segment.length; i += 1) {
-						const start = segment[i - 1];
-						const end = segment[i];
-						if (!Array.isArray(start) || !Array.isArray(end)) {
-							continue;
-						}
-						const key = buildSegmentKey(start, end);
-						const entry = segmentTotals.get(key);
-						if (entry) {
-							entry.total += perHour;
-						} else {
-							segmentTotals.set(key, { points: [start, end], total: perHour });
-						}
-					}
-				});
-			})
-			.catch(() => {});
-	});
-
-	await Promise.all(tasks);
-	if (loadToken !== appState.frequencyLoadToken) {
-		return;
-	}
-	if (segmentTotals.size === 0) {
-		return;
-	}
-
-	let maxTotal = 0;
-	segmentTotals.forEach((entry) => {
-		if (entry.total > maxTotal) {
-			maxTotal = entry.total;
-		}
-	});
-	if (maxTotal <= 0) {
-		return;
-	}
-
-	const minWeight = 2;
-	const maxWeight = 12;
-	const layerGroup = L.layerGroup().addTo(appState.map);
-	appState.frequencyLayer = layerGroup;
-
-	segmentTotals.forEach((entry) => {
-		const scale = Math.sqrt(entry.total / maxTotal);
-		const weight = minWeight + (maxWeight - minWeight) * scale;
-		L.polyline(entry.points, {
-			color: "#1f2937",
-			weight,
-			opacity: 0.55,
-			pane: FREQUENCY_PANE,
-			lineCap: "round",
-			lineJoin: "round",
-			interactive: false
-		}).addTo(layerGroup);
-	});
-}
-
 async function renderNetworkRoutes(loadToken) {
 	if (appState.focusRouteId || appState.suppressNetworkRoutes) {
 		clearNetworkRoutes();
@@ -1718,7 +1758,8 @@ async function renderNetworkRoutes(loadToken) {
 	if (categories.length === 0) {
 		appState.showNetworkRoutes = false;
 		updateSelectedRouteCount(0);
-		refreshFrequencyLayer();
+		appState.frequencySegmentTotals = null;
+		appState.frequencyMaxTotal = 0;
 		return;
 	}
 
@@ -1732,16 +1773,32 @@ async function renderNetworkRoutes(loadToken) {
 	});
 	updateSelectedRouteCount(selectedRoutes.size);
 
+	let frequencyContext = null;
+	if (appState.showFrequencyLayer) {
+		frequencyContext = await buildFrequencyContext(selectedRoutes);
+		if (loadToken !== appState.networkRouteLoadToken) {
+			return;
+		}
+	} else {
+		appState.frequencySegmentTotals = null;
+		appState.frequencyMaxTotal = 0;
+	}
+
 	appState.showNetworkRoutes = true;
 	const layerGroup = L.layerGroup().addTo(appState.map);
 	appState.networkRouteLayer = layerGroup;
+	const hasFrequency = Boolean(frequencyContext?.segmentTotals && frequencyContext.maxTotal > 0);
+	const baseWeight = hasFrequency ? 1.6 : 3;
 
 	const tasks = filteredCategories.flatMap((category) => {
 		if (category.filteredRoutes.length === 0) {
 			return [];
 		}
 		return category.filteredRoutes.map((routeId) => {
-			return loadRouteGeometry(routeId)
+			const segmentPromise = frequencyContext?.segmentsByRoute?.has(routeId)
+				? Promise.resolve(frequencyContext.segmentsByRoute.get(routeId))
+				: loadRouteGeometry(routeId);
+			return segmentPromise
 				.then((segments) => {
 					if (loadToken !== appState.networkRouteLoadToken) {
 						return;
@@ -1750,9 +1807,10 @@ async function renderNetworkRoutes(loadToken) {
 						return;
 					}
 					segments.forEach((segment) => {
+						const weighted = hasFrequency ? getFrequencyLineWeight(segment, frequencyContext) : null;
 						const line = L.polyline(segment, {
 							color: resolveRouteColour(category.color),
-							weight: 3,
+							weight: weighted ?? baseWeight,
 							opacity: 0.7,
 							pane: ROUTE_PANE
 						}).addTo(layerGroup);
@@ -1765,7 +1823,6 @@ async function renderNetworkRoutes(loadToken) {
 	});
 
 	await Promise.all(tasks);
-	refreshFrequencyLayer();
 }
 
 async function loadRouteGeometry(routeId) {
@@ -1914,10 +1971,14 @@ function collectRoutesNearLatLng(layerGroup, latlng, seedRouteId) {
 	return sortRouteIds(Array.from(routes));
 }
 
-function buildRouteGeometryHoverHtml(routes, routeSets) {
+function buildRouteGeometryHoverHtml(routes, routeSets, frequencyTotal) {
+	const frequencyLine = Number.isFinite(frequencyTotal) && frequencyTotal > 0
+		? `<div class="hover-popup__meta">Combined frequency: ${formatFrequencyValue(frequencyTotal)}</div>`
+		: "";
 	return `
 		<div class="hover-popup__content">
 			<div class="hover-popup__title">Routes here</div>
+			${frequencyLine}
 			<div class="hover-popup__routes">${renderRoutePills(routes, routeSets)}</div>
 		</div>
 	`;
@@ -1930,7 +1991,8 @@ function bindRouteHoverPopup(line, layerGroup) {
 	bindHoverPopup(line, (event) => {
 		const routes = collectRoutesNearLatLng(layerGroup, event?.latlng, line._routeId);
 		const routeSets = appState.useRouteTypeColours ? appState.networkRouteSets : null;
-		return buildRouteGeometryHoverHtml(routes, routeSets);
+		const frequencyTotal = getFrequencyTotalAtLatLng(line, event?.latlng);
+		return buildRouteGeometryHoverHtml(routes, routeSets, frequencyTotal);
 	});
 }
 
@@ -2670,12 +2732,28 @@ async function renderBusStationRoutes(loadToken) {
 		return;
 	}
 
+	let frequencyContext = null;
+	if (appState.showFrequencyLayer) {
+		frequencyContext = await buildFrequencyContext(selectedRoutes);
+		if (loadToken !== appState.busStationRouteLoadToken) {
+			return;
+		}
+	} else {
+		appState.frequencySegmentTotals = null;
+		appState.frequencyMaxTotal = 0;
+	}
+
 	const routeSets = appState.useRouteTypeColours ? await loadNetworkRouteSets() : null;
 	const layerGroup = L.layerGroup().addTo(appState.map);
 	appState.busStationRouteLayer = layerGroup;
+	const hasFrequency = Boolean(frequencyContext?.segmentTotals && frequencyContext.maxTotal > 0);
+	const baseWeight = hasFrequency ? 1.8 : 4;
 
 	const tasks = filteredRoutes.map((routeId) => {
-		return loadRouteGeometry(routeId)
+		const segmentPromise = frequencyContext?.segmentsByRoute?.has(routeId)
+			? Promise.resolve(frequencyContext.segmentsByRoute.get(routeId))
+			: loadRouteGeometry(routeId);
+		return segmentPromise
 			.then((segments) => {
 				if (loadToken !== appState.busStationRouteLoadToken) {
 					return;
@@ -2684,9 +2762,10 @@ async function renderBusStationRoutes(loadToken) {
 					return;
 				}
 				segments.forEach((segment) => {
+					const weighted = hasFrequency ? getFrequencyLineWeight(segment, frequencyContext) : null;
 					const line = L.polyline(segment, {
 						color: getBusStationRouteColour(routeId, routeSets),
-						weight: 4,
+						weight: weighted ?? baseWeight,
 						opacity: 0.85,
 						pane: ROUTE_PANE
 					}).addTo(layerGroup);
@@ -3047,7 +3126,8 @@ function setupUI() {
 			clearBusStationHighlight();
 			clearBusStationRoutes();
 			clearNetworkRoutes();
-			clearFrequencyLayer();
+			appState.frequencySegmentTotals = null;
+			appState.frequencyMaxTotal = 0;
 			appState.showNetworkRoutes = false;
 			appState.activeGarageRoutes = null;
 			appState.activeBusStationRoutes = null;
@@ -3071,7 +3151,8 @@ function setupUI() {
 			clearGarageRoutes();
 			clearBusStationRoutes();
 			clearNetworkRoutes();
-			clearFrequencyLayer();
+			appState.frequencySegmentTotals = null;
+			appState.frequencyMaxTotal = 0;
 			appState.activeGarageRoutes = null;
 			appState.activeBusStationRoutes = null;
 			appState.showNetworkRoutes = false;
@@ -3450,14 +3531,29 @@ function setupFrequencyModule() {
 	appState.frequencyBand = bandSelect.value || "peak_am";
 	appState.showFrequencyLayer = overlayToggle.checked;
 
+	const refreshFrequencyRoutes = () => {
+		if (appState.activeGarageRoutes) {
+			appState.routeLoadToken += 1;
+			renderGarageRoutes(appState.routeLoadToken);
+		}
+		if (appState.activeBusStationRoutes) {
+			appState.busStationRouteLoadToken += 1;
+			renderBusStationRoutes(appState.busStationRouteLoadToken);
+		}
+		if (appState.showNetworkRoutes) {
+			appState.networkRouteLoadToken += 1;
+			renderNetworkRoutes(appState.networkRouteLoadToken);
+		}
+	};
+
 	bandSelect.addEventListener("change", (event) => {
 		appState.frequencyBand = event.target.value || "peak_am";
-		refreshFrequencyLayer();
+		refreshFrequencyRoutes();
 	});
 
 	overlayToggle.addEventListener("change", (event) => {
 		appState.showFrequencyLayer = event.target.checked;
-		refreshFrequencyLayer();
+		refreshFrequencyRoutes();
 	});
 }
 

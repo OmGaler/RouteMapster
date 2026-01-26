@@ -30,6 +30,10 @@ import argparse, json, logging, re
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
+try:
+    from scripts.utils.route_ids import normalize_route_id
+except ModuleNotFoundError:  # pragma: no cover - script execution fallback
+    from utils.route_ids import normalize_route_id
 
 GARAGE_CODE_KEY = "TfL garage code"
 GARAGE_CODE_FALLBACK_KEY = "LBR garage code"
@@ -62,7 +66,7 @@ def norm_code(s: str) -> str:
 
 
 def norm_route(s: str) -> str:
-    return (s or "").strip()
+    return normalize_route_id(s)
 
 
 def load_geojson(path: Path) -> Dict[str, Any]:
