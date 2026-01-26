@@ -1,0 +1,53 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.055,
+          51.546
+        ]
+      },
+      "properties": {
+        "Garage name": "Alpha Depot",
+        "TfL garage code": "AD",
+        "Garage address": "1 Alpha Rd, London E8 4RH",
+        "Company address": "",
+        "TfL main network routes": "12 ",
+        "TfL night routes": "N12 ",
+        "TfL school/mobility routes": "",
+        "Other routes": "",
+        "_geocode_source": "postcodes.io",
+        "_geocode_postcode": "E8 4RH",
+        "_geocode_admin_district": null,
+        "_geocode_country": null
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.141,
+          51.501
+        ]
+      },
+      "properties": {
+        "Garage name": "Beta Garage",
+        "TfL garage code": "BG",
+        "Garage address": "",
+        "Company address": "15 Beta Lane, LONDON  sw1a1aa",
+        "TfL main network routes": "",
+        "TfL night routes": "N88 ",
+        "TfL school/mobility routes": "",
+        "Other routes": "",
+        "_geocode_source": "postcodes.io",
+        "_geocode_postcode": "SW1A 1AA",
+        "_geocode_admin_district": null,
+        "_geocode_country": null
+      }
+    }
+  ]
+}

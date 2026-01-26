@@ -7,6 +7,8 @@ data/*.csv
 data/*.xlsx
 data/route_geometry_*.geojson
 data/bus_stops_*.geojson
+data/garages.geojson
 __pycache__/
 .env
 .env.*
+.vscode/settings.json

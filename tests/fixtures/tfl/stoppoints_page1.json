@@ -1,0 +1,39 @@
+{
+  "stopPoints": [
+    {
+      "id": "490000123A",
+      "naptanId": "490000123A",
+      "commonName": "Alpha Stop",
+      "lat": 51.5,
+      "lon": -0.1,
+      "stopType": "NaptanPublicBusCoachTram",
+      "modes": [
+        "bus"
+      ],
+      "lines": [
+        {
+          "id": "11"
+        },
+        {
+          "name": "N11"
+        }
+      ],
+      "additionalProperties": [
+        {
+          "key": "Postcode",
+          "value": "SW1A 1AA"
+        }
+      ]
+    },
+    {
+      "id": "9100STATION",
+      "commonName": "Tube Station",
+      "lat": 51.501,
+      "lon": -0.12,
+      "stopType": "NaptanMetroStation",
+      "modes": [
+        "tube"
+      ]
+    }
+  ]
+}
