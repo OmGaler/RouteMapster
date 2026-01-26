@@ -32,6 +32,7 @@ GARAGES_PAGE = "http://www.londonbusroutes.net/garages.htm"
 GARAGES_CSV = "http://www.londonbusroutes.net/garages.csv"
 RAW_OUTPUT_DIR = Path("data/raw/garages")
 PROCESSED_OUTPUT = Path("data/processed/garages.geojson")
+SECONDARY_OUTPUT = Path("data/garages.geojson")
 
 GARAGE_PROPERTIES = [
     "Group name",
@@ -264,6 +265,11 @@ def write_geojson(path: Path, features: List[Dict[str, Any]], metadata: Dict[str
     with path.open("w", encoding="utf-8") as handle:
         json.dump(payload, handle, ensure_ascii=True, separators=(",", ":"))
 
+    if path.resolve() != SECONDARY_OUTPUT.resolve():
+        SECONDARY_OUTPUT.parent.mkdir(parents=True, exist_ok=True)
+        with SECONDARY_OUTPUT.open("w", encoding="utf-8") as handle:
+            json.dump(payload, handle, ensure_ascii=True, separators=(",", ":"))
+
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Fetch and process London bus garages data.")
@@ -290,7 +296,6 @@ def main() -> int:
     if not args.input:
         _, source_date = fetch_page_and_date(session, args.page_url)
         logging.info("Garages source date: %s", source_date or "unknown")
-
     existing_path = Path(args.output)
     if existing_path.exists() and source_date and not args.force:
         with existing_path.open("r", encoding="utf-8") as handle:

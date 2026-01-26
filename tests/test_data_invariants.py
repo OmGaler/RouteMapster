@@ -7,7 +7,12 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Set, Tuple
 
 from scripts import check_route
-from scripts.utils.route_ids import active_routes_from_geometry, is_700_series, normalize_route_id
+from scripts.utils.route_ids import (
+    active_routes_from_geometry,
+    is_700_series,
+    is_excluded_route_id,
+    normalize_route_id,
+)
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -82,7 +87,10 @@ def _freqs_map() -> Dict[str, Dict[str, Any]]:
     for key, value in obj.items():
         if not isinstance(value, dict):
             continue
-        out[normalize_route_id(key)] = value
+        route_id = normalize_route_id(key)
+        if not route_id or is_excluded_route_id(route_id):
+            continue
+        out[route_id] = value
     return out
 
 
@@ -190,7 +198,7 @@ def test_frequency_values_within_bounds() -> None:
     freqs = _freqs_map()
     violations: List[str] = []
     for route, entry in freqs.items():
-        if _is_school_frequency_exempt(route) or is_700_series(route):
+        if _is_school_frequency_exempt(route) or is_700_series(route) or is_excluded_route_id(route):
             continue
         for key, value in entry.items():
             if value is None:

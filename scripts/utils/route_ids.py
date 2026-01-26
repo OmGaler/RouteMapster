@@ -7,12 +7,24 @@ from typing import Set, Union
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_GEOM_DIR = REPO_ROOT / "data" / "processed" / "routes"
+EXCLUDED_PREFIXES = ("UL", "T")
 
 
 def normalize_route_id(raw: object) -> str:
     if raw is None:
         return ""
     return str(raw).strip().upper()
+
+
+def is_excluded_route_id(route_id: object) -> bool:
+    text = normalize_route_id(route_id)
+    if not text:
+        return False
+    if text.startswith("UL"):
+        return True
+    if text.startswith("T") and len(text) > 1 and text[1].isdigit():
+        return True
+    return False
 
 
 def is_700_series(route_id: object) -> bool:
@@ -31,6 +43,8 @@ def active_routes_from_geometry(geom_dir: Union[Path, str] = DEFAULT_GEOM_DIR) -
     for geojson_path in path.glob("*.geojson"):
         route_id = normalize_route_id(geojson_path.stem)
         if not route_id:
+            continue
+        if is_excluded_route_id(route_id):
             continue
         if is_700_series(route_id):
             continue

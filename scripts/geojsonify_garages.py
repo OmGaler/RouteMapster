@@ -20,9 +20,9 @@ from pathlib import Path
 from typing import Any, Dict, Optional, List, Callable
 
 try:
-    from scripts.utils.route_ids import normalize_route_id
+    from scripts.utils.route_ids import is_excluded_route_id, normalize_route_id
 except ModuleNotFoundError:  # pragma: no cover - script execution fallback
-    from utils.route_ids import normalize_route_id
+    from utils.route_ids import is_excluded_route_id, normalize_route_id
 
 
 POSTCODES_URL = "https://api.postcodes.io/postcodes"
@@ -140,7 +140,12 @@ def bulk_lookup_postcodes(
 def parse_routes(val: Any) -> List[str]:
     if not val:
         return []
-    return [normalize_route_id(token) for token in ROUTE_TOKEN_RE.findall(str(val))]
+    tokens: List[str] = []
+    for token in ROUTE_TOKEN_RE.findall(str(val)):
+        normalized = normalize_route_id(token)
+        if normalized and not is_excluded_route_id(normalized):
+            tokens.append(normalized)
+    return tokens
 
 
 def format_routes(routes: List[str]) -> str:

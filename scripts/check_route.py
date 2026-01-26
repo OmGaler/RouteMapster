@@ -16,9 +16,9 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 try:
-    from scripts.utils.route_ids import normalize_route_id
+    from scripts.utils.route_ids import is_excluded_route_id, normalize_route_id
 except ModuleNotFoundError:  # pragma: no cover - script execution fallback
-    from utils.route_ids import normalize_route_id
+    from utils.route_ids import is_excluded_route_id, normalize_route_id
 
 def repo_root() -> Path:
     return Path(__file__).resolve().parents[1]
@@ -91,7 +91,12 @@ def parse_routes_field(value: Any) -> List[str]:
     s = str(value).strip()
     if not s:
         return []
-    return [normalize_route_id(m.group(0)) for m in ROUTE_TOKEN_RE.finditer(s)]
+    tokens: List[str] = []
+    for match in ROUTE_TOKEN_RE.finditer(s):
+        token = normalize_route_id(match.group(0))
+        if token and not is_excluded_route_id(token):
+            tokens.append(token)
+    return tokens
 
 
 def find_allocations(garages_obj: Any, route: str) -> List[Dict[str, str]]:

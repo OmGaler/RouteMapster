@@ -48,12 +48,14 @@ from urllib3.util.retry import Retry
 try:
     from scripts.utils.route_ids import (
         active_routes_from_geometry,
+        is_excluded_route_id,
         normalize_route_id,
         reconcile_possible_ghost_night_route,
     )
 except ModuleNotFoundError:  # pragma: no cover - script execution fallback
     from utils.route_ids import (
         active_routes_from_geometry,
+        is_excluded_route_id,
         normalize_route_id,
         reconcile_possible_ghost_night_route,
     )
@@ -483,6 +485,8 @@ def parse_routes_value(value: Any, active_routes: Optional[Set[str]] = None) -> 
     for token in tokens:
         normalized = normalize_route_id(token)
         if not normalized:
+            continue
+        if is_excluded_route_id(normalized):
             continue
         if active_routes is not None:
             normalized = reconcile_possible_ghost_night_route(normalized, active_routes)
