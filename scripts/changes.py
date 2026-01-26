@@ -7,9 +7,9 @@ from pathlib import Path
 from typing import Dict, Set, List, Tuple, Optional
 
 try:
-    from scripts.utils.route_ids import normalize_route_id
+    from scripts.utils.route_ids import is_excluded_route_id, normalize_route_id
 except ModuleNotFoundError:  # pragma: no cover - script execution fallback
-    from utils.route_ids import normalize_route_id
+    from utils.route_ids import is_excluded_route_id, normalize_route_id
 ROUTES_DIR = Path("data/processed/routes")
 GARAGES_FILE = Path("data/processed/garages.geojson")
 
@@ -55,7 +55,7 @@ def parse_route_tokens(val: object) -> List[str]:
     tokens: List[str] = []
     for raw in s.split():
         normalized = normalize_route_id(raw)
-        if normalized:
+        if normalized and not is_excluded_route_id(normalized):
             tokens.append(normalized)
     return tokens
 
@@ -93,6 +93,8 @@ removed = sorted(old_routes - new_routes)
 
 # ---- ALLOCATION MOVES ----
 moves: List[Tuple[str, str, str]] = []
+alloc_added: List[Tuple[str, str]] = []
+alloc_removed: List[Tuple[str, str]] = []
 old_g = load_json_from_git("HEAD", GARAGES_FILE)
 new_g = load_json_from_fs(GARAGES_FILE)
 
@@ -103,6 +105,10 @@ if old_g and new_g:
     for r in sorted(old_map.keys() & new_map.keys()):
         if old_map[r] != new_map[r]:
             moves.append((r, old_map[r], new_map[r]))
+    for r in sorted(new_map.keys() - old_map.keys()):
+        alloc_added.append((r, new_map[r]))
+    for r in sorted(old_map.keys() - new_map.keys()):
+        alloc_removed.append((r, old_map[r]))
 
 # ---- STOP ADDS / REMOVES ----
 def extract_stop_ids(gj: dict) -> Set[str]:
@@ -145,7 +151,7 @@ geom_updated = sorted(set(changed_route_ids) - set(added) - set(removed))
 def cap_list(items: List[str], n: int = 10) -> str:
     if len(items) <= n:
         return ", ".join(items)
-    return ", ".join(items[:n]) + f" …(+{len(items)-n} more)"
+    return ", ".join(items[:n]) + f" ...(+{len(items)-n} more)"
 
 lines: List[str] = []
 
@@ -163,8 +169,14 @@ if stops_added or stops_removed:
     lines.append(f"Stops (+{len(stops_added)} -{len(stops_removed)})")
 
 if moves:
-    move_strings = [f"{r} {a}→{b}" for (r, a, b) in moves]
+    move_strings = [f"{r} {a}->{b}" for (r, a, b) in moves]
     lines.append("Alloc: " + cap_list(move_strings, 12))
+if alloc_added:
+    added_strings = [f"{r}@{g}" for (r, g) in alloc_added]
+    lines.append("Alloc+: " + cap_list(added_strings, 12))
+if alloc_removed:
+    removed_strings = [f"{r}@{g}" for (r, g) in alloc_removed]
+    lines.append("Alloc-: " + cap_list(removed_strings, 12))
 
 if not lines:
     lines.append("Processed data update")

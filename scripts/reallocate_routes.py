@@ -6,10 +6,10 @@ Move bus routes from one garage to another inside an existing garages GeoJSON.
 
 Examples:
 Move a single route:
-python reallocate_routes.py ../data/garages.geojson 142 X BT
+python reallocate_routes.py ../data/processed/garages.geojson 142 X BT
 
 # Apply a batch file of moves (lines: route from to):
-python reallocate_routes.py ../data/garages.geojson moves.txt
+python reallocate_routes.py ../data/processed/garages.geojson moves.txt
 
 moves.txt example:
 1 Q W
@@ -257,9 +257,9 @@ def main() -> int:
             raise ReallocationError(
                 "Invalid invocation.\n"
                 "Use either:\n"
-                "  reallocate_routes.py garages.geojson ROUTE FROM TO\n"
+                "  reallocate_routes.py data/processed/garages.geojson ROUTE FROM TO\n"
                 "or:\n"
-                "  reallocate_routes.py garages.geojson moves.txt"
+                "  reallocate_routes.py data/processed/garages.geojson moves.txt"
             )
 
         for route, src, dst in moves:

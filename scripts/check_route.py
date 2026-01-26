@@ -252,7 +252,7 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("route", help="Route id (e.g. 1, 100, sl10)")
     ap.add_argument("--geom-dir", default=str(repo_root() / "data" / "processed" / "routes"))
-    ap.add_argument("--garages", default=str(repo_root() / "data" / "garages.geojson"))
+    ap.add_argument("--garages", default=str(repo_root() / "data" / "processed" / "garages.geojson"))
     ap.add_argument("--freqs", default=str(repo_root() / "data" / "processed" / "frequencies.json"))
     ap.add_argument("--vehicles", default=str(repo_root() / "data" / "vehicles.json"))
     args = ap.parse_args()

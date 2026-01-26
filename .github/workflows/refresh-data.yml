@@ -53,7 +53,7 @@ jobs:
           set -euo pipefail
 
           # Detect changes in exactly what we intend to commit
-          changes=$(git status --porcelain -- data/processed data/garages.geojson data/raw/stops/postcode_cache.json)
+          changes=$(git status --porcelain -- data/processed data/raw/stops/postcode_cache.json)
           if [ -z "$changes" ]; then
             echo "No data changes."
             exit 0
@@ -68,7 +68,6 @@ jobs:
           echo "$msg" >> "$GITHUB_STEP_SUMMARY"
 
           git add data/processed
-          git add data/garages.geojson
           git add -f data/raw/stops/postcode_cache.json
           git commit -m "$msg"
           git push

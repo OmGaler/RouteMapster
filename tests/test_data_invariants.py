@@ -17,7 +17,7 @@ from scripts.utils.route_ids import (
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 GEOM_DIR = REPO_ROOT / "data" / "processed" / "routes"
-GARAGES_PATH = REPO_ROOT / "data" / "garages.geojson"
+GARAGES_PATH = REPO_ROOT / "data" / "processed" / "garages.geojson"
 FREQS_PATH = REPO_ROOT / "data" / "processed" / "frequencies.json"
 VEHICLES_PATH = REPO_ROOT / "data" / "vehicles.json"
 

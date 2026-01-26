@@ -32,7 +32,6 @@ GARAGES_PAGE = "http://www.londonbusroutes.net/garages.htm"
 GARAGES_CSV = "http://www.londonbusroutes.net/garages.csv"
 RAW_OUTPUT_DIR = Path("data/raw/garages")
 PROCESSED_OUTPUT = Path("data/processed/garages.geojson")
-SECONDARY_OUTPUT = Path("data/garages.geojson")
 
 GARAGE_PROPERTIES = [
     "Group name",
@@ -141,25 +140,35 @@ def get_garage_code(row: Dict[str, Any]) -> str:
     return str(code).strip().upper()
 
 
-def load_existing_map(path: Path) -> Dict[str, Dict[str, Any]]:
+def load_existing_map(path: Path) -> Tuple[Dict[str, Dict[str, Any]], List[Dict[str, Any]]]:
     """
-    Returns { GARAGE_CODE: {"properties": <dict>, "geometry": <dict>} }
+    Returns (by_code, unnamed_features):
+      by_code: { GARAGE_CODE: {"properties": <dict>, "geometry": <dict>} }
+      unnamed_features: [{"properties": <dict>, "geometry": <dict>}, ...] for missing codes
     """
     if not path.exists():
-        return {}
+        return {}, []
 
     with path.open("r", encoding="utf-8") as handle:
         data = json.load(handle)
 
     features = data.get("features") or []
     out: Dict[str, Dict[str, Any]] = {}
+    unnamed: List[Dict[str, Any]] = []
     for feature in features:
         props = feature.get("properties") or {}
         geom = feature.get("geometry") or {}
         code = str(props.get("TfL garage code") or props.get("LBR garage code") or "").strip().upper()
         if code:
             out[code] = {"properties": props, "geometry": geom}
-    return out
+        else:
+            unnamed.append({"properties": props, "geometry": geom})
+    return out, unnamed
+
+
+def normalize_name(value: Any) -> str:
+    text = str(value or "").strip().lower()
+    return " ".join(text.split())
 
 
 def compare_non_route_fields(rows: List[Dict[str, Any]], existing: Dict[str, Dict[str, Any]]) -> None:
@@ -188,19 +197,31 @@ def build_features(
     rows: List[Dict[str, Any]],
     cache: Dict[str, Dict[str, Any]],
     existing_map: Dict[str, Dict[str, Any]],
+    unnamed_existing: List[Dict[str, Any]],
     address_col: str,
     fallback_address_col: str,
     precision: int,
 ) -> List[Dict[str, Any]]:
     features: List[Dict[str, Any]] = []
+    used_existing: set[int] = set()
+
+    name_index: Dict[str, List[Dict[str, Any]]] = {}
+    for entry in list(existing_map.values()) + list(unnamed_existing):
+        name = normalize_name(entry.get("properties", {}).get("Garage name"))
+        if name:
+            name_index.setdefault(name, []).append(entry)
 
     for row in rows:
         code = get_garage_code(row)
-        existing = existing_map.get(code)
+        existing = existing_map.get(code) if code else None
+        if not existing:
+            name_key = normalize_name(row.get("Garage name"))
+            candidates = name_index.get(name_key) or []
+            existing = next((entry for entry in candidates if id(entry) not in used_existing), None)
 
         # If we already have this garage in the processed GeoJSON:
-        # LOCK geometry + most non-route fields (preserve manual fixes),
-        # update route allocations, and also refresh selected upstream fields (PVR / % network).
+        # LOCK geometry + non-route fields (preserve manual fixes),
+        # update route allocations and selected metrics (PVR / % network).
         if existing:
             props = dict(existing["properties"])
 
@@ -220,6 +241,7 @@ def build_features(
                     "properties": props,
                 }
             )
+            used_existing.add(id(existing))
             continue
 
         # Otherwise this is a genuinely new garage: geocode + create full props.
@@ -256,6 +278,18 @@ def build_features(
         )
 
     features.sort(key=lambda feat: get_garage_code(feat.get("properties", {})))
+
+    for entry in list(existing_map.values()) + list(unnamed_existing):
+        if id(entry) in used_existing:
+            continue
+        features.append(
+            {
+                "type": "Feature",
+                "geometry": entry.get("geometry"),
+                "properties": entry.get("properties", {}),
+            }
+        )
+    features.sort(key=lambda feat: get_garage_code(feat.get("properties", {})))
     return features
 
 
@@ -264,11 +298,6 @@ def write_geojson(path: Path, features: List[Dict[str, Any]], metadata: Dict[str
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as handle:
         json.dump(payload, handle, ensure_ascii=True, separators=(",", ":"))
-
-    if path.resolve() != SECONDARY_OUTPUT.resolve():
-        SECONDARY_OUTPUT.parent.mkdir(parents=True, exist_ok=True)
-        with SECONDARY_OUTPUT.open("w", encoding="utf-8") as handle:
-            json.dump(payload, handle, ensure_ascii=True, separators=(",", ":"))
 
 
 def main() -> int:
@@ -317,7 +346,7 @@ def main() -> int:
     rows = read_csv_rows(csv_path)
     apply_route_fixes_to_rows(rows)
 
-    existing_map = load_existing_map(existing_path)
+    existing_map, unnamed_existing = load_existing_map(existing_path)
     if existing_map:
         compare_non_route_fields(rows, existing_map)
 
@@ -362,6 +391,7 @@ def main() -> int:
         rows,
         cache,
         existing_map,
+        unnamed_existing,
         args.address_col,
         args.fallback_address_col,
         args.precision,
