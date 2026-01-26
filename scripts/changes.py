@@ -168,15 +168,15 @@ if added or removed or geom_updated:
 if stops_added or stops_removed:
     lines.append(f"Stops (+{len(stops_added)} -{len(stops_removed)})")
 
+alloc_messages: List[str] = []
 if moves:
-    move_strings = [f"{r} {a}->{b}" for (r, a, b) in moves]
-    lines.append("Alloc: " + cap_list(move_strings, 12))
+    alloc_messages.extend([f"{r} {a}->{b}" for (r, a, b) in moves])
 if alloc_added:
-    added_strings = [f"{r}@{g}" for (r, g) in alloc_added]
-    lines.append("Alloc+: " + cap_list(added_strings, 12))
+    alloc_messages.extend([f"{r} allocated to {g}" for (r, g) in alloc_added])
 if alloc_removed:
-    removed_strings = [f"{r}@{g}" for (r, g) in alloc_removed]
-    lines.append("Alloc-: " + cap_list(removed_strings, 12))
+    alloc_messages.extend([f"{r} removed from {g}" for (r, g) in alloc_removed])
+if alloc_messages:
+    lines.append("Alloc: " + cap_list(alloc_messages, 12))
 
 if not lines:
     lines.append("Processed data update")

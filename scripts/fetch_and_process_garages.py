@@ -166,9 +166,32 @@ def load_existing_map(path: Path) -> Tuple[Dict[str, Dict[str, Any]], List[Dict[
     return out, unnamed
 
 
+_NAME_STOPWORDS = {
+    "bus",
+    "depot",
+    "garage",
+    "works",
+}
+
+
 def normalize_name(value: Any) -> str:
     text = str(value or "").strip().lower()
+    text = re.sub(r"\([^)]*\)", " ", text)
+    text = re.sub(r"[^a-z0-9]+", " ", text)
+    parts = [p for p in text.split() if p and p not in _NAME_STOPWORDS]
+    return " ".join(parts)
+
+
+def normalize_address(value: Any) -> str:
+    text = str(value or "").strip().lower()
+    text = POSTCODE_RE.sub(" ", text)
+    text = re.sub(r"[^a-z0-9]+", " ", text)
     return " ".join(text.split())
+
+
+def token_set(value: Any, *, is_name: bool) -> set[str]:
+    text = normalize_name(value) if is_name else normalize_address(value)
+    return {token for token in text.split() if token}
 
 
 def compare_non_route_fields(rows: List[Dict[str, Any]], existing: Dict[str, Dict[str, Any]]) -> None:
@@ -206,7 +229,8 @@ def build_features(
     used_existing: set[int] = set()
 
     name_index: Dict[str, List[Dict[str, Any]]] = {}
-    for entry in list(existing_map.values()) + list(unnamed_existing):
+    existing_entries = list(existing_map.values()) + list(unnamed_existing)
+    for entry in existing_entries:
         name = normalize_name(entry.get("properties", {}).get("Garage name"))
         if name:
             name_index.setdefault(name, []).append(entry)
@@ -218,6 +242,39 @@ def build_features(
             name_key = normalize_name(row.get("Garage name"))
             candidates = name_index.get(name_key) or []
             existing = next((entry for entry in candidates if id(entry) not in used_existing), None)
+
+        if not existing:
+            row_name_tokens = token_set(row.get("Garage name"), is_name=True)
+            row_addr_tokens = token_set(row.get(address_col), is_name=False) | token_set(
+                row.get(fallback_address_col), is_name=False
+            )
+            best_entry = None
+            best_score = 0.0
+            for entry in existing_entries:
+                if id(entry) in used_existing:
+                    continue
+                props = entry.get("properties", {})
+                entry_name_tokens = token_set(props.get("Garage name"), is_name=True)
+                name_score = 0.0
+                if row_name_tokens and entry_name_tokens:
+                    name_intersection = row_name_tokens & entry_name_tokens
+                    name_union = row_name_tokens | entry_name_tokens
+                    name_score = len(name_intersection) / len(name_union)
+
+                entry_addr_tokens = token_set(props.get("Garage address"), is_name=False)
+                addr_union = row_addr_tokens | entry_addr_tokens
+                if row_addr_tokens and entry_addr_tokens and addr_union:
+                    addr_score = len(row_addr_tokens & entry_addr_tokens) / len(addr_union)
+                else:
+                    addr_score = 0.0
+
+                candidate_score = max(name_score, addr_score)
+                if name_score >= 0.5 or (addr_score >= 0.7 and name_score >= 0.2):
+                    if candidate_score > best_score:
+                        best_score = candidate_score
+                        best_entry = entry
+            if best_entry:
+                existing = best_entry
 
         # If we already have this garage in the processed GeoJSON:
         # LOCK geometry + non-route fields (preserve manual fixes),
