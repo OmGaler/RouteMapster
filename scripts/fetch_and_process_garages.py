@@ -33,6 +33,7 @@ GARAGES_PAGE = "http://www.londonbusroutes.net/garages.htm"
 GARAGES_CSV = "http://www.londonbusroutes.net/garages.csv"
 RAW_OUTPUT_DIR = Path("data/raw/garages")
 PROCESSED_OUTPUT = Path("data/processed/garages.geojson")
+LEGACY_INPUT = Path("data/garages.geojson")
 
 GARAGE_PROPERTIES = [
     "Group name",
@@ -165,6 +166,20 @@ def load_existing_map(path: Path) -> Tuple[Dict[str, Dict[str, Any]], List[Dict[
         else:
             unnamed.append({"properties": props, "geometry": geom})
     return out, unnamed
+
+
+def merge_existing_maps(
+    primary: Tuple[Dict[str, Dict[str, Any]], List[Dict[str, Any]]],
+    secondary: Tuple[Dict[str, Dict[str, Any]], List[Dict[str, Any]]],
+) -> Tuple[Dict[str, Dict[str, Any]], List[Dict[str, Any]]]:
+    primary_map, primary_unnamed = primary
+    secondary_map, secondary_unnamed = secondary
+    merged_map = dict(primary_map)
+    for code, entry in secondary_map.items():
+        if code and code not in merged_map:
+            merged_map[code] = entry
+    merged_unnamed = list(primary_unnamed) + list(secondary_unnamed)
+    return merged_map, merged_unnamed
 
 
 _NAME_STOPWORDS = {
@@ -405,6 +420,12 @@ def main() -> int:
     apply_route_fixes_to_rows(rows)
 
     existing_map, unnamed_existing = load_existing_map(existing_path)
+    if LEGACY_INPUT.exists() and LEGACY_INPUT.resolve() != existing_path.resolve():
+        legacy_map = load_existing_map(LEGACY_INPUT)
+        existing_map, unnamed_existing = merge_existing_maps(
+            (existing_map, unnamed_existing),
+            legacy_map,
+        )
     if existing_map:
         compare_non_route_fields(rows, existing_map)
 
