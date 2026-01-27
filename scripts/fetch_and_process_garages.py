@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import requests
 
 from geojsonify_garages import (
+    POSTCODE_RE,
     apply_route_fixes_to_rows,
     bulk_lookup_postcodes,
     chunks,
