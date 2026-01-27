@@ -170,7 +170,7 @@ if stops_added or stops_removed:
 
 alloc_messages: List[str] = []
 if moves:
-    alloc_messages.extend([f"{r} {a}->{b}" for (r, a, b) in moves])
+    alloc_messages.extend([f"{r} {a} -> {b}" for (r, a, b) in moves])
 if alloc_added:
     alloc_messages.extend([f"{r} allocated to {g}" for (r, g) in alloc_added])
 if alloc_removed:

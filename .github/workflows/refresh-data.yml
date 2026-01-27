@@ -42,7 +42,7 @@ jobs:
         run: python scripts/build_frequency_cache.py
 
       - name: Fetch garages
-        run: python scripts/fetch_and_process_garages.py
+        run: python scripts/fetch_and_process_garages.py --base data/garages-base.geojson
 
       # - name: Run tests
       #   run: pytest -q

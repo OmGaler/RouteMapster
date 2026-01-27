@@ -1,0 +1,1633 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.19923,
+          51.369141
+        ]
+      },
+      "properties": {
+        "Group name": "Go-Ahead",
+        "Company name": "London General Transport Services Ltd",
+        "LBR garage code": "A",
+        "Garage name": "Sutton",
+        "Garage address": "Bushey Road, Sutton, SM1 1QJ",
+        "TfL garage code": "A",
+        "_geocode_source": "postcodes.io",
+        "_geocode_postcode": "SM1 1QJ",
+        "_geocode_admin_district": "Sutton",
+        "_geocode_country": "England"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.238288,
+          51.548365
+        ]
+      },
+      "properties": {
+        "Group name": "Metroline",
+        "Company name": "Metroline Travel Ltd.",
+        "LBR garage code": "AC",
+        "Garage name": "Willesden",
+        "Garage address": "287 High Road, Willesden, London, NW10 2JY",
+        "TfL garage code": "AC",
+        "_geocode_source": "postcodes.io",
+        "_geocode_postcode": "NW10 2JY",
+        "_geocode_admin_district": "Brent",
+        "_geocode_country": "England"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.108213,
+          51.612839
+        ]
+      },
+      "properties": {
+        "Group name": "Arriva",
+        "Company name": "Arriva London North Ltd.",
+        "LBR garage code": "AD",
+        "Garage name": "Palmers Green",
+        "Garage address": "Regents Avenue, Palmers Green, London, N13 5UR",
+        "TfL garage code": "AD",
+        "_geocode_source": "postcodes.io",
+        "_geocode_postcode": "N13 5UR",
+        "_geocode_admin_district": "Enfield",
+        "_geocode_country": "England"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.057655,
+          51.53572
+        ]
+      },
+      "properties": {
+        "Group name": "Arriva",
+        "Company name": "Arriva London North Ltd.",
+        "LBR garage code": "AE",
+        "Garage name": "Ash Grove",
+        "Garage address": "Mare Street, South Hackney, London, E8 4RH",
+        "TfL garage code": "AE",
+        "_geocode_source": "postcodes.io",
+        "_geocode_postcode": "E8 4RH",
+        "_geocode_admin_district": "Hackney",
+        "_geocode_country": "England"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.217993,
+          51.462368
+        ]
+      },
+      "properties": {
+        "Group name": "Go-Ahead",
+        "Company name": "London General Transport Services Ltd",
+        "LBR garage code": "AF",
+        "Garage name": "Putney",
+        "Garage address": "10 Chelverton Road, London, SW15 1RN",
+        "TfL garage code": "AF",
+        "_geocode_source": "postcodes.io",
+        "_geocode_postcode": "SW15 1RN",
+        "_geocode_admin_district": "Wandsworth",
+        "_geocode_country": "England"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.314707,
+          51.483833
+        ]
+      },
+      "properties": {
+        "Group name": "Metroline",
+        "Company name": "Metroline Travel Ltd.",
+        "LBR garage code": "AH",
+        "Garage name": "Brentford",
+        "Garage address": "Commerce Road, Brentford, Middlesex, TW8 8LZ",
+        "TfL garage code": "AH",
+        "_geocode_source": "postcodes.io",
+        "_geocode_postcode": "TW8 8LZ",
+        "_geocode_admin_district": "Hounslow",
+        "_geocode_country": "England"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.181662,
+          51.416567
+        ]
+      },
+      "properties": {
+        "Group name": "Go-Ahead",
+        "Company name": "London General Transport Services Ltd",
+        "LBR garage code": "AL",
+        "Garage name": "Merton",
+        "Garage address": "High Street, London, SW19 1DN",
+        "TfL garage code": "AL",
+        "_geocode_source": "postcodes.io",
+        "_geocode_postcode": "SW19 1DN",
+        "_geocode_admin_district": "Merton",
+        "_geocode_country": "England"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.302711,
+          51.537651
+        ]
+      },
+      "properties": {
+        "Group name": "Metroline",
+        "Company name": "Metroline Travel Ltd.",
+        "LBR garage code": "AO",
+        "Garage name": "Athlon Road",
+        "Garage address": "Unit 1-3, Capital Business Centre Athlon Road, Wembley, HA0 1YU",
+        "TfL garage code": "AO",
+        "_geocode_source": "postcodes.io",
+        "_geocode_postcode": "HA0 1YU",
+        "_geocode_admin_district": "Brent",
+        "_geocode_country": "England"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.072359,
+          51.588722
+        ]
+      },
+      "properties": {
+        "Group name": "Arriva",
+        "Company name": "Arriva London North Ltd.",
+        "LBR garage code": "AR",
+        "Garage name": "Tottenham",
+        "Garage address": "Philip Lane, Tottenham, London, N15 4JB",
+        "TfL garage code": "AR",
+        "_geocode_source": "postcodes.io",
+        "_geocode_postcode": "N15 4JB",
+        "_geocode_admin_district": "Haringey",
+        "_geocode_country": "England"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.355561,
+          51.471985
+        ]
+      },
+      "properties": {
+        "Group name": "First",
+        "Company name": "London United Busways Ltd",
+        "LBR garage code": "AV",
+        "Garage name": "Hounslow",
+        "Garage address": "Kingsley Road, Hounslow, TW3 1PA",
+        "TfL garage code": "AV",
+        "_geocode_source": "postcodes.io",
+        "_geocode_postcode": "TW3 1PA",
+        "_geocode_admin_district": "Hounslow",
+        "_geocode_country": "England"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.017188,
+          51.60255
+        ]
+      },
+      "properties": {
+        "Group name": "Stagecoach London",
+        "Company name": "East London Bus &amp; Coach Co. Ltd.",
+        "LBR garage code": "AW",
+        "Garage name": "Walthamstow Avenue",
+        "Garage address": "Walthamstow Avenue, London, E4 8SP",
+        "TfL garage code": "AW",
+        "_geocode_source": "postcodes.io",
+        "_geocode_postcode": "E4 8SP",
+        "_geocode_admin_district": "Waltham Forest",
+        "_geocode_country": "England"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.133069,
+          51.383331
+        ]
+      },
+      "properties": {
+        "Group name": "Transport UK",
+        "Company name": "Transport UK London Bus Ltd.",
+        "LBR garage code": "BC",
+        "Garage name": "Beddington",
+        "Garage address": "Unit 10, Beddington Cross, Beddington Farm Road, Croydon, CR0 4XH",
+        "TfL garage code": "BC",
+        "_geocode_source": "postcodes.io",
+        "_geocode_postcode": "CR0 4XH",
+        "_geocode_admin_district": "Sutton",
+        "_geocode_country": "England"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          0.095221,
+          51.547054
+        ]
+      },
+      "properties": {
+        "Group name": "Stagecoach London",
+        "Company name": "East London Bus &amp; Coach Co. Ltd.",
+        "LBR garage code": "BK",
+        "Garage name": "Barking",
+        "Garage address": "205 Longbridge Road, Barking, Essex, IG11 8UE",
+        "TfL garage code": "BK",
+        "_geocode_source": "postcodes.io",
+        "_geocode_postcode": "IG11 8UE",
+        "_geocode_admin_district": "Redbridge",
+        "_geocode_country": "England"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          0.095221,
+          51.547054
+        ]
+      },
+      "properties": {
+        "Group name": "Stagecoach London",
+        "Company name": "East London Bus &amp; Coach Co. Ltd.",
+        "LBR garage code": "BK",
+        "Garage name": "Barking",
+        "Garage address": "205 Longbridge Road, Barking, Essex, IG11 8UE",
+        "TfL garage code": "BK",
+        "_geocode_source": "postcodes.io",
+        "_geocode_postcode": "IG11 8UE",
+        "_geocode_admin_district": "Redbridge",
+        "_geocode_country": "England"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.12373,
+          51.446122
+        ]
+      },
+      "properties": {
+        "Group name": "Arriva",
+        "Company name": "Arriva London South Ltd.",
+        "LBR garage code": "",
+        "Garage name": "Brixton Hill",
+        "Garage address": "239 Brixton Hill, London, SW2 1NR",
+        "TfL garage code": "BN",
+        "_geocode_source": "postcodes.io",
+        "_geocode_postcode": "SW2 1NR",
+        "_geocode_admin_district": "Lambeth",
+        "_geocode_country": "England"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.12373,
+          51.446122
+        ]
+      },
+      "properties": {
+        "Group name": "Arriva",
+        "Company name": "Arriva London South Ltd.",
+        "LBR garage code": "",
+        "Garage name": "Brixton Hill",
+        "Garage address": "239 Brixton Hill, London, SW2 1NR",
+        "TfL garage code": "BN",
+        "_geocode_source": "postcodes.io",
+        "_geocode_postcode": "SW2 1NR",
+        "_geocode_admin_district": "Lambeth",
+        "_geocode_country": "England"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.273136,
+          51.611541
+        ]
+      },
+      "properties": {
+        "Group name": "First",
+        "Company name": "London Sovereign Limited",
+        "LBR garage code": "BT",
+        "Garage name": "Edgware",
+        "Garage address": "Approach Road, Edgware, Middlesex, HA8 7AN",
+        "TfL garage code": "BT",
+        "_geocode_source": "postcodes.io",
+        "_geocode_postcode": "HA8 7AN",
+        "_geocode_admin_district": "Barnet",
+        "_geocode_country": "England"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.273136,
+          51.611541
+        ]
+      },
+      "properties": {
+        "Group name": "First",
+        "Company name": "London Sovereign Limited",
+        "LBR garage code": "BT",
+        "Garage name": "Edgware",
+        "Garage address": "Approach Road, Edgware, Middlesex, HA8 7AN",
+        "TfL garage code": "BT",
+        "_geocode_source": "postcodes.io",
+        "_geocode_postcode": "HA8 7AN",
+        "_geocode_admin_district": "Barnet",
+        "_geocode_country": "England"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.023324,
+          51.53235
+        ]
+      },
+      "properties": {
+        "Group name": "Stagecoach London",
+        "Company name": "East London Bus &amp; Coach Co. Ltd.",
+        "LBR garage code": "BW",
+        "Garage name": "Bow",
+        "Garage address": "Fairfield Road, Bow, London, E3 2QP",
+        "TfL garage code": "BW",
+        "_geocode_source": "postcodes.io",
+        "_geocode_postcode": "E3 2QP",
+        "_geocode_admin_district": "Tower Hamlets",
+        "_geocode_country": "England"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          0.153803,
+          51.460146
+        ]
+      },
+      "properties": {
+        "Group name": "Go-Ahead",
+        "Company name": "London General Transport Services Ltd<br>t/a London Central",
+        "LBR garage code": "BX",
+        "Garage name": "Bexleyheath",
+        "Garage address": "Erith Road, Bexleyheath, Kent, DA7 6BX",
+        "TfL garage code": "BX",
+        "_geocode_source": "postcodes.io",
+        "_geocode_postcode": "DA7 6BX",
+        "_geocode_admin_district": "Bexley",
+        "_geocode_country": "England"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1386,
+          51.383725
+        ]
+      },
+      "properties": {
+        "Group name": "Go-Ahead",
+        "Company name": "London General Transport Services Ltd<br>t/a Metrobus",
+        "LBR garage code": "C",
+        "Garage name": "Croydon",
+        "Garage address": "134 Beddington Lane, Beddington, Croydon, CR0 4TD",
+        "TfL garage code": "C",
+        "_geocode_source": "postcodes.io",
+        "_geocode_postcode": "CR0 4TD",
+        "_geocode_admin_district": "Sutton",
+        "_geocode_country": "England"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.05318,
+          51.547327
+        ]
+      },
+      "properties": {
+        "Group name": "Arriva",
+        "Company name": "Arriva London North Ltd.",
+        "LBR garage code": "CT",
+        "Garage name": "Clapton",
+        "Garage address": "15 Bohemia Place, Mare Street, London, E8 1DU",
+        "TfL garage code": "CT",
+        "_geocode_source": "postcodes.io",
+        "_geocode_postcode": "E8 1DU",
+        "_geocode_admin_district": "Hackney",
+        "_geocode_country": "England"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.050895,
+          51.648654
+        ]
+      },
+      "properties": {
+        "Group name": "Arriva",
+        "Company name": "Arriva London North Ltd.",
+        "LBR garage code": "E",
+        "Garage name": "Enfield",
+        "Garage address": "Southbury Road, Ponders End, Middlesex, EN3 4HX",
+        "TfL garage code": "E",
+        "_geocode_source": "postcodes.io",
+        "_geocode_postcode": "EN3 4HX",
+        "_geocode_admin_district": "Enfield",
+        "_geocode_country": "England"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.273136,
+          51.611541
+        ]
+      },
+      "properties": {
+        "Group name": "Metroline",
+        "Company name": "Metroline Travel Ltd.",
+        "LBR garage code": "EW",
+        "Garage name": "Edgware",
+        "Garage address": "Approach Road, Edgware, Middlesex, HA8 7AN",
+        "TfL garage code": "EW",
+        "_geocode_source": "postcodes.io",
+        "_geocode_postcode": "HA8 7AN",
+        "_geocode_admin_district": "Barnet",
+        "_geocode_country": "England"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.479059,
+          51.349772
+        ]
+      },
+      "properties": {
+        "Group name": "Falcon Coaches",
+        "Company name": "Falcon Coaches",
+        "LBR garage code": "FC",
+        "Garage name": "Byfleet",
+        "Garage address": "20a Wintersells Road, Byfleet, Surrey, KT14 7LF",
+        "TfL garage code": "",
+        "_geocode_source": "postcodes.io",
+        "_geocode_postcode": "KT14 7LF",
+        "_geocode_admin_district": "Elmbridge",
+        "_geocode_country": "England"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.35139,
+          51.433889
+        ]
+      },
+      "properties": {
+        "Group name": "First",
+        "Company name": "London United Busways Ltd",
+        "LBR garage code": "FW",
+        "Garage name": "Fulwell",
+        "Garage address": "Wellington Road, Fulwell, Middlesex, TW2 5NX",
+        "TfL garage code": "FW",
+        "_geocode_source": "postcodes.io",
+        "_geocode_postcode": "TW2 5NX",
+        "_geocode_admin_district": "Richmond upon Thames",
+        "_geocode_country": "England"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.159942,
+          51.38872
+        ]
+      },
+      "properties": {
+        "Group name": "Go-Ahead",
+        "Company name": "London General Transport Services Ltd",
+        "LBR garage code": "GM",
+        "Garage name": "Ellis Road",
+        "Garage address": "Goat Road, CR4 4HU",
+        "TfL garage code": "GM",
+        "_geocode_source": "postcodes.io",
+        "_geocode_postcode": "CR4 4HU",
+        "_geocode_admin_district": "Merton",
+        "_geocode_country": "England"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          0.29398,
+          51.477398
+        ]
+      },
+      "properties": {
+        "Group name": "Arriva",
+        "Company name": "Arriva London North Ltd.",
+        "LBR garage code": "GY",
+        "Garage name": "Grays",
+        "Garage address": "Unit 7, Europa Park, London Road, Grays, Essex, RM20 4DB",
+        "TfL garage code": "GY",
+        "_geocode_source": "postcodes.io",
+        "_geocode_postcode": "RM20 4DB",
+        "_geocode_admin_district": "Thurrock",
+        "_geocode_country": "England"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.45884,
+          51.453245
+        ]
+      },
+      "properties": {
+        "Group name": "Diamond Bus South-East",
+        "Company name": "Hallmark Connections Ltd (Rotala)",
+        "LBR garage code": "HC",
+        "Garage name": "Hounslow",
+        "Garage address": "Coach Travel Centre, Bedfont Road, Stanwell, Middx, TW19 7LZ",
+        "TfL garage code": "",
+        "_geocode_source": "postcodes.io",
+        "_geocode_postcode": "TW19 7LZ",
+        "_geocode_admin_district": "Hounslow",
+        "_geocode_country": "England"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.340525,
+          51.605644
+        ]
+      },
+      "properties": {
+        "Group name": "Metroline",
+        "Company name": "Metroline Travel Ltd.",
+        "LBR garage code": "HD",
+        "Garage name": "Harrow Weald",
+        "Garage address": "467 High Road, Harrow Weald, Middlesex, HA3 6EJ",
+        "TfL garage code": "HD",
+        "_geocode_source": "postcodes.io",
+        "_geocode_postcode": "HA3 6EJ",
+        "_geocode_admin_district": "Harrow",
+        "_geocode_country": "England"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.014839,
+          51.555687
+        ]
+      },
+      "properties": {
+        "Group name": "Stagecoach London",
+        "Company name": "Lea Interchange Bus Co. Ltd.",
+        "LBR garage code": "LI",
+        "Garage name": "Lea Interchange",
+        "Garage address": "151 Ruckholt Road, Leyton, London, E10 5PB",
+        "TfL garage code": "HO",
+        "_geocode_source": "postcodes.io",
+        "_geocode_postcode": "E10 5PB",
+        "_geocode_admin_district": "Waltham Forest",
+        "_geocode_country": "England"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.131605,
+          51.56265
+        ]
+      },
+      "properties": {
+        "Group name": "Metroline",
+        "Company name": "Metroline Travel Ltd.",
+        "LBR garage code": "HT",
+        "Garage name": "Holloway",
+        "Garage address": "37A Pemberton Gardens, London, N19 5RR",
+        "TfL garage code": "HT",
+        "_geocode_source": "postcodes.io",
+        "_geocode_postcode": "N19 5RR",
+        "_geocode_admin_district": "Islington",
+        "_geocode_country": "England"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.034189,
+          51.426687
+        ]
+      },
+      "properties": {
+        "Group name": "Stagecoach London",
+        "Company name": "South East London &amp; Kent Bus Co. Ltd.",
+        "LBR garage code": "KB",
+        "Garage name": "Kangley Bridge Road",
+        "Garage address": "Kangley Bridge Road, Lower Sydenham, London, SE26 5BA",
+        "TfL garage code": "KB",
+        "_geocode_source": "postcodes.io",
+        "_geocode_postcode": "SE26 5BA",
+        "_geocode_admin_district": "Lewisham",
+        "_geocode_country": "England"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          0.087681,
+          51.356558
+        ]
+      },
+      "properties": {
+        "Group name": "Go-Ahead",
+        "Company name": "London General Transport Services Ltd<br>t/a Metrobus",
+        "LBR garage code": "MB",
+        "Garage name": "Orpington",
+        "Garage address": "Oak Farm, Farnborough Hill, Green Street Green, Orpington, Kent, BR6 6DA",
+        "TfL garage code": "MB",
+        "_geocode_source": "postcodes.io",
+        "_geocode_postcode": "BR6 6DA",
+        "_geocode_admin_district": "Bromley",
+        "_geocode_country": "England"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          0.003631,
+          51.493448
+        ]
+      },
+      "properties": {
+        "Group name": "Go-Ahead",
+        "Company name": "London General Transport Services Ltd<br>t/a London Central",
+        "LBR garage code": "MG",
+        "Garage name": "Morden Wharf (Greenwich)",
+        "Garage address": "Morden Wharf Road, Greenwich, London, SE10 0NU",
+        "TfL garage code": "MG",
+        "_geocode_source": "postcodes.io",
+        "_geocode_postcode": "SE10 0NU",
+        "_geocode_admin_district": "Greenwich",
+        "_geocode_country": "England"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.161935,
+          51.139062
+        ]
+      },
+      "properties": {
+        "Group name": "Go-Ahead",
+        "Company name": "Metrobus Ltd",
+        "LBR garage code": "CY",
+        "Garage name": "Crawley",
+        "Garage address": "Wheatstone Close, Manor Royal, Crawley, West Sussex, RH10 9UA",
+        "TfL garage code": "MY",
+        "_geocode_source": "postcodes.io",
+        "_geocode_postcode": "RH10 9UA",
+        "_geocode_admin_district": "Crawley",
+        "_geocode_country": "England"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.103945,
+          51.430084
+        ]
+      },
+      "properties": {
+        "Group name": "Arriva",
+        "Company name": "Arriva London South Ltd.",
+        "LBR garage code": "N",
+        "Garage name": "Norwood",
+        "Garage address": "Ernest Avenue, West Norwood, London, SE27 0HN",
+        "TfL garage code": "N",
+        "_geocode_source": "postcodes.io",
+        "_geocode_postcode": "SE27 0HN",
+        "_geocode_admin_district": "Lambeth",
+        "_geocode_country": "England"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.051211,
+          51.600189
+        ]
+      },
+      "properties": {
+        "Group name": "Go-Ahead",
+        "Company name": "London General Transport Services Ltd",
+        "LBR garage code": "NP",
+        "Garage name": "Northumberland Park",
+        "Garage address": "Marsh Lane, Tottenham, London, N17 0XB",
+        "TfL garage code": "NP",
+        "_geocode_source": "postcodes.io",
+        "_geocode_postcode": "N17 0XB",
+        "_geocode_admin_district": "Haringey",
+        "_geocode_country": "England"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          0.175214,
+          51.583954
+        ]
+      },
+      "properties": {
+        "Group name": "Stagecoach London",
+        "Company name": "East London Bus &amp; Coach Co. Ltd.",
+        "LBR garage code": "NS",
+        "Garage name": "Romford",
+        "Garage address": "North Street, Romford, Essex, RM1 1DS",
+        "TfL garage code": "NS",
+        "_geocode_source": "postcodes.io",
+        "_geocode_postcode": "RM1 1DS",
+        "_geocode_admin_district": "Havering",
+        "_geocode_country": "England"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.176509,
+          51.697702
+        ]
+      },
+      "properties": {
+        "Group name": "Metroline",
+        "Company name": "Metroline Travel Ltd.",
+        "LBR garage code": "PB",
+        "Garage name": "Potters Bar",
+        "Garage address": "High Street, Potters Bar, Herts, EN6 5BE",
+        "TfL garage code": "PB",
+        "_geocode_source": "postcodes.io",
+        "_geocode_postcode": "EN6 5BE",
+        "_geocode_admin_district": "Hertsmere",
+        "_geocode_country": "England"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          0.083469,
+          51.491193
+        ]
+      },
+      "properties": {
+        "Group name": "Stagecoach London",
+        "Company name": "South East London &amp; Kent Bus Co. Ltd.",
+        "LBR garage code": "PD",
+        "Garage name": "Plumstead",
+        "Garage address": "Pettman Crescent, Plumstead, London, SE28 0BJ",
+        "TfL garage code": "PD",
+        "_geocode_source": "postcodes.io",
+        "_geocode_postcode": "SE28 0BJ",
+        "_geocode_admin_district": "Greenwich",
+        "_geocode_country": "England"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.061565,
+          51.46574
+        ]
+      },
+      "properties": {
+        "Group name": "Go-Ahead",
+        "Company name": "London General Transport Services Ltd<br>t/a London Central",
+        "LBR garage code": "PM",
+        "Garage name": "Peckham",
+        "Garage address": "Blackpool Road, Peckham, London, SE15 3SE",
+        "TfL garage code": "PM",
+        "_geocode_source": "postcodes.io",
+        "_geocode_postcode": "SE15 3SE",
+        "_geocode_admin_district": "Southwark",
+        "_geocode_country": "England"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          0.231665,
+          51.493925
+        ]
+      },
+      "properties": {
+        "Group name": "First",
+        "Company name": "Ensign Bus Co Ltd",
+        "LBR garage code": "PT",
+        "Garage name": "Purfleet",
+        "Garage address": "Juliette Close, Purfleet Industrial Park, Aveley, South Ockendon, RM15 4YF",
+        "TfL garage code": "",
+        "_geocode_source": "postcodes.io",
+        "_geocode_postcode": "RM15 4YF",
+        "_geocode_admin_district": "Thurrock",
+        "_geocode_country": "England"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.318859,
+          51.533792
+        ]
+      },
+      "properties": {
+        "Group name": "Metroline",
+        "Company name": "Metroline Travel Ltd.",
+        "LBR garage code": "PV",
+        "Garage name": "Perivale [East]",
+        "Garage address": "Alperton Lane, Western Avenue, Greenford, Middlesex, UB6 8DW",
+        "TfL garage code": "PV",
+        "_geocode_source": "postcodes.io",
+        "_geocode_postcode": "UB6 8DW",
+        "_geocode_admin_district": "Ealing",
+        "_geocode_country": "England"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.09577,
+          51.474116
+        ]
+      },
+      "properties": {
+        "Group name": "Go-Ahead",
+        "Company name": "London General Transport Services Ltd<br>t/a London Central",
+        "LBR garage code": "Q",
+        "Garage name": "Camberwell",
+        "Garage address": "1 Warner Road, Camberwell, London, SE5 9LU",
+        "TfL garage code": "Q",
+        "_geocode_source": "postcodes.io",
+        "_geocode_postcode": "SE5 9LU",
+        "_geocode_admin_district": "Southwark",
+        "_geocode_country": "England"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.145866,
+          51.472356
+        ]
+      },
+      "properties": {
+        "Group name": "Transport UK",
+        "Company name": "Transport UK London Bus Ltd.",
+        "LBR garage code": "QB",
+        "Garage name": "Battersea",
+        "Garage address": "Silverthorne Road, Battersea, London, SW8 3HE",
+        "TfL garage code": "QB",
+        "_geocode_source": "postcodes.io",
+        "_geocode_postcode": "SW8 3HE",
+        "_geocode_admin_district": "Wandsworth",
+        "_geocode_country": "England"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.109155,
+          51.50283
+        ]
+      },
+      "properties": {
+        "Group name": "Go-Ahead",
+        "Company name": "London General Transport Services Ltd",
+        "LBR garage code": "RA",
+        "Garage name": "Waterloo",
+        "Garage address": "Cornwall Road, London, SE1 8TE",
+        "TfL garage code": "RA",
+        "_geocode_source": "postcodes.io",
+        "_geocode_postcode": "SE1 8TE",
+        "_geocode_admin_district": "Lambeth",
+        "_geocode_country": "England"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          0.18476,
+          51.515664
+        ]
+      },
+      "properties": {
+        "Group name": "Stagecoach London",
+        "Company name": "East London Bus &amp; Coach Co. Ltd.",
+        "LBR garage code": "RM",
+        "Garage name": "Rainham",
+        "Garage address": "Unit 2, Albright Industrial Estate, Ferry Lane, Rainham, Essex, RM13 9BU",
+        "TfL garage code": "RM",
+        "_geocode_source": "postcodes.io",
+        "_geocode_postcode": "RM13 9BU",
+        "_geocode_admin_district": "Havering",
+        "_geocode_country": "England"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.251556,
+          51.529976
+        ]
+      },
+      "properties": {
+        "Group name": "First",
+        "Company name": "London United Busways Ltd",
+        "LBR garage code": "RP",
+        "Garage name": "Park Royal",
+        "Garage address": "Atlas Road, Harlesden, London, NW10 6DN",
+        "TfL garage code": "RP",
+        "_geocode_source": "postcodes.io",
+        "_geocode_postcode": "NW10 6DN",
+        "_geocode_admin_district": "Ealing",
+        "_geocode_country": "England"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.226176,
+          51.501934
+        ]
+      },
+      "properties": {
+        "Group name": "First",
+        "Company name": "London United Busways Ltd",
+        "LBR garage code": "S",
+        "Garage name": "Shepherd's Bush",
+        "Garage address": "Wells Road, London, W12 8DA",
+        "TfL garage code": "S",
+        "_geocode_source": "postcodes.io",
+        "_geocode_postcode": "W12 8DA",
+        "_geocode_admin_district": "Hammersmith and Fulham",
+        "_geocode_country": "England"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.067328,
+          51.574593
+        ]
+      },
+      "properties": {
+        "Group name": "Arriva",
+        "Company name": "Arriva London North Ltd.",
+        "LBR garage code": "SF",
+        "Garage name": "Stamford Hill",
+        "Garage address": "Rookwood Road, London N16 6SS",
+        "TfL garage code": "SF",
+        "_geocode_source": "postcodes.io",
+        "_geocode_postcode": "N16 6SS",
+        "_geocode_admin_district": "Hackney",
+        "_geocode_country": "England"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.361549,
+          51.476457
+        ]
+      },
+      "properties": {
+        "Group name": "Metroline",
+        "Company name": "Metroline Travel Ltd.",
+        "LBR garage code": "SG",
+        "Garage name": "Lampton",
+        "Garage address": "27A Spring Grove Rd, Hounslow TW3 4BE",
+        "TfL garage code": "SG",
+        "_geocode_source": "postcodes.io",
+        "_geocode_postcode": "TW3 4BE",
+        "_geocode_admin_district": "Hounslow",
+        "_geocode_country": "England"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.035919,
+          51.426275
+        ]
+      },
+      "properties": {
+        "Group name": "Go-Ahead",
+        "Company name": "London General Transport Services Ltd<br>t/a London Central",
+        "LBR garage code": "SM",
+        "Garage name": "Sydenham",
+        "Garage address": "Kangley Bridge Road, Lower Sydenham, London, SE26 5AQ",
+        "TfL garage code": "SM",
+        "_geocode_source": "postcodes.io",
+        "_geocode_postcode": "SE26 5AQ",
+        "_geocode_admin_district": "Lewisham",
+        "_geocode_country": "England"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.090224,
+          51.13785
+        ]
+      },
+      "properties": {
+        "Group name": "Go-Ahead",
+        "Company name": "Metrobus Ltd",
+        "LBR garage code": "SP",
+        "Garage name": "Copthorne",
+        "Garage address": "Unit 3 Silverwood, Snow Hill, Copthorne, West Sussex, RH10 3EN",
+        "TfL garage code": "",
+        "_geocode_source": "postcodes.io",
+        "_geocode_postcode": "RH10 3EN",
+        "_geocode_admin_district": "Mid Sussex",
+        "_geocode_country": "England"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.123662,
+          51.474125
+        ]
+      },
+      "properties": {
+        "Group name": "Go-Ahead",
+        "Company name": "London General Transport Services Ltd",
+        "LBR garage code": "SW",
+        "Garage name": "Stockwell",
+        "Garage address": "Binfield Road, London, SW4 6ST",
+        "TfL garage code": "SW",
+        "_geocode_source": "postcodes.io",
+        "_geocode_postcode": "SW4 6ST",
+        "_geocode_admin_district": "Lambeth",
+        "_geocode_country": "England"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.00875,
+          51.573884
+        ]
+      },
+      "properties": {
+        "Group name": "Stagecoach London",
+        "Company name": "East London Bus &amp; Coach Co. Ltd.",
+        "LBR garage code": "T",
+        "Garage name": "Leyton",
+        "Garage address": "High Road, Leyton, London, E10 6AD",
+        "TfL garage code": "T",
+        "_geocode_source": "postcodes.io",
+        "_geocode_postcode": "E10 6AD",
+        "_geocode_admin_district": "Waltham Forest",
+        "_geocode_country": "England"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          0.045001,
+          51.375099
+        ]
+      },
+      "properties": {
+        "Group name": "Stagecoach London",
+        "Company name": "South East London &amp; Kent Bus Co. Ltd.",
+        "LBR garage code": "TB",
+        "Garage name": "Bromley",
+        "Garage address": "111 Hastings Road, Bromley, Kent, BR2 8NH",
+        "TfL garage code": "TB",
+        "_geocode_source": "postcodes.io",
+        "_geocode_postcode": "BR2 8NH",
+        "_geocode_admin_district": "Bromley",
+        "_geocode_country": "England"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.097512,
+          51.354252
+        ]
+      },
+      "properties": {
+        "Group name": "Arriva",
+        "Company name": "Arriva London South Ltd.",
+        "LBR garage code": "TC",
+        "Garage name": "Croydon",
+        "Garage address": "Brighton Road, Croydon, Surrey, CR2 6EL",
+        "TfL garage code": "TC",
+        "_geocode_source": "postcodes.io",
+        "_geocode_postcode": "CR2 6EL",
+        "_geocode_admin_district": "Croydon",
+        "_geocode_country": "England"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.347578,
+          51.437063
+        ]
+      },
+      "properties": {
+        "Group name": "Transport UK",
+        "Company name": "Transport UK West London Bus Ltd.",
+        "LBR garage code": "TF",
+        "Garage name": "Fulwell (Twickenham)",
+        "Garage address": "The Old Tram Depot, Stanley Road, Twickenham, Middlesex, TW2 5NP",
+        "TfL garage code": "TF",
+        "_geocode_source": "postcodes.io",
+        "_geocode_postcode": "TW2 5NP",
+        "_geocode_admin_district": "Richmond upon Thames",
+        "_geocode_country": "England"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.114381,
+          51.39323
+        ]
+      },
+      "properties": {
+        "Group name": "Arriva",
+        "Company name": "Arriva London South Ltd.",
+        "LBR garage code": "TH",
+        "Garage name": "Thornton Heath",
+        "Garage address": "719 London Road, Thornton Heath, CR7 6AU",
+        "TfL garage code": "TH",
+        "_geocode_source": "postcodes.io",
+        "_geocode_postcode": "CR7 6AU",
+        "_geocode_admin_district": "Croydon",
+        "_geocode_country": "England"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.134834,
+          51.386219
+        ]
+      },
+      "properties": {
+        "Group name": "First",
+        "Company name": "Tram Operations Limited",
+        "LBR garage code": "TK",
+        "Garage name": "Therapia Lane",
+        "Garage address": "22 Coomber Way, Beddington, Croydon, CR0 4TQ",
+        "TfL garage code": "TK",
+        "_geocode_source": "postcodes.io",
+        "_geocode_postcode": "CR0 4TQ",
+        "_geocode_admin_district": "Sutton",
+        "_geocode_country": "England"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.018598,
+          51.433618
+        ]
+      },
+      "properties": {
+        "Group name": "Stagecoach London",
+        "Company name": "South East London &amp; Kent Bus Co. Ltd.",
+        "LBR garage code": "TL",
+        "Garage name": "Catford",
+        "Garage address": "180 Bromley Road, Catford, London, SE6 2XA",
+        "TfL garage code": "TL",
+        "_geocode_source": "postcodes.io",
+        "_geocode_postcode": "SE6 2XA",
+        "_geocode_admin_district": "Lewisham",
+        "_geocode_country": "England"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.525726,
+          51.401329
+        ]
+      },
+      "properties": {
+        "Group name": "Sullivan Buses",
+        "Company name": "Sullivan Buses Ltd.",
+        "LBR garage code": "TP",
+        "Garage name": "Thorpe Park",
+        "Garage address": "Thorpe Park, Staines Road, Chertsey, KT16 8PH",
+        "TfL garage code": "",
+        "_geocode_source": "postcodes.io",
+        "_geocode_postcode": "KT16 8PH",
+        "_geocode_admin_district": "Runnymede",
+        "_geocode_country": "England"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.278685,
+          51.375857
+        ]
+      },
+      "properties": {
+        "Group name": "First",
+        "Company name": "London United Busways Ltd",
+        "LBR garage code": "TV",
+        "Garage name": "Tolworth",
+        "Garage address": "Kingston Road, Tolworth, KT5 9NU",
+        "TfL garage code": "TV",
+        "_geocode_source": "postcodes.io",
+        "_geocode_postcode": "KT5 9NU",
+        "_geocode_admin_district": "Kingston upon Thames",
+        "_geocode_country": "England"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.240742,
+          51.771925
+        ]
+      },
+      "properties": {
+        "Group name": "Uno",
+        "Company name": "University Bus Ltd",
+        "LBR garage code": "HF",
+        "Garage name": "Hatfield",
+        "Garage address": "Gypsy Moth Avenue, Hatfield Business Park, Hatfield, Hertfordshire, AL10 9BS",
+        "TfL garage code": "UB",
+        "_geocode_source": "postcodes.io",
+        "_geocode_postcode": "AL10 9BS",
+        "_geocode_admin_district": "Welwyn Hatfield",
+        "_geocode_country": "England"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.48901,
+          51.536817
+        ]
+      },
+      "properties": {
+        "Group name": "Metroline",
+        "Company name": "Metroline West Ltd.",
+        "LBR garage code": "UE",
+        "Garage name": "Uxbridge Industrial Estate",
+        "Garage address": "51 Wallingford Road, Cowley, UB8 2RW",
+        "TfL garage code": "UX",
+        "_geocode_source": "postcodes.io",
+        "_geocode_postcode": "UB8 2RW",
+        "_geocode_admin_district": "Hillingdon",
+        "_geocode_country": "England"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.48901,
+          51.536817
+        ]
+      },
+      "properties": {
+        "Group name": "Metroline",
+        "Company name": "Metroline West Ltd.",
+        "LBR garage code": "UE",
+        "Garage name": "Uxbridge Industrial Estate",
+        "Garage address": "51 Wallingford Road, Cowley, UB8 2RW",
+        "TfL garage code": "UX",
+        "_geocode_source": "postcodes.io",
+        "_geocode_postcode": "UB8 2RW",
+        "_geocode_admin_district": "Hillingdon",
+        "_geocode_country": "England"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.249484,
+          51.493417
+        ]
+      },
+      "properties": {
+        "Group name": "First",
+        "Company name": "London United Busways Ltd",
+        "LBR garage code": "V",
+        "Garage name": "Stamford Brook",
+        "Garage address": "72-74 Chiswick High Road, London, W4 1SY",
+        "TfL garage code": "V",
+        "_geocode_source": "postcodes.io",
+        "_geocode_postcode": "W4 1SY",
+        "_geocode_admin_district": "Hounslow",
+        "_geocode_country": "England"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.221893,
+          51.562317
+        ]
+      },
+      "properties": {
+        "Group name": "Metroline",
+        "Company name": "Metroline Travel Ltd.",
+        "LBR garage code": "W",
+        "Garage name": "Cricklewood",
+        "Garage address": "329 Edgware Road, Dollis Hill, London, NW2 6JP",
+        "TfL garage code": "W",
+        "_geocode_source": "postcodes.io",
+        "_geocode_postcode": "NW2 6JP",
+        "_geocode_admin_district": "Brent",
+        "_geocode_country": "England"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          0.003785,
+          51.51993
+        ]
+      },
+      "properties": {
+        "Group name": "Stagecoach London",
+        "Company name": "East London Bus &amp; Coach Co. Ltd.",
+        "LBR garage code": "WH",
+        "Garage name": "West Ham",
+        "Garage address": "Stephenson Street, Canning Town, London, E16 4SA",
+        "TfL garage code": "WH",
+        "_geocode_source": "postcodes.io",
+        "_geocode_postcode": "E16 4SA",
+        "_geocode_admin_district": "Newham",
+        "_geocode_country": "England"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.398697,
+          51.463832
+        ]
+      },
+      "properties": {
+        "Group name": "First",
+        "Company name": "London United Busways Ltd",
+        "LBR garage code": "WK",
+        "Garage name": "Hounslow Heath",
+        "Garage address": "Tamian Way, Hounslow, Middlesex, TW4 6BL",
+        "TfL garage code": "WK",
+        "_geocode_source": "postcodes.io",
+        "_geocode_postcode": "TW4 6BL",
+        "_geocode_admin_district": "Hounslow",
+        "_geocode_country": "England"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.095974,
+          51.475441
+        ]
+      },
+      "properties": {
+        "Group name": "Transport UK",
+        "Company name": "Transport UK London Bus Ltd.",
+        "LBR garage code": "WL",
+        "Garage name": "Walworth",
+        "Garage address": "301 Camberwell New Road, London, SE5 0TF",
+        "TfL garage code": "WL",
+        "_geocode_source": "postcodes.io",
+        "_geocode_postcode": "SE5 0TF",
+        "_geocode_admin_district": "Southwark",
+        "_geocode_country": "England"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.112397,
+          51.597952
+        ]
+      },
+      "properties": {
+        "Group name": "Arriva",
+        "Company name": "Arriva London North Ltd.",
+        "LBR garage code": "WN",
+        "Garage name": "Wood Green",
+        "Garage address": "Jolly Butchers Hill, High Road, Wood Green, London, N22 7TZ",
+        "TfL garage code": "WN",
+        "_geocode_source": "postcodes.io",
+        "_geocode_postcode": "N22 7TZ",
+        "_geocode_admin_district": "Haringey",
+        "_geocode_country": "England"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.201514,
+          51.523365
+        ]
+      },
+      "properties": {
+        "Group name": "First",
+        "Company name": "London Transit",
+        "LBR garage code": "X",
+        "Garage name": "Westbourne Park",
+        "Garage address": "Great Western Road, London, W9 3NW",
+        "TfL garage code": "X",
+        "_geocode_source": "postcodes.io",
+        "_geocode_postcode": "W9 3NW",
+        "_geocode_admin_district": "Westminster",
+        "_geocode_country": "England"
+      }
+    }
+  ]
+}

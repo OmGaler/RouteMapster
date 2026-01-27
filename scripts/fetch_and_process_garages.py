@@ -33,7 +33,7 @@ GARAGES_PAGE = "http://www.londonbusroutes.net/garages.htm"
 GARAGES_CSV = "http://www.londonbusroutes.net/garages.csv"
 RAW_OUTPUT_DIR = Path("data/raw/garages")
 PROCESSED_OUTPUT = Path("data/processed/garages.geojson")
-LEGACY_INPUT = Path("data/garages.geojson")
+BASE_INPUT = Path("data/garages-base.geojson")
 
 GARAGE_PROPERTIES = [
     "Group name",
@@ -142,17 +142,16 @@ def get_garage_code(row: Dict[str, Any]) -> str:
     return str(code).strip().upper()
 
 
-def load_existing_map(path: Path) -> Tuple[Dict[str, Dict[str, Any]], List[Dict[str, Any]]]:
+def load_existing_map_from_payload(
+    data: Any,
+) -> Tuple[Dict[str, Dict[str, Any]], List[Dict[str, Any]]]:
     """
     Returns (by_code, unnamed_features):
       by_code: { GARAGE_CODE: {"properties": <dict>, "geometry": <dict>} }
       unnamed_features: [{"properties": <dict>, "geometry": <dict>}, ...] for missing codes
     """
-    if not path.exists():
+    if not isinstance(data, dict):
         return {}, []
-
-    with path.open("r", encoding="utf-8") as handle:
-        data = json.load(handle)
 
     features = data.get("features") or []
     out: Dict[str, Dict[str, Any]] = {}
@@ -166,6 +165,22 @@ def load_existing_map(path: Path) -> Tuple[Dict[str, Dict[str, Any]], List[Dict[
         else:
             unnamed.append({"properties": props, "geometry": geom})
     return out, unnamed
+
+
+def load_existing_map(path: Path) -> Tuple[Dict[str, Dict[str, Any]], List[Dict[str, Any]]]:
+    """
+    Returns (by_code, unnamed_features):
+      by_code: { GARAGE_CODE: {"properties": <dict>, "geometry": <dict>} }
+      unnamed_features: [{"properties": <dict>, "geometry": <dict>}, ...] for missing codes
+    """
+    if not path.exists():
+        return {}, []
+
+    with path.open("r", encoding="utf-8") as handle:
+        data = json.load(handle)
+    return load_existing_map_from_payload(data)
+
+
 
 
 def merge_existing_maps(
@@ -378,6 +393,11 @@ def main() -> int:
     parser.add_argument("--page-url", default=GARAGES_PAGE, help="Source page URL for garages data.")
     parser.add_argument("--csv-url", default=GARAGES_CSV, help="CSV download URL for garages data.")
     parser.add_argument("--input", default="", help="Local garages CSV file (skip download).")
+    parser.add_argument(
+        "--base",
+        default="",
+        help="Base GeoJSON to preserve manual fixes (defaults to data/garages-base.geojson if present, else output file).",
+    )
     parser.add_argument("--output", default=str(PROCESSED_OUTPUT), help="Output GeoJSON path.")
     parser.add_argument("--cache", default="scripts/geocode_cache.json", help="Geocode cache path.")
     parser.add_argument("--address-col", default="Garage address", help="Primary address column.")
@@ -419,13 +439,10 @@ def main() -> int:
     rows = read_csv_rows(csv_path)
     apply_route_fixes_to_rows(rows)
 
+    base_path = Path(args.base) if args.base else (BASE_INPUT if BASE_INPUT.exists() else existing_path)
+    base_map = load_existing_map(base_path) if base_path.exists() else ({}, [])
     existing_map, unnamed_existing = load_existing_map(existing_path)
-    if LEGACY_INPUT.exists() and LEGACY_INPUT.resolve() != existing_path.resolve():
-        legacy_map = load_existing_map(LEGACY_INPUT)
-        existing_map, unnamed_existing = merge_existing_maps(
-            (existing_map, unnamed_existing),
-            legacy_map,
-        )
+    existing_map, unnamed_existing = merge_existing_maps(base_map, (existing_map, unnamed_existing))
     if existing_map:
         compare_non_route_fields(rows, existing_map)
 
