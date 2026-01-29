@@ -33,8 +33,8 @@ POSTCODE_RE = re.compile(
     r"\b([A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2})\b", re.IGNORECASE
 )
 
-# Route token matcher: captures things like 6, 113, N113, C11, SL1, W19, etc.
-ROUTE_TOKEN_RE = re.compile(r"[A-Za-z]*\d+[A-Za-z]*")
+# Route token matcher: captures things like 6, 113, N113, C11, SL1, W19, SCS, etc.
+ROUTE_TOKEN_RE = re.compile(r"[A-Za-z0-9]+")
 
 
 def setup_logging(verbose: bool) -> None:

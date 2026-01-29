@@ -198,7 +198,11 @@ def test_frequency_values_within_bounds() -> None:
     freqs = _freqs_map()
     violations: List[str] = []
     for route, entry in freqs.items():
-        if _is_school_frequency_exempt(route) or is_700_series(route) or is_excluded_route_id(route):
+        if (
+            _is_school_frequency_exempt(route)
+            or is_700_series(route)
+            or is_excluded_route_id(route)
+        ):
             continue
         for key, value in entry.items():
             if value is None:
@@ -250,7 +254,7 @@ def test_frequency_rules_by_route_type() -> None:
             elif any(v <= 0 for v in (peak_am, offpeak, peak_pm, overnight)):
                 errors.append(f"{route}: 24hr route has zero in a time band")
 
-    assert not errors, "Frequency rule violations:\n" + "\n".join(errors[:60])
+    assert not errors, "Frequency rule violations:\n" + "\n".join(errors[:600])
 
 
 def test_garage_pvr_percentages_sum_to_100() -> None:
@@ -292,6 +296,8 @@ def test_garage_allocations_are_consistent() -> None:
             errors.append(f"{route}: night list route not in main network (expected 24hr)")
 
     for route in sorted(school_routes):
+        if route in main_routes:
+            continue
         if not _is_school_frequency_exempt(route):
             errors.append(f"{route}: school/mobility route not in 600/900 series")
 

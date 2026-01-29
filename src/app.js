@@ -648,7 +648,7 @@ function isExcludedRoute(routeId) {
 	if (!value) {
 		return false;
 	}
-	return value.startsWith("UL") || value.startsWith("Y");
+	return value === "SCS" || value.startsWith("UL") || value.startsWith("Y");
 }
 
 function getStopPointIdFromProps(props) {
@@ -1075,7 +1075,20 @@ function buildGarageRouteSets(features) {
 		addRouteTokens(school, p["TfL school/mobility routes"]);
 		addRouteTokens(regular, p["Other routes"]);
 	});
+	removeOverlappingSchoolRoutes(school, regular, night);
 	return { regular, night, school };
+}
+
+function removeOverlappingSchoolRoutes(school, ...routeSets) {
+	if (!school) {
+		return;
+	}
+	routeSets.forEach((set) => {
+		if (!set) {
+			return;
+		}
+		set.forEach((routeId) => school.delete(routeId));
+	});
 }
 
 function addRouteTokens(set, value) {
@@ -1300,6 +1313,7 @@ async function loadNetworkRouteSets() {
 			});
 		});
 	}
+	removeOverlappingSchoolRoutes(school, regular, night, other, twentyFour);
 	appState.networkRouteSets = { regular, night, school, other, twentyFour };
 	return appState.networkRouteSets;
 }

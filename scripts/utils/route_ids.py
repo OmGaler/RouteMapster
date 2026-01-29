@@ -8,6 +8,7 @@ from typing import Set, Union
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_GEOM_DIR = REPO_ROOT / "data" / "processed" / "routes"
 EXCLUDED_PREFIXES = ("UL", "T")
+EXCLUDED_ROUTES = {"SCS"}
 
 
 def normalize_route_id(raw: object) -> str:
@@ -20,6 +21,8 @@ def is_excluded_route_id(route_id: object) -> bool:
     text = normalize_route_id(route_id)
     if not text:
         return False
+    if text in EXCLUDED_ROUTES:
+        return True
     if text.startswith("UL"):
         return True
     if text.startswith("T") and len(text) > 1 and text[1].isdigit():
