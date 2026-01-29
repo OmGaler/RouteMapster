@@ -137,22 +137,30 @@ def _nonzero(values: Iterable[float]) -> bool:
 
 def test_routes_with_geometry_are_active() -> None:
     geom_routes = _geom_routes()
+    allocations = _allocation_sets()
     inactive: List[str] = []
     for route in geom_routes:
         status = check_route.route_status(route, GEOM_DIR, GARAGES_PATH, FREQS_PATH, VEHICLES_PATH)
         if not status["active"]:
             if route.startswith("N"):
                 day = route[1:]
-                if day and day in geom_routes and not status["has_alloc"] and not status["has_freq"]:
-                    day_status = check_route.route_status(
-                        day,
-                        GEOM_DIR,
-                        GARAGES_PATH,
-                        FREQS_PATH,
-                        VEHICLES_PATH,
-                    )
-                    if day_status["active"]:
+                if day and day in geom_routes:
+                    # Check if the day route is 24-hour
+                    base_day = _base_route(day)
+                    if base_day in allocations["main"] and base_day in allocations["night"]:
+                        # It's a phantom N route for a 24-hour base, skip it
                         continue
+                    # Also skip if day route is active and N route has no allocation/freq
+                    if not status["has_alloc"] and not status["has_freq"]:
+                        day_status = check_route.route_status(
+                            day,
+                            GEOM_DIR,
+                            GARAGES_PATH,
+                            FREQS_PATH,
+                            VEHICLES_PATH,
+                        )
+                        if day_status["active"]:
+                            continue
             missing = [
                 name
                 for name, flag in (
