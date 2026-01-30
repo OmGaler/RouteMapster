@@ -63,7 +63,8 @@
       height: 100vh;
     }
 
-    #app.has-details {
+    #app.has-details,
+    #app.has-advanced-results {
       grid-template-columns: 340px 1fr 320px;
     }
 
@@ -85,7 +86,8 @@
       overscroll-behavior: contain;
     }
 
-    #app.has-details #rightpanel {
+    #app.has-details #rightpanel,
+    #app.has-advanced-results #rightpanel {
       display: flex;
     }
 
@@ -263,6 +265,12 @@
       flex: 1;
     }
 
+    .ghost-button.tiny {
+      padding: 4px 8px;
+      font-size: 11px;
+      width: auto;
+    }
+
     .button-row {
       display: flex;
       gap: 8px;
@@ -426,6 +434,203 @@
     .module-note {
       font-size: 12px;
       color: var(--muted);
+    }
+
+    .select-field[multiple] {
+      min-height: 120px;
+      padding: 8px;
+    }
+
+    .field-row {
+      display: flex;
+      gap: 8px;
+    }
+
+    .field-row input,
+    .field-row .select-field {
+      flex: 1;
+    }
+
+    .submodule {
+      border: 1px dashed var(--panel-border);
+      border-radius: 14px;
+      padding: 10px;
+      background: #fffaf1;
+    }
+
+    .submodule summary {
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 13px;
+      margin-bottom: 8px;
+    }
+
+    .route-count {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--ink);
+    }
+
+    .route-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      max-height: 320px;
+      overflow-y: auto;
+      padding-right: 4px;
+    }
+
+    .route-card {
+      border: 1px solid var(--panel-border);
+      border-radius: 14px;
+      padding: 10px 12px;
+      background: #fffaf1;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .route-card__header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .route-card__title {
+      font-weight: 600;
+      font-size: 14px;
+    }
+
+    .route-card__meta,
+    .route-card__freq,
+    .route-card__kpi {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .analysis-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .analysis-toolbar .select-field {
+      flex: 1 1 200px;
+    }
+
+    .analysis-block {
+      border: 1px solid var(--panel-border);
+      border-radius: 14px;
+      padding: 10px 12px;
+      background: #fffaf1;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .analysis-block__header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .analysis-block__title {
+      font-weight: 600;
+      font-size: 14px;
+    }
+
+    .analysis-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+
+    .analysis-table th {
+      text-align: left;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--muted);
+      padding-bottom: 6px;
+    }
+
+    .analysis-table td {
+      padding: 6px 0;
+      border-bottom: 1px dashed var(--panel-border);
+    }
+
+    #advancedResultsPanel {
+      display: none;
+    }
+
+    #advancedResultsPanel.is-visible {
+      display: flex;
+    }
+
+    .preset-grid {
+      display: grid;
+      gap: 10px;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    }
+
+    .preset-card {
+      border: 1px solid var(--panel-border);
+      border-radius: 14px;
+      padding: 10px;
+      background: #fdfbf7;
+      text-align: left;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      cursor: pointer;
+      transition: border-color 0.2s ease, transform 0.2s ease;
+    }
+
+    .preset-card:hover {
+      border-color: var(--accent);
+      transform: translateY(-1px);
+    }
+
+    .preset-card__icon {
+      font-size: 18px;
+    }
+
+    .preset-card__title {
+      font-weight: 600;
+      font-size: 13px;
+    }
+
+    .preset-card__desc {
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .preset-card.is-disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .coming-next {
+      margin: 0;
+      padding-left: 18px;
+      font-size: 12px;
+      color: var(--muted);
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .route-zoom-btn {
+      border: 1px solid var(--panel-border);
+      border-radius: 10px;
+      padding: 4px 8px;
+      background: #f8fafc;
+      font-size: 11px;
+      cursor: pointer;
     }
 
     .global-controls {
@@ -1054,8 +1259,104 @@
           <div class="module-body">
             <div class="module-note">Fine-grained filters for routes, allocations, and service patterns.</div>
             <div class="module-section">
-              <div class="info-empty">Configure advanced filters here.</div>
+              <div class="section-title">Presets</div>
+              <div id="advancedFilterPresets" class="preset-grid"></div>
             </div>
+
+            <div class="module-section">
+              <div class="section-title">Core filters</div>
+              <div class="field">
+                <label for="advancedRouteSearch">Route ID search</label>
+                <input id="advancedRouteSearch" type="search" placeholder="e.g. 12, N205, SL7" autocomplete="off" />
+                <div class="module-note">Use spaces or commas to add multiple routes.</div>
+              </div>
+              <div class="field">
+                <label for="advancedRoutePrefix">Route prefix</label>
+                <div class="field-row">
+                  <select id="advancedRoutePrefix" class="select-field"></select>
+                  <input id="advancedRoutePrefixCustom" type="search" placeholder="Custom prefix" />
+                </div>
+              </div>
+              <div class="field">
+                <label for="advancedRouteTypes">Route types</label>
+                <select id="advancedRouteTypes" class="select-field" multiple size="4"></select>
+                <button id="advancedRouteTypesSelectAll" class="ghost-button compact" type="button">Select all</button>
+              </div>
+              <div class="field">
+                <label for="advancedOperators">Operators</label>
+                <select id="advancedOperators" class="select-field" multiple size="5"></select>
+                <button id="advancedOperatorsSelectAll" class="ghost-button compact" type="button">Select all</button>
+              </div>
+              <div class="field">
+                <label for="advancedGarages">Garages</label>
+                <select id="advancedGarages" class="select-field" multiple size="5"></select>
+                <button id="advancedGaragesSelectAll" class="ghost-button compact" type="button">Select all</button>
+              </div>
+              <div class="field">
+                <label for="advancedVehicles">Vehicles</label>
+                <select id="advancedVehicles" class="select-field" multiple size="4"></select>
+                <button id="advancedVehiclesSelectAll" class="ghost-button compact" type="button">Select all</button>
+              </div>
+            </div>
+
+            <details class="submodule">
+              <summary>Advanced service filters</summary>
+              <div class="module-section">
+                <div class="section-title">Frequency ranges</div>
+                <div class="field">
+                  <label>Peak AM (min / max)</label>
+                  <div class="field-row">
+                    <input id="advancedPeakAmMin" type="number" min="0" step="0.1" placeholder="Min" />
+                    <input id="advancedPeakAmMax" type="number" min="0" step="0.1" placeholder="Max" />
+                  </div>
+                </div>
+                <div class="field">
+                  <label>Peak PM (min / max)</label>
+                  <div class="field-row">
+                    <input id="advancedPeakPmMin" type="number" min="0" step="0.1" placeholder="Min" />
+                    <input id="advancedPeakPmMax" type="number" min="0" step="0.1" placeholder="Max" />
+                  </div>
+                </div>
+                <div class="field">
+                  <label>Off-peak (min / max)</label>
+                  <div class="field-row">
+                    <input id="advancedOffpeakMin" type="number" min="0" step="0.1" placeholder="Min" />
+                    <input id="advancedOffpeakMax" type="number" min="0" step="0.1" placeholder="Max" />
+                  </div>
+                </div>
+                <div class="field">
+                  <label>Overnight (min / max)</label>
+                  <div class="field-row">
+                    <input id="advancedOvernightMin" type="number" min="0" step="0.1" placeholder="Min" />
+                    <input id="advancedOvernightMax" type="number" min="0" step="0.1" placeholder="Max" />
+                  </div>
+                </div>
+              </div>
+              <div class="module-section">
+                <div class="section-title">Flags</div>
+                <label class="toggle">
+                  <span>Has overnight service</span>
+                  <input type="checkbox" id="advancedHasOvernight" />
+                </label>
+                <label class="toggle">
+                  <span>High frequency (>=)</span>
+                  <input type="checkbox" id="advancedHighFrequencyToggle" />
+                </label>
+                <input id="advancedHighFrequencyValue" type="number" min="0" step="0.1" placeholder="Frequency threshold" />
+                <div class="field">
+                  <label for="advancedPeakinessMin">Peakiness delta (peak - offpeak)</label>
+                  <input id="advancedPeakinessMin" type="number" min="0" step="0.1" placeholder="Min delta" />
+                </div>
+              </div>
+              <div class="module-section" id="advancedLengthWrap">
+                <div class="section-title">Length (km)</div>
+                <div class="field-row">
+                  <input id="advancedLengthMin" type="number" min="0" step="0.1" placeholder="Min" />
+                  <input id="advancedLengthMax" type="number" min="0" step="0.1" placeholder="Max" />
+                </div>
+              </div>
+            </details>
+
           </div>
         </details>
 
@@ -1067,8 +1368,40 @@
           <div class="module-body">
             <div class="module-note">Diagnostics and summaries for route performance.</div>
             <div class="module-section">
-              <div class="info-empty">Analysis tools coming soon.</div>
+              <div class="section-title">Analyze</div>
+              <div class="field">
+                <label for="analysisScope">Analyze</label>
+                <select id="analysisScope" class="select-field">
+                  <option value="filtered">Current filtered subset</option>
+                  <option value="all">All routes</option>
+                </select>
+              </div>
+              <div id="analysisScopeNote" class="module-note">Analyzing filtered subset.</div>
             </div>
+
+            <div class="module-section">
+              <div class="section-title">Presets</div>
+              <div id="analysisPresets" class="preset-grid"></div>
+            </div>
+
+            <div class="module-section">
+              <div class="section-title">Analysis tools</div>
+              <div class="analysis-toolbar">
+                <select id="analysisSelect" class="select-field"></select>
+                <button id="runAnalysis" class="ghost-button compact" type="button">Run analysis</button>
+              </div>
+              <div id="analysisOutput" class="analysis-output"></div>
+            </div>
+          </div>
+        </details>
+
+        <details class="module" data-module="stop-analyses">
+          <summary>
+            <span class="module-title">Stop analyses</span>
+            <span class="module-tag planned">Planned</span>
+          </summary>
+          <div class="module-body">
+            <div id="stopAnalysesContainer"></div>
           </div>
         </details>
 
@@ -1082,6 +1415,22 @@
     </main>
 
     <aside id="rightpanel">
+      <div class="info-panel" id="advancedResultsPanel">
+        <h2 class="info-title">Filtered routes</h2>
+        <p class="info-subtitle">Advanced filters results</p>
+        <div class="info-body">
+          <div id="advancedRouteCount" class="route-count">0 routes found</div>
+          <div class="button-row">
+            <button id="advancedShowAllOnMap" class="ghost-button compact" type="button">Show all on map</button>
+            <button id="advancedClearMap" class="ghost-button compact" type="button">Clear map highlights</button>
+          </div>
+          <div class="button-row">
+            <button id="advancedExportCsv" class="ghost-button compact" type="button">Export CSV</button>
+          </div>
+          <div id="advancedMapWarning" class="module-note"></div>
+          <div id="advancedRouteList" class="route-list"></div>
+        </div>
+      </div>
       <div class="info-panel">
         <h2 id="infoTitle" class="info-title">Details</h2>
         <p id="infoSubtitle" class="info-subtitle">Click a stop, station, or garage to view details.</p>
@@ -1111,6 +1460,12 @@
     src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js">
   </script>
 
+  <script src="src/query_engine.js"></script>
+  <script src="src/presets.js"></script>
+  <script src="src/analyses.js"></script>
+  <script src="src/advanced_filters.js"></script>
+  <script src="src/advanced_analyses.js"></script>
+  <script src="src/stop_analyses.js"></script>
   <script src="src/app.js"></script>
 
 </body>

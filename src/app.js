@@ -107,6 +107,7 @@ const appState = {
 	selectedFeature: null,
 	busStationHighlightLayer: null,
 	routeGeometryCache: new Map(),
+	filteredRoutesLayer: null,
 	garageRouteLayer: null,
 	networkRouteLayer: null,
 	focusRouteLayer: null,
@@ -128,6 +129,7 @@ const appState = {
 	frequencyMaxTotal: 0,
 	geocodeLastAt: 0,
 	selectedFeatureToken: 0,
+	advancedFiltersState: null,
 };
 
 
@@ -2992,6 +2994,22 @@ function setupUI() {
 	setupBusStationSelect();
 	setupNetworkFilterDrag();
 
+	const advancedFiltersModule = document.querySelector('[data-module="advanced-filters"]');
+	if (advancedFiltersModule && window.RouteMapsterAdvancedFilters?.initAdvancedFilters) {
+		window.RouteMapsterAdvancedFilters.initAdvancedFilters(advancedFiltersModule, appState).catch(() => {});
+	}
+
+	const advancedAnalysesModule = document.querySelector('[data-module="advanced-analyses"]');
+	if (advancedAnalysesModule && window.RouteMapsterAdvancedAnalyses?.initAdvancedAnalyses) {
+		window.RouteMapsterAdvancedAnalyses.initAdvancedAnalyses(advancedAnalysesModule, appState).catch(() => {});
+	}
+
+	const stopAnalysesModule = document.querySelector('[data-module="stop-analyses"]');
+	if (stopAnalysesModule && window.RouteMapsterStopAnalyses?.initStopAnalyses) {
+		const stopContainer = stopAnalysesModule.querySelector("#stopAnalysesContainer");
+		window.RouteMapsterStopAnalyses.initStopAnalyses(stopContainer || stopAnalysesModule, appState);
+	}
+
 	document.getElementById('showGarages').addEventListener('change', (e) => {
 		if (e.target.checked) {
 			appState.garageLoadToken += 1;
@@ -3294,6 +3312,9 @@ function setupUI() {
 			clearBusStationHighlight();
 			clearBusStationRoutes();
 			clearNetworkRoutes();
+			if (window.RouteMapsterAdvancedFilters?.clearMapHighlights) {
+				window.RouteMapsterAdvancedFilters.clearMapHighlights(appState);
+			}
 			appState.frequencySegmentTotals = null;
 			appState.frequencyMaxTotal = 0;
 			appState.showNetworkRoutes = false;
@@ -3319,6 +3340,9 @@ function setupUI() {
 			clearGarageRoutes();
 			clearBusStationRoutes();
 			clearNetworkRoutes();
+			if (window.RouteMapsterAdvancedFilters?.clearMapHighlights) {
+				window.RouteMapsterAdvancedFilters.clearMapHighlights(appState);
+			}
 			appState.frequencySegmentTotals = null;
 			appState.frequencyMaxTotal = 0;
 			appState.activeGarageRoutes = null;
@@ -3747,6 +3771,15 @@ function setupFrequencyModule() {
 		refreshFrequencyRoutes();
 	});
 }
+
+window.RouteMapsterAPI = {
+	appState,
+	loadRouteGeometry,
+	sortRouteIds,
+	compareRouteIds,
+	getRoutePillClass,
+	escapeHtml
+};
 
 async function start() {
 	setLoadingModalVisible(true);
