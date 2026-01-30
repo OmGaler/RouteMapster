@@ -128,6 +128,55 @@
       .join("");
   };
 
+  const buildGarageOptions = (rows) => {
+    const codeToName = new Map();
+    const nameOnly = new Set();
+    rows.forEach((row) => {
+      const codes = Array.isArray(row.garage_codes_arr) ? row.garage_codes_arr : [];
+      const names = Array.isArray(row.garage_names_arr) ? row.garage_names_arr : [];
+      if (codes.length > 0) {
+        codes.forEach((code, index) => {
+          const token = String(code || "").trim();
+          if (!token) {
+            return;
+          }
+          const name = String(names[index] || names[0] || "").trim();
+          if (!codeToName.has(token)) {
+            codeToName.set(token, name);
+          }
+        });
+        return;
+      }
+      names.forEach((name) => {
+        const token = String(name || "").trim();
+        if (token) {
+          nameOnly.add(token);
+        }
+      });
+    });
+
+    const knownNames = new Set(
+      Array.from(codeToName.values())
+        .filter((value) => value)
+        .map((value) => String(value).trim().toLowerCase())
+    );
+
+    const options = [];
+    codeToName.forEach((name, code) => {
+      const label = name ? `${name} (${code})` : code;
+      options.push({ value: code, label });
+    });
+
+    nameOnly.forEach((name) => {
+      if (knownNames.has(String(name).trim().toLowerCase())) {
+        return;
+      }
+      options.push({ value: name, label: name });
+    });
+
+    return options.sort((a, b) => a.label.localeCompare(b.label));
+  };
+
   const state = {
     rows: [],
     derivedRows: [],
@@ -306,7 +355,7 @@
       vehicle_types: getSelectedValues(els.vehicles),
       freq: Object.keys(freq).length > 0 ? freq : undefined,
       flags: Object.keys(flags).length > 0 ? flags : undefined,
-      length_km: length
+      length_miles: length
     };
   };
 
@@ -381,10 +430,10 @@
         : "";
     }
     if (els.lengthMin) {
-      els.lengthMin.value = Number.isFinite(normalized.length_km?.min) ? normalized.length_km.min : "";
+      els.lengthMin.value = Number.isFinite(normalized.length_miles?.min) ? normalized.length_miles.min : "";
     }
     if (els.lengthMax) {
-      els.lengthMax.value = Number.isFinite(normalized.length_km?.max) ? normalized.length_km.max : "";
+      els.lengthMax.value = Number.isFinite(normalized.length_miles?.max) ? normalized.length_miles.max : "";
     }
   };
 
@@ -436,7 +485,7 @@
         return true;
       }
     }
-    if (normalized.length_km && (Number.isFinite(normalized.length_km.min) || Number.isFinite(normalized.length_km.max))) {
+    if (normalized.length_miles && (Number.isFinite(normalized.length_miles.min) || Number.isFinite(normalized.length_miles.max))) {
       return true;
     }
     return false;
@@ -606,18 +655,12 @@
     if (els.operators) {
       els.operators.innerHTML = buildOptionHtml(operators.filter((value) => !isUnknown(value)));
     }
-    const garages = engine.getUniqueValues(rows, (row) => {
-      const list = [];
-      if (row.garage_codes_arr?.length) {
-        list.push(...row.garage_codes_arr);
-      }
-      if (row.garage_names_arr?.length) {
-        list.push(...row.garage_names_arr);
-      }
-      return list;
-    }, (value) => String(value || ""));
     if (els.garages) {
-      els.garages.innerHTML = buildOptionHtml(garages.filter((value) => !isUnknown(value)));
+      const garages = buildGarageOptions(rows)
+        .filter((option) => option.label && !isUnknown(option.label));
+      els.garages.innerHTML = garages
+        .map((option) => `<option value="${escapeHtml(option.value)}">${escapeHtml(option.label)}</option>`)
+        .join("");
     }
     const vehicles = engine.getUniqueValues(rows, (row) => row.vehicle_type, (value) => String(value || "").toUpperCase());
     if (els.vehicles) {
@@ -718,7 +761,7 @@
 
     populateSelects(state.derivedRows, els);
 
-    const hasLength = state.derivedRows.some((row) => Number.isFinite(row.length_km));
+    const hasLength = state.derivedRows.some((row) => Number.isFinite(row.length_miles));
     if (els.lengthWrap) {
       els.lengthWrap.style.display = hasLength ? "" : "none";
     }

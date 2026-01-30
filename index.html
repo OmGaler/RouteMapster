@@ -562,6 +562,18 @@
       border-bottom: 1px dashed var(--panel-border);
     }
 
+    .analysis-summary {
+      display: grid;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .analysis-summary strong {
+      color: var(--ink);
+      font-weight: 600;
+    }
+
     #advancedResultsPanel {
       display: none;
     }
@@ -1120,31 +1132,17 @@
             <div class="module-section">
               <div class="section-title">Postcode district</div>
               <div class="field">
-                <label for="busStopDistrict">Filter by district</label>
-                <input id="busStopDistrict" type="search" placeholder="e.g. N1" autocomplete="off" />
+                <label for="busStopDistrictEntry">Filter by district</label>
+                <div class="tag-input" id="busStopDistrictInput">
+                  <div class="tag-list" id="busStopDistrictTags"></div>
+                  <input id="busStopDistrictEntry" type="search" placeholder="e.g. N1, SW1" autocomplete="off" />
+                </div>
               </div>
               <div class="button-row">
                 <button id="applyBusStopFilter" class="ghost-button compact" type="button">Apply filter</button>
                 <button id="clearBusStopFilter" class="ghost-button compact" type="button">Clear filter</button>
               </div>
               <div id="busStopFilterStatus" class="module-note">Filter inactive.</div>
-            </div>
-          </div>
-        </details>
-
-        <details class="module" data-module="stands">
-          <summary>
-            <span class="module-title">Bus stands</span>
-            <span class="module-tag">Live</span>
-          </summary>
-          <div class="module-body">
-            <div class="module-section">
-              <div class="section-title">Visibility</div>
-              <label class="toggle">
-                <span>Show bus stands</span>
-                <input type="checkbox" id="showBusStands" />
-              </label>
-              <div class="module-note">Stops with no routes listed.</div>
             </div>
           </div>
         </details>
@@ -1349,7 +1347,7 @@
                 </div>
               </div>
               <div class="module-section" id="advancedLengthWrap">
-                <div class="section-title">Length (km)</div>
+                <div class="section-title">Length (miles)</div>
                 <div class="field-row">
                   <input id="advancedLengthMin" type="number" min="0" step="0.1" placeholder="Min" />
                   <input id="advancedLengthMax" type="number" min="0" step="0.1" placeholder="Max" />
@@ -1398,7 +1396,7 @@
         <details class="module" data-module="stop-analyses">
           <summary>
             <span class="module-title">Stop analyses</span>
-            <span class="module-tag planned">Planned</span>
+            <span class="module-tag">New</span>
           </summary>
           <div class="module-body">
             <div id="stopAnalysesContainer"></div>

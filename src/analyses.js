@@ -234,21 +234,21 @@
       run: (rows) => {
         const summary = new Map();
         rows.forEach((row) => {
-          if (!Number.isFinite(row.length_km)) {
+          if (!Number.isFinite(row.length_miles)) {
             return;
           }
           getOperators(row).forEach((operator) => {
             if (!summary.has(operator)) {
               summary.set(operator, []);
             }
-            summary.get(operator).push(row.length_km);
+            summary.get(operator).push(row.length_miles);
           });
         });
         if (summary.size === 0) {
           return {
             type: "table",
-            columns: ["Operator", "Avg length (km)"],
-            rows: [["No length_km data available", ""]]
+            columns: ["Operator", "Avg length (mi)"],
+            rows: [["No length_miles data available", ""]]
           };
         }
         const rowsOut = Array.from(summary.entries())
@@ -256,7 +256,7 @@
           .sort((a, b) => (parseFloat(b[1]) || 0) - (parseFloat(a[1]) || 0));
         return {
           type: "table",
-          columns: ["Operator", "Avg length (km)"],
+          columns: ["Operator", "Avg length (mi)"],
           rows: rowsOut
         };
       }

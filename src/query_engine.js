@@ -1,5 +1,6 @@
 ﻿(() => {
   const ROUTE_SUMMARY_PATH = "/route_summary.csv";
+  const KM_TO_MILES = 0.621371;
   let cachedRows = null;
   let loadPromise = null;
 
@@ -129,6 +130,13 @@
     const garagesCodesRaw = resolveField(row, ["garage_codes", "garage_code", "garageCodes", "garage"]);
     const garagesNamesRaw = resolveField(row, ["garage_names", "garage_name", "garageNames"]);
     const vehicleRaw = resolveField(row, ["vehicle_type", "vehicle", "vehicleType"]);
+    const lengthKm = parseNumber(resolveField(row, ["length_km", "lengthKm", "length"]));
+    const lengthMilesRaw = parseNumber(resolveField(row, ["length_miles", "lengthMiles", "length_mi", "lengthMi"]));
+    const lengthMiles = Number.isFinite(lengthMilesRaw)
+      ? lengthMilesRaw
+      : Number.isFinite(lengthKm)
+        ? lengthKm * KM_TO_MILES
+        : null;
 
     const operatorList = splitList(operatorsRaw);
     const operatorNorm = operatorList.map(normaliseLower);
@@ -157,7 +165,8 @@
       frequency_peak_pm: parseNumber(resolveField(row, ["frequency_peak_pm", "peak_pm", "peakPm"])),
       frequency_offpeak: parseNumber(resolveField(row, ["frequency_offpeak", "offpeak", "offPeak"])),
       frequency_overnight: parseNumber(resolveField(row, ["frequency_overnight", "overnight"])),
-      length_km: parseNumber(resolveField(row, ["length_km", "lengthKm", "length"]))
+      length_km: lengthKm,
+      length_miles: lengthMiles
     };
   };
 
@@ -234,6 +243,11 @@
 
   const normalizeFilterSpec = (filterSpec) => {
     const spec = filterSpec && typeof filterSpec === "object" ? filterSpec : {};
+    const lengthSpec = spec.length_miles && typeof spec.length_miles === "object"
+      ? spec.length_miles
+      : spec.length_km && typeof spec.length_km === "object"
+        ? spec.length_km
+        : undefined;
     const normalised = {
       route_ids: Array.isArray(spec.route_ids) ? spec.route_ids.map(normaliseToken).filter(Boolean) : undefined,
       route_prefix: spec.route_prefix ? normaliseToken(spec.route_prefix) : undefined,
@@ -243,7 +257,7 @@
       vehicle_types: Array.isArray(spec.vehicle_types) ? spec.vehicle_types.map((value) => normaliseToken(value).toUpperCase()).filter(Boolean) : undefined,
       freq: spec.freq && typeof spec.freq === "object" ? spec.freq : undefined,
       flags: spec.flags && typeof spec.flags === "object" ? spec.flags : undefined,
-      length_km: spec.length_km && typeof spec.length_km === "object" ? spec.length_km : undefined
+      length_miles: lengthSpec
     };
     return normalised;
   };
@@ -346,13 +360,13 @@
           }
         }
       }
-      if (spec.length_km) {
-        const value = row.length_km;
+      if (spec.length_miles) {
+        const value = row.length_miles;
         if (Number.isFinite(value)) {
-          if (spec.length_km.min !== undefined && Number.isFinite(spec.length_km.min) && value < spec.length_km.min) {
+          if (spec.length_miles.min !== undefined && Number.isFinite(spec.length_miles.min) && value < spec.length_miles.min) {
             return false;
           }
-          if (spec.length_km.max !== undefined && Number.isFinite(spec.length_km.max) && value > spec.length_km.max) {
+          if (spec.length_miles.max !== undefined && Number.isFinite(spec.length_miles.max) && value > spec.length_miles.max) {
             return false;
           }
         }
@@ -414,10 +428,10 @@
         cleaned.flags = flags;
       }
     }
-    if (spec.length_km && (Number.isFinite(spec.length_km.min) || Number.isFinite(spec.length_km.max))) {
-      cleaned.length_km = {
-        ...(Number.isFinite(spec.length_km.min) ? { min: spec.length_km.min } : {}),
-        ...(Number.isFinite(spec.length_km.max) ? { max: spec.length_km.max } : {})
+    if (spec.length_miles && (Number.isFinite(spec.length_miles.min) || Number.isFinite(spec.length_miles.max))) {
+      cleaned.length_miles = {
+        ...(Number.isFinite(spec.length_miles.min) ? { min: spec.length_miles.min } : {}),
+        ...(Number.isFinite(spec.length_miles.max) ? { max: spec.length_miles.max } : {})
       };
     }
     return cleaned;

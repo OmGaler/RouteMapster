@@ -88,9 +88,8 @@ const appState = {
 	busStationsGeojson: null,
 	busStopLayer: null,
 	busStopLoadToken: 0,
-	busStopFilterDistrict: "",
-	busStandLayer: null,
-	busStandLoadToken: 0,
+	busStopFilterDistrict: [],
+	advancedStopsLayer: null,
 	stopRoutesIndex: null,
 	stopRoutesFromLines: new Map(),
 	stopPointFetches: new Map(),
@@ -331,11 +330,53 @@ function clearBusStopsLayer() {
 	}
 }
 
-function clearBusStandsLayer() {
-	if (appState.busStandLayer && appState.map) {
-		appState.map.removeLayer(appState.busStandLayer);
-		appState.busStandLayer = null;
+function clearAdvancedStopsLayer() {
+	if (appState.advancedStopsLayer && appState.map) {
+		appState.map.removeLayer(appState.advancedStopsLayer);
+		appState.advancedStopsLayer = null;
 	}
+}
+
+function buildAdvancedStopPopup(stop) {
+	const name = stop?.name || "Bus stop";
+	const routes = Array.isArray(stop?.routes) ? stop.routes : [];
+	const routeSets = appState.useRouteTypeColours ? appState.networkRouteSets : null;
+	return `
+		<div class="hover-popup__content">
+			<div class="hover-popup__title">${escapeHtml(name)}</div>
+			<div class="hover-popup__routes">${renderRoutePills(routes, routeSets)}</div>
+		</div>
+	`;
+}
+
+function renderAdvancedStopsLayer(stops) {
+	if (!appState.map) {
+		return;
+	}
+	clearAdvancedStopsLayer();
+	if (!Array.isArray(stops) || stops.length === 0) {
+		return;
+	}
+	const layerGroup = L.layerGroup();
+	stops.forEach((stop) => {
+		const lat = Number(stop?.lat);
+		const lon = Number(stop?.lon);
+		if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+			return;
+		}
+		const marker = L.circleMarker([lat, lon], {
+			radius: 4,
+			weight: 1,
+			color: "#0f766e",
+			fillColor: "#14b8a6",
+			fillOpacity: 0.75,
+			pane: STOP_PANE
+		});
+		bindHoverPopup(marker, () => buildAdvancedStopPopup(stop));
+		marker.addTo(layerGroup);
+	});
+	layerGroup.addTo(appState.map);
+	appState.advancedStopsLayer = layerGroup;
 }
 
 async function addBusStopsLayer(map) {
@@ -389,55 +430,6 @@ async function addBusStopsLayer(map) {
 	return layerGroup;
 }
 
-async function addBusStandsLayer(map) {
-	if (!map) {
-		return null;
-	}
-	const loadToken = appState.busStandLoadToken;
-	const geojson = await loadBusStopsGeojson();
-	if (loadToken !== appState.busStandLoadToken) {
-		return null;
-	}
-
-	clearBusStandsLayer();
-	const result = filterBusStands(geojson);
-	const layerGroup = L.layerGroup();
-
-	result.features.forEach((feature) => {
-		const coords = feature?.geometry?.coordinates;
-		if (!Array.isArray(coords) || coords.length < 2) {
-			return;
-		}
-		const lon = Number(coords[0]);
-		const lat = Number(coords[1]);
-		if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
-			return;
-		}
-		const marker = L.circleMarker([lat, lon], {
-			radius: 4,
-			weight: 1,
-			color: "#475569",
-			fillColor: "#94a3b8",
-			fillOpacity: 0.75,
-			pane: STOP_PANE
-		});
-		bindHoverPopup(marker, () => buildBusStopPopup(feature.properties || {}));
-		marker.on("click", () => {
-			const props = feature.properties || {};
-			setSelectedFeature("stop", props);
-			refreshSelectedInfoPanel().catch(() => {});
-			ensureStopPointRoutes(props)
-				.then(() => refreshSelectedInfoPanel().catch(() => {}))
-				.catch(() => {});
-		});
-		marker.addTo(layerGroup);
-	});
-
-	layerGroup.addTo(map);
-	appState.busStandLayer = layerGroup;
-	return layerGroup;
-}
-
 async function loadGaragesGeojson() {
 	if (appState.garagesGeojson) {
 		return appState.garagesGeojson;
@@ -484,6 +476,19 @@ function normalisePostcodeDistrict(value) {
 
 function getPostcodeDistrict(props) {
 	return normalisePostcodeDistrict(props?.POSTCODE);
+}
+
+function normalisePostcodeDistrictTokens(value) {
+	if (!value) {
+		return [];
+	}
+	const tokens = Array.isArray(value)
+		? value
+		: String(value).split(/[\s,]+/);
+	const cleaned = tokens
+		.map((token) => normalisePostcodeDistrict(token))
+		.filter(Boolean);
+	return Array.from(new Set(cleaned));
 }
 
 function formatRouteList(routes) {
@@ -803,31 +808,23 @@ function hasStopRoutes(props) {
 
 function filterBusStops(geojson, district) {
 	const features = Array.isArray(geojson?.features) ? geojson.features : [];
-	const normalised = normalisePostcodeDistrict(district);
-	if (!normalised) {
+	const districts = normalisePostcodeDistrictTokens(district);
+	if (districts.length === 0) {
 		const withRoutes = features.filter((feature) => {
 			const props = feature?.properties || {};
 			return hasStopRoutes(props);
 		});
-		return { features: withRoutes, count: withRoutes.length, district: "" };
+		return { features: withRoutes, count: withRoutes.length, district: [] };
 	}
+	const districtSet = new Set(districts);
 	const filtered = features.filter((feature) => {
 		const props = feature?.properties || {};
 		if (!hasStopRoutes(props)) {
 			return false;
 		}
-		return getPostcodeDistrict(props) === normalised;
+		return districtSet.has(getPostcodeDistrict(props));
 	});
-	return { features: filtered, count: filtered.length, district: normalised };
-}
-
-function filterBusStands(geojson) {
-	const features = Array.isArray(geojson?.features) ? geojson.features : [];
-	const filtered = features.filter((feature) => {
-		const props = feature?.properties || {};
-		return !hasStopRoutes(props);
-	});
-	return { features: filtered, count: filtered.length };
+	return { features: filtered, count: filtered.length, district: districts };
 }
 
 function updateBusStopFilterStatus(count, district) {
@@ -835,8 +832,12 @@ function updateBusStopFilterStatus(count, district) {
 	if (!status) {
 		return;
 	}
-	if (district) {
-		status.textContent = `Showing ${count} stops in ${district}.`;
+	const districts = normalisePostcodeDistrictTokens(district);
+	if (districts.length > 0) {
+		const label = districts.length > 3
+			? `${districts.length} districts`
+			: districts.join(", ");
+		status.textContent = `Showing ${count} stops in ${label}.`;
 	} else {
 		status.textContent = "Showing all stops.";
 	}
@@ -3047,22 +3048,6 @@ function setupUI() {
 		});
 	}
 
-	const showBusStands = document.getElementById("showBusStands");
-	if (showBusStands) {
-		showBusStands.addEventListener("change", (event) => {
-			appState.busStandLoadToken += 1;
-			if (event.target.checked) {
-				addBusStandsLayer(appState.map).catch(() => {});
-				return;
-			}
-			clearBusStandsLayer();
-			updateSelectedInfo("Bus stands hidden.");
-			if (appState.selectedFeature?.type === "stop") {
-				resetInfoPanel();
-			}
-		});
-	}
-
 	const showBusStations = document.getElementById("showBusStations");
 	if (showBusStations) {
 		showBusStations.addEventListener("change", (event) => {
@@ -3286,12 +3271,11 @@ function setupUI() {
 			syncNetworkFilters();
 			appState.garageLoadToken += 1;
 			appState.busStopLoadToken += 1;
-			appState.busStandLoadToken += 1;
 			appState.busStationLoadToken += 1;
 			appState.busStationRouteLoadToken += 1;
 			appState.networkRouteLoadToken += 1;
 
-			const toggles = ["showGarages", "showBusStops", "showBusStands", "showBusStations"];
+			const toggles = ["showGarages", "showBusStops", "showBusStations"];
 			toggles.forEach((id) => {
 				const checkbox = document.getElementById(id);
 				if (checkbox) {
@@ -3307,7 +3291,7 @@ function setupUI() {
 			clearGarageMarkers();
 			clearGarageRoutes();
 			clearBusStopsLayer();
-			clearBusStandsLayer();
+			clearAdvancedStopsLayer();
 			clearBusStationsLayer();
 			clearBusStationHighlight();
 			clearBusStationRoutes();
@@ -3512,15 +3496,31 @@ function setupRouteFilterInput() {
 }
 
 function setupBusStopFilterInput() {
-	const input = document.getElementById("busStopDistrict");
+	const input = document.getElementById("busStopDistrictEntry");
+	const list = document.getElementById("busStopDistrictTags");
 	const applyButton = document.getElementById("applyBusStopFilter");
 	const clearButton = document.getElementById("clearBusStopFilter");
-	if (!input || !applyButton || !clearButton) {
+	if (!input || !list || !applyButton || !clearButton) {
 		return;
 	}
 
-	const applyFilter = async (value) => {
-		appState.busStopFilterDistrict = normalisePostcodeDistrict(value);
+	let tokens = [];
+
+	const syncTags = () => {
+		list.innerHTML = tokens
+			.map((token) => {
+				const safe = token.replace(/"/g, "&quot;");
+				return `<span class="tag-chip" data-token="${safe}">
+					<span>${safe}</span>
+					<button type="button" class="tag-remove" aria-label="Remove ${safe}">x</button>
+				</span>`;
+			})
+			.join("");
+		clearButton.disabled = tokens.length === 0;
+	};
+
+	const applyTokens = async () => {
+		appState.busStopFilterDistrict = tokens.slice();
 		await refreshBusStopFilterStatus();
 		const showStops = document.getElementById("showBusStops");
 		if (showStops && showStops.checked) {
@@ -3529,25 +3529,84 @@ function setupBusStopFilterInput() {
 		}
 	};
 
-	const runFilter = (value) => {
-		applyFilter(value).catch(() => {});
+	const applyAndRefresh = () => {
+		applyTokens().catch(() => {});
+	};
+
+	const addTokensFromValue = (value) => {
+		const newTokens = normalisePostcodeDistrictTokens(value);
+		if (newTokens.length === 0) {
+			return;
+		}
+		const tokenSet = new Set(tokens);
+		newTokens.forEach((token) => {
+			if (!tokenSet.has(token)) {
+				tokens.push(token);
+				tokenSet.add(token);
+			}
+		});
+		syncTags();
+		applyAndRefresh();
+	};
+
+	const commitInput = () => {
+		const value = input.value.trim();
+		if (!value) {
+			return;
+		}
+		addTokensFromValue(value);
+		input.value = "";
 	};
 
 	applyButton.addEventListener("click", () => {
-		runFilter(input.value.trim());
+		commitInput();
+		applyAndRefresh();
 	});
 
 	clearButton.addEventListener("click", () => {
+		tokens = [];
 		input.value = "";
-		runFilter("");
+		syncTags();
+		applyAndRefresh();
 	});
 
 	input.addEventListener("keydown", (event) => {
-		if (event.key === "Enter") {
+		if (event.key === "Enter" || event.key === " " || event.key === "Spacebar") {
 			event.preventDefault();
-			runFilter(input.value.trim());
+			commitInput();
+			return;
+		}
+		if (event.key === "Backspace" && input.value.trim() === "" && tokens.length > 0) {
+			event.preventDefault();
+			tokens = tokens.slice(0, -1);
+			syncTags();
+			applyAndRefresh();
 		}
 	});
+
+	input.addEventListener("blur", () => {
+		commitInput();
+	});
+
+	list.addEventListener("click", (event) => {
+		const button = event.target.closest(".tag-remove");
+		if (!button) {
+			return;
+		}
+		const chip = button.closest(".tag-chip");
+		if (!chip) {
+			return;
+		}
+		const token = chip.getAttribute("data-token");
+		if (!token) {
+			return;
+		}
+		tokens = tokens.filter((entry) => entry !== token);
+		syncTags();
+		applyAndRefresh();
+	});
+
+	syncTags();
 }
 
 function setupNetworkFilterDrag() {
@@ -3778,7 +3837,9 @@ window.RouteMapsterAPI = {
 	sortRouteIds,
 	compareRouteIds,
 	getRoutePillClass,
-	escapeHtml
+	escapeHtml,
+	showAdvancedStops: (stops) => renderAdvancedStopsLayer(stops),
+	clearAdvancedStops: () => clearAdvancedStopsLayer()
 };
 
 async function start() {
