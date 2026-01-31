@@ -128,6 +128,16 @@
       text-transform: uppercase;
     }
 
+    .brand-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .brand-actions .ghost-button {
+      flex: 0 0 auto;
+    }
+
     #controls {
       display: flex;
       flex-direction: column;
@@ -877,6 +887,112 @@
       font-size: 18px;
     }
 
+    .about-modal {
+      position: fixed;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: rgba(15, 23, 42, 0.35);
+      z-index: 30;
+      padding: 24px;
+    }
+
+    .about-modal.is-visible {
+      display: flex;
+    }
+
+    .about-card {
+      width: min(760px, 92vw);
+      max-height: min(720px, 90vh);
+      overflow: auto;
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      border-radius: 20px;
+      box-shadow: var(--shadow);
+      padding: 20px 22px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .about-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .about-title {
+      margin: 0;
+      font-size: 22px;
+      font-weight: 700;
+    }
+
+    .about-body {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      font-size: 14px;
+      color: var(--ink);
+    }
+
+    .about-section {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 12px;
+      border-radius: 14px;
+      background: #fbf8f1;
+      border: 1px solid var(--panel-border);
+    }
+
+    .about-section h3 {
+      margin: 0;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--muted);
+    }
+
+    .about-list {
+      margin: 0;
+      padding-left: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .about-links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .about-links a,
+    .about-section a {
+      color: var(--accent);
+      font-weight: 600;
+      text-decoration: none;
+    }
+
+    .about-links a:hover,
+    .about-section a:hover {
+      text-decoration: underline;
+    }
+
+    .about-meta {
+      display: grid;
+      gap: 6px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .about-meta strong {
+      color: var(--ink);
+      font-weight: 600;
+    }
+
     .leaflet-container {
       font-family: "Space Grotesk", "Segoe UI", sans-serif;
     }
@@ -1005,6 +1121,9 @@
         <div>
           <div class="brand-title">RouteMapster</div>
           <div class="brand-subtitle">Garage-led route explorer</div>
+          <div class="brand-actions">
+            <button id="openAbout" class="ghost-button tiny" type="button">About</button>
+          </div>
         </div>
       </div>
 
@@ -1450,6 +1569,56 @@
       <div class="loading-text">
         <strong>Loading route geometry</strong>
         <span>Please wait while layers render.</span>
+      </div>
+    </div>
+  </div>
+
+  <div id="aboutModal" class="about-modal" aria-hidden="true">
+    <div class="about-card" role="dialog" aria-modal="true" aria-labelledby="aboutTitle">
+      <div class="about-header">
+        <h2 id="aboutTitle" class="about-title">About RouteMapster</h2>
+        <button id="closeAbout" class="ghost-button tiny" type="button">Close</button>
+      </div>
+      <div class="about-body">
+        <div class="about-section">
+          <h3>What this is</h3>
+          <div>RouteMapster is a garage-led view of London bus routes, built to explore coverage, operators, and service patterns quickly without drowning in raw data.</div>
+        </div>
+
+        <div class="about-section">
+          <h3>Data sources</h3>
+          <ul class="about-list">
+            <li><a href="https://bus.data.tfl.gov.uk/bus-geometry/" target="_blank" rel="noopener">TfL Bus Open Data - route geometry</a></li>
+            <li><a href="https://api.tfl.gov.uk" target="_blank" rel="noopener">TfL Unified API - StopPoint + timetable data</a></li>
+            <li><a href="https://www.londonbusroutes.net/garages.htm" target="_blank" rel="noopener">LondonBusRoutes.net - garage allocations</a></li>
+            <li><a href="https://postcodes.io" target="_blank" rel="noopener">postcodes.io - postcode enrichment</a></li>
+            <li><a href="https://www.openstreetmap.org" target="_blank" rel="noopener">OpenStreetMap - basemap tiles</a></li>
+          </ul>
+        </div>
+
+        <div class="about-section">
+          <h3>Notes</h3>
+          <div>Not affiliated with TfL.</div>
+        </div>
+
+        <div class="about-section">
+          <h3>Links</h3>
+          <div class="about-links">
+            <a href="https://github.com/OmGaler/RouteMapster" target="_blank" rel="noopener">GitHub</a>
+          </div>
+        </div>
+
+        <div class="about-section">
+          <h3>Last updated</h3>
+          <div class="about-meta">
+            <div><strong>Routes geometry snapshot:</strong> <span id="aboutRoutesGeometryDate">-</span></div>
+            <div><strong>Garages:</strong> <span id="aboutUpdatedGarages">-</span></div>
+            <div><strong>Stops:</strong> <span id="aboutUpdatedStops">-</span></div>
+            <div><strong>Bus stations:</strong> <span id="aboutUpdatedStations">-</span></div>
+            <div><strong>Frequencies:</strong> <span id="aboutUpdatedFrequencies">-</span></div>
+            <div><strong>Route summary:</strong> <span id="aboutUpdatedRouteSummary">-</span></div>
+          </div>
+        </div>
       </div>
     </div>
   </div>

@@ -1,6 +1,3 @@
-#TODO: Add weekend frequency to route summary    
-#TODO: change length to miles
-
 from __future__ import annotations
 
 import json
@@ -19,6 +16,7 @@ GARAGE_FIELDS = (
     "Other routes",
 )
 SUFFIX_ROUTE_RE = re.compile(r"^(\d+)([A-Z]+)$")
+KM_TO_MILES = 0.621371
 
 
 def is_tram_feature(props: Dict[str, Any]) -> bool:
@@ -198,10 +196,10 @@ def geometry_length_km(geometry: Dict[str, Any]) -> float:
         coords = geometry.get("coordinates") or []
         return line_length_km(coords)
     if geom_type == "MultiLineString":
-        total = 0.0
+        longest = 0.0
         for segment in geometry.get("coordinates") or []:
-            total += line_length_km(segment)
-        return total
+            longest = max(longest, line_length_km(segment))
+        return longest
     return 0.0
 
 
@@ -345,17 +343,21 @@ def build_route_summary_rows(
         offpeak = freq.get("offpeak") if isinstance(freq, dict) else None
         overnight = freq.get("overnight") if isinstance(freq, dict) else None
         weekend = freq.get("weekend") if isinstance(freq, dict) else None
+        if weekend is None:
+            weekend = 0
         vehicle = vehicles.get(route_id)
         additional = format_join(additional_journeys.get(route_id, set()))
 
         length_km = None
+        length_miles = None
         if include_length:
             route_file = routes_dir / f"{route_id}.geojson"
             if route_file.exists():
                 payload = json.loads(route_file.read_text(encoding="utf-8"))
-                length_km = route_length_km(payload)
-                if length_km is not None:
-                    length_km = round(length_km, 3)
+                raw_length_km = route_length_km(payload)
+                if raw_length_km is not None:
+                    length_km = round(raw_length_km, 3)
+                    length_miles = round(raw_length_km * KM_TO_MILES, 3)
 
         rows.append(
             {
@@ -372,6 +374,7 @@ def build_route_summary_rows(
                 "frequency_overnight": overnight,
                 "frequency_weekend": weekend,
                 "length_km": length_km,
+                "length_miles": length_miles,
             }
         )
 
@@ -406,18 +409,20 @@ def build_route_summary_df(
     )
 
     columns = [
-        "route_id",
+        "route",
         "route_type",
-        "garage_codes",
-        "garage_names",
-        "operators",
+        "garage_code",
+        "garage_name",
+        "operator",
         "vehicle",
         "additional_journeys",
         "frequency_peak_am",
         "frequency_peak_pm",
         "frequency_offpeak",
         "frequency_overnight",
+        "frequency_weekend",
         "length_km",
+        "length_miles",
     ]
     df = pd.DataFrame(rows)
     if df.empty:

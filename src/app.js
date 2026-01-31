@@ -15,6 +15,7 @@ const BUS_STATIONS_GEOJSON_PATH = "/data/processed/bus_stations.geojson";
 const GARAGES_GEOJSON_PATH = "/data/processed/garages.geojson";
 const VEHICLE_LOOKUP_PATH = "/data/vehicles.json";
 const FREQUENCY_DATA_PATH = "/data/processed/frequencies.json";
+const ABOUT_METADATA_PATH = "/data/processed/last_updated.json";
 
 const ROUTE_COLOURS = {
 	regular: "#ef4444",
@@ -126,6 +127,8 @@ const appState = {
 	showFrequencyLayer: false,
 	frequencySegmentTotals: null,
 	frequencyMaxTotal: 0,
+	aboutMetadata: null,
+	aboutLoadPromise: null,
 	geocodeLastAt: 0,
 	selectedFeatureToken: 0,
 	advancedFiltersState: null,
@@ -251,6 +254,176 @@ function setLoadingModalVisible(visible) {
 	}
 	modal.classList.toggle("is-visible", visible);
 	modal.setAttribute("aria-hidden", visible ? "false" : "true");
+}
+
+function setAboutModalVisible(visible) {
+	const modal = document.getElementById("aboutModal");
+	if (!modal) {
+		return;
+	}
+	modal.classList.toggle("is-visible", visible);
+	modal.setAttribute("aria-hidden", visible ? "false" : "true");
+}
+
+function formatDateToken(token) {
+	if (!token) {
+		return "-";
+	}
+	const text = String(token).trim();
+	if (!/^\d{8}$/.test(text)) {
+		return text;
+	}
+	const year = Number(text.slice(0, 4));
+	const month = Number(text.slice(4, 6)) - 1;
+	const day = Number(text.slice(6, 8));
+	const date = new Date(Date.UTC(year, month, day));
+	if (Number.isNaN(date.getTime())) {
+		return text;
+	}
+	return date.toLocaleDateString("en-GB", {
+		day: "2-digit",
+		month: "short",
+		year: "numeric",
+		timeZone: "UTC"
+	});
+}
+
+function formatIsoUtc(value) {
+	if (!value) {
+		return "-";
+	}
+	const date = new Date(value);
+	if (Number.isNaN(date.getTime())) {
+		return String(value);
+	}
+	return `${date.toLocaleString("en-GB", {
+		day: "2-digit",
+		month: "short",
+		year: "numeric",
+		hour: "2-digit",
+		minute: "2-digit",
+		timeZone: "UTC"
+	})} UTC`;
+}
+
+function setAboutValue(id, value) {
+	const el = document.getElementById(id);
+	if (el) {
+		el.textContent = value || "-";
+	}
+}
+
+function getAboutNavigationTargets() {
+	const isFile = window.location.protocol === "file:" || window.location.pathname.endsWith(".html");
+	if (isFile) {
+		return {
+			aboutPath: `${window.location.pathname}#about`,
+			homePath: window.location.pathname
+		};
+	}
+	const basePath = window.location.pathname.replace(/\/about\/?$/, "").replace(/\/$/, "");
+	return {
+		aboutPath: `${basePath || ""}/about`,
+		homePath: basePath || "/"
+	};
+}
+
+async function loadAboutMetadata() {
+	if (appState.aboutMetadata) {
+		return appState.aboutMetadata;
+	}
+	if (appState.aboutLoadPromise) {
+		return appState.aboutLoadPromise;
+	}
+	appState.aboutLoadPromise = Promise.all([
+		fetch(ABOUT_METADATA_PATH)
+			.then((res) => res.ok ? res.json() : null)
+			.catch(() => null),
+		fetch(ROUTE_GEOMETRY_INDEX_PATH)
+			.then((res) => res.ok ? res.json() : null)
+			.catch(() => null)
+	])
+		.then(([meta, index]) => {
+			appState.aboutMetadata = { meta, index };
+			return appState.aboutMetadata;
+		})
+		.finally(() => {
+			appState.aboutLoadPromise = null;
+		});
+	return appState.aboutLoadPromise;
+}
+
+async function refreshAboutModal() {
+	const payload = await loadAboutMetadata();
+	const meta = payload?.meta || {};
+	const index = payload?.index || {};
+	const geometryDate = meta.routes_geometry_date || index.date;
+
+	setAboutValue("aboutRoutesGeometryDate", formatDateToken(geometryDate));
+	setAboutValue("aboutUpdatedGarages", formatIsoUtc(meta.garages));
+	setAboutValue("aboutUpdatedStops", formatIsoUtc(meta.stops));
+	setAboutValue("aboutUpdatedStations", formatIsoUtc(meta.bus_stations));
+	setAboutValue("aboutUpdatedFrequencies", formatIsoUtc(meta.frequencies));
+	setAboutValue("aboutUpdatedRouteSummary", formatIsoUtc(meta.route_summary));
+}
+
+function openAboutModal(pushState = true) {
+	setAboutModalVisible(true);
+	refreshAboutModal().catch(() => {});
+	if (pushState) {
+		const { aboutPath } = getAboutNavigationTargets();
+		window.history.pushState({ about: true }, "", aboutPath);
+	}
+}
+
+function closeAboutModal(pushState = true) {
+	setAboutModalVisible(false);
+	if (pushState) {
+		const { homePath } = getAboutNavigationTargets();
+		window.history.pushState({ about: false }, "", homePath);
+	}
+}
+
+function syncAboutFromLocation() {
+	const pathname = window.location.pathname;
+	const hash = window.location.hash;
+	const show = hash === "#about" || pathname.endsWith("/about");
+	if (show) {
+		openAboutModal(false);
+	} else {
+		closeAboutModal(false);
+	}
+}
+
+function setupAboutModal() {
+	const openButton = document.getElementById("openAbout");
+	const closeButton = document.getElementById("closeAbout");
+	const modal = document.getElementById("aboutModal");
+	if (openButton) {
+		openButton.addEventListener("click", () => openAboutModal(true));
+	}
+	if (closeButton) {
+		closeButton.addEventListener("click", () => closeAboutModal(true));
+	}
+	if (modal) {
+		modal.addEventListener("click", (event) => {
+			if (event.target === modal) {
+				closeAboutModal(true);
+			}
+		});
+	}
+	document.addEventListener("keydown", (event) => {
+		if (event.key === "Escape") {
+			const isVisible = modal && modal.classList.contains("is-visible");
+			if (isVisible) {
+				closeAboutModal(true);
+			}
+		}
+	});
+	window.addEventListener("popstate", () => {
+		syncAboutFromLocation();
+	});
+	syncAboutFromLocation();
 }
 
 
@@ -2994,6 +3167,7 @@ function setupUI() {
 	setupBusStopFilterInput();
 	setupBusStationSelect();
 	setupNetworkFilterDrag();
+	setupAboutModal();
 
 	const advancedFiltersModule = document.querySelector('[data-module="advanced-filters"]');
 	if (advancedFiltersModule && window.RouteMapsterAdvancedFilters?.initAdvancedFilters) {

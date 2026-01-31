@@ -18,7 +18,7 @@ Expected inputs:
 - Optional lines JSON array (or {"routes": [...]} or {"lines": [...]}).
 
 Output:
-- Simplified JSON mapping line id -> {peak_am, offpeak, peak_pm, overnight} in bph.
+- Simplified JSON mapping line id -> {peak_am, offpeak, peak_pm, overnight, weekend} in bph.
 - Values are taken from the first available day (weekday, then saturday, then sunday) and averaged across directions.
 - Offpeak prefers interpeak and falls back to evening if interpeak is missing.
 
@@ -81,6 +81,7 @@ DEFAULT_BANDS = (
 DEFAULT_DAYS = "weekday,saturday,sunday"
 DEFAULT_CACHE_MAX_AGE_DAYS = 30
 DEFAULT_STOP_ATTEMPTS = 5
+WEEKEND_SIGNIFICANT_DIFF = 1.0
 
 TIME_RE = re.compile(r"^(?:[01]?\d|2[0-3]|24):[0-5]\d(?::[0-5]\d)?$")
 
@@ -913,6 +914,34 @@ def normalize_bph(value: Optional[float]) -> float:
     return max(0.0, round(value * 2) / 2)
 
 
+def weekend_day_value(day_metrics: Dict[str, Optional[float]]) -> Optional[float]:
+    if not day_metrics:
+        return None
+    if day_metrics.get("offpeak") is not None:
+        return day_metrics.get("offpeak")
+    candidates = [day_metrics.get("peak_am"), day_metrics.get("peak_pm")]
+    candidates = [value for value in candidates if value is not None]
+    if candidates:
+        return mean_or_none(candidates)
+    return day_metrics.get("overnight")
+
+
+def select_weekend_frequency(
+    saturday: Optional[float],
+    sunday: Optional[float],
+    threshold: float = WEEKEND_SIGNIFICANT_DIFF,
+) -> float:
+    if saturday is None and sunday is None:
+        return 0
+    if sunday is None:
+        return normalize_bph(saturday)
+    if saturday is None:
+        return normalize_bph(sunday)
+    if abs(sunday - saturday) >= threshold:
+        return normalize_bph(sunday)
+    return normalize_bph((sunday + saturday) / 2)
+
+
 def load_allocations(garages_path: Path) -> Dict[str, Set[str]]:
     if not garages_path.exists():
         return {"main": set(), "night": set(), "school/mobility": set(), "other": set()}
@@ -999,6 +1028,11 @@ def simplify_lines(
                     break
             aggregated[key] = normalize_bph(selected)
 
+        weekend = select_weekend_frequency(
+            weekend_day_value(day_simple.get("saturday", {})),
+            weekend_day_value(day_simple.get("sunday", {})),
+        )
+
         # Apply route-type-specific frequency rules using allocations when available.
         route_name = normalize_route_id(line_id)
         category = route_category(route_name, route_sets or {}) if route_sets else None
@@ -1020,6 +1054,7 @@ def simplify_lines(
             # Regular / school / other routes: force overnight to zero.
             aggregated["overnight"] = 0
 
+        aggregated["weekend"] = weekend
         simplified[line_id] = aggregated
 
     return simplified
