@@ -260,6 +260,157 @@
           rows: rowsOut
         };
       }
+    },
+    "shared-endpoints": {
+      id: "shared-endpoints",
+      label: "Routes sharing the same endpoints",
+      requiresSpatial: true,
+      run: (rows) => {
+        const PRIMARY_PRECISION = 3;
+        const FALLBACK_PRECISION = 2;
+
+        const roundCoord = (value, decimals) => {
+          if (!Number.isFinite(value)) {
+            return "";
+          }
+          return Number(value).toFixed(decimals);
+        };
+
+        const orderEndpoints = (startLat, startLon, endLat, endLon) => {
+          if (!Number.isFinite(startLat) || !Number.isFinite(startLon) || !Number.isFinite(endLat) || !Number.isFinite(endLon)) {
+            return null;
+          }
+          const a = [startLat, startLon];
+          const b = [endLat, endLon];
+          if (a[0] === b[0] ? a[1] <= b[1] : a[0] <= b[0]) {
+            return { a, b };
+          }
+          return { a: b, b: a };
+        };
+
+        const buildKey = (a, b, precision) => {
+          const aKey = `${roundCoord(a[0], precision)},${roundCoord(a[1], precision)}`;
+          const bKey = `${roundCoord(b[0], precision)},${roundCoord(b[1], precision)}`;
+          if (!aKey || !bKey) {
+            return "";
+          }
+          return aKey < bKey ? `${aKey}|${bKey}` : `${bKey}|${aKey}`;
+        };
+
+        const addToGroup = (map, key, routeId, routeType, a, b) => {
+          if (!key) {
+            return;
+          }
+          if (!map.has(key)) {
+            map.set(key, {
+              key,
+              routes: new Map(),
+              aLatSum: 0,
+              aLonSum: 0,
+              bLatSum: 0,
+              bLonSum: 0,
+              count: 0
+            });
+          }
+          const entry = map.get(key);
+          if (!entry.routes.has(routeId)) {
+            entry.routes.set(routeId, routeType);
+          }
+          entry.aLatSum += a[0];
+          entry.aLonSum += a[1];
+          entry.bLatSum += b[0];
+          entry.bLonSum += b[1];
+          entry.count += 1;
+        };
+
+        const normalisedRows = rows
+          .map((row) => {
+            const routeId = row.route_id || row.route_id_norm || "";
+            if (!routeId) {
+              return null;
+            }
+            const ordered = orderEndpoints(
+              row.endpoint_start_lat,
+              row.endpoint_start_lon,
+              row.endpoint_end_lat,
+              row.endpoint_end_lon
+            );
+            if (!ordered) {
+              return null;
+            }
+            return { routeId, routeType: row.route_type || "", a: ordered.a, b: ordered.b };
+          })
+          .filter(Boolean);
+
+        const primaryGroups = new Map();
+        normalisedRows.forEach((row) => {
+          const key = buildKey(row.a, row.b, PRIMARY_PRECISION);
+          addToGroup(primaryGroups, key, row.routeId, row.routeType, row.a, row.b);
+        });
+
+        const formatGroup = (entry) => ({
+          key: entry.key,
+          routes: Array.from(entry.routes.entries()).map(([id, type]) => ({ id, type })),
+          count: entry.routes.size,
+          endpoints: {
+            a: [entry.aLatSum / entry.count, entry.aLonSum / entry.count],
+            b: [entry.bLatSum / entry.count, entry.bLonSum / entry.count]
+          }
+        });
+
+        const primaryEntries = Array.from(primaryGroups.values())
+          .map(formatGroup)
+          .filter((entry) => entry.count >= 2);
+
+        const fallbackGroups = new Map();
+        normalisedRows.forEach((row) => {
+          const key = buildKey(row.a, row.b, FALLBACK_PRECISION);
+          addToGroup(fallbackGroups, key, row.routeId, row.routeType, row.a, row.b);
+        });
+
+        const fallbackEntries = Array.from(fallbackGroups.values())
+          .map(formatGroup)
+          .filter((entry) => entry.count >= 2);
+
+        const entries = [...primaryEntries];
+        fallbackEntries.forEach((fallback) => {
+          const fallbackSet = new Set(fallback.routes);
+          for (let i = entries.length - 1; i >= 0; i -= 1) {
+            const entry = entries[i];
+            const isSubset = entry.routes.every((route) => fallbackSet.has(route));
+            if (isSubset && fallback.count > entry.count) {
+              entries.splice(i, 1);
+            }
+          }
+          const alreadyIncluded = entries.some((entry) => {
+            if (entry.routes.length !== fallback.routes.length) {
+              return false;
+            }
+            return entry.routes.every((route) => fallbackSet.has(route));
+          });
+          if (!alreadyIncluded) {
+            entries.push(fallback);
+          }
+        });
+
+        entries.sort((a, b) => b.count - a.count);
+
+        if (entries.length === 0) {
+          return {
+            type: "route-pills",
+            groups: [],
+            emptyMessage: "No shared endpoint pairs found."
+          };
+        }
+        return {
+          type: "route-pills",
+          groups: entries.map((entry) => ({
+            key: entry.key,
+            routes: entry.routes,
+            endpoints: entry.endpoints
+          }))
+        };
+      }
     }
   };
 

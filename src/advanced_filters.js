@@ -5,7 +5,6 @@
   const MAP_HIGHLIGHT_OPACITY = 0.9;
   const SHOW_ALL_CAP = Number.POSITIVE_INFINITY;
   const LIST_CAP = Number.POSITIVE_INFINITY;
-  const DEBOUNCE_MS = 180;
 
   const escapeHtml = (value) => String(value || "")
     .replace(/&/g, "&amp;")
@@ -186,10 +185,11 @@
     mapLayerGroup: null,
     routeLayers: new Map(),
     visibleRoutes: new Set(),
-    debounceHandle: null,
     lastHash: "",
     elements: null,
-    moduleOpen: false
+    moduleOpen: false,
+    spatialReady: false,
+    spatialPromise: null
   };
 
   const ensureLayerGroup = (appState) => {
@@ -290,6 +290,81 @@
     }
   };
 
+  const loadSpatialStatsForRows = async (rows) => {
+    const api = window.RouteMapsterAPI;
+    if (!api || typeof api.loadRouteSpatialStats !== "function") {
+      return;
+    }
+    const rowById = new Map();
+    rows.forEach((row) => {
+      const routeId = row.route_id_norm || row.route_id;
+      if (routeId) {
+        rowById.set(routeId, row);
+      }
+    });
+
+    const pending = Array.from(rowById.keys()).filter((routeId) => {
+      const row = rowById.get(routeId);
+      return !Number.isFinite(row?.northmost_lat)
+        || !Number.isFinite(row?.southmost_lat)
+        || !Number.isFinite(row?.eastmost_lon)
+        || !Number.isFinite(row?.westmost_lon);
+    });
+
+    if (pending.length === 0) {
+      return;
+    }
+
+    if (typeof api.setLoadingModalVisible === "function") {
+      api.setLoadingModalVisible(true);
+    }
+
+    const concurrency = 6;
+    let index = 0;
+    const worker = async () => {
+      while (index < pending.length) {
+        const routeId = pending[index];
+        index += 1;
+        const stats = await api.loadRouteSpatialStats(routeId);
+        if (stats) {
+          const row = rowById.get(routeId);
+          if (row) {
+            Object.assign(row, stats);
+          }
+        }
+      }
+    };
+
+    try {
+      await Promise.all(Array.from({ length: concurrency }, () => worker()));
+    } finally {
+      if (typeof api.setLoadingModalVisible === "function") {
+        api.setLoadingModalVisible(false);
+      }
+    }
+  };
+
+  const ensureSpatialMetrics = async (els, appState) => {
+    if (state.spatialReady) {
+      return;
+    }
+    if (state.spatialPromise) {
+      return state.spatialPromise;
+    }
+    state.spatialPromise = loadSpatialStatsForRows(state.rows)
+      .then(() => {
+        state.spatialReady = true;
+        const engine = window.RouteMapsterQueryEngine;
+        if (engine) {
+          state.derivedRows = engine.computeDerivedFields(state.rows);
+        }
+      })
+      .finally(() => {
+        state.spatialPromise = null;
+      });
+    return state.spatialPromise;
+  };
+
   const buildFilterSpecFromUI = (els) => {
     const routeIds = parseTokens(els.routeSearch?.value || "");
     let prefixValue = "";
@@ -346,6 +421,8 @@
       ? { min: lengthMin ?? undefined, max: lengthMax ?? undefined }
       : undefined;
 
+    const extreme = String(els.extremeSelect?.value || "").trim().toLowerCase();
+
     return {
       route_ids: routeIds.length > 0 ? routeIds : undefined,
       route_prefix: prefixValue ? prefixValue.toUpperCase() : undefined,
@@ -355,7 +432,8 @@
       vehicle_types: getSelectedValues(els.vehicles),
       freq: Object.keys(freq).length > 0 ? freq : undefined,
       flags: Object.keys(flags).length > 0 ? flags : undefined,
-      length_miles: length
+      length_miles: length,
+      extreme: extreme || undefined
     };
   };
 
@@ -435,6 +513,9 @@
     if (els.lengthMax) {
       els.lengthMax.value = Number.isFinite(normalized.length_miles?.max) ? normalized.length_miles.max : "";
     }
+    if (els.extremeSelect) {
+      els.extremeSelect.value = normalized.extreme || "";
+    }
   };
 
   const getHashSpec = () => {
@@ -488,7 +569,15 @@
     if (normalized.length_miles && (Number.isFinite(normalized.length_miles.min) || Number.isFinite(normalized.length_miles.max))) {
       return true;
     }
+    if (normalized.extreme) {
+      return true;
+    }
     return false;
+  };
+
+  const hasSpatialFilters = (spec) => {
+    const normalized = window.RouteMapsterQueryEngine.normalizeFilterSpec(spec || {});
+    return Boolean(normalized.extreme);
   };
 
   const updateResultsVisibility = (els, isActive, isOpen) => {
@@ -635,13 +724,17 @@
     document.dispatchEvent(new CustomEvent("routeFiltersUpdated", { detail: { rows: derived, filterSpec: normalizedSpec } }));
   };
 
-  const scheduleApplyFilters = (appState, els) => {
-    if (state.debounceHandle) {
-      window.clearTimeout(state.debounceHandle);
+  const applyFromUI = async (appState, els) => {
+    const engine = window.RouteMapsterQueryEngine;
+    if (!engine) {
+      return;
     }
-    state.debounceHandle = window.setTimeout(() => {
-      applyFilters(appState, els);
-    }, DEBOUNCE_MS);
+    const spec = buildFilterSpecFromUI(els);
+    const normalized = engine.normalizeFilterSpec(spec);
+    if (normalized.extreme && !state.spatialReady) {
+      await ensureSpatialMetrics(els, appState);
+    }
+    applyFilters(appState, els);
   };
 
   const populateSelects = (rows, els) => {
@@ -705,7 +798,7 @@
         return;
       }
       applyFilterSpecToUI(preset.filterSpec || {}, els);
-      scheduleApplyFilters(appState, els);
+      applyFromUI(appState, els).catch(() => {});
     });
   };
 
@@ -741,6 +834,8 @@
       peakinessMin: container.querySelector("#advancedPeakinessMin"),
       lengthMin: container.querySelector("#advancedLengthMin"),
       lengthMax: container.querySelector("#advancedLengthMax"),
+      extremeSelect: container.querySelector("#advancedExtremeSelect"),
+      applyButton: container.querySelector("#advancedApplyFilters"),
       routeCount: document.getElementById("advancedRouteCount"),
       routeList: document.getElementById("advancedRouteList"),
       showAllOnMap: document.getElementById("advancedShowAllOnMap"),
@@ -769,17 +864,11 @@
     renderPresets(els.presets, els, appState);
 
     const hashSpec = getHashSpec();
-    if (Object.keys(hashSpec).length > 0) {
-      applyFilterSpecToUI(hashSpec, els);
-    } else {
-      applyFilterSpecToUI({}, els);
+    const hasHashSpec = Object.keys(hashSpec).length > 0;
+    if (hasSpatialFilters(hashSpec)) {
+      await ensureSpatialMetrics(els, appState);
     }
-
-    const inputs = container.querySelectorAll("input, select");
-    inputs.forEach((input) => {
-      input.addEventListener("input", () => scheduleApplyFilters(appState, els));
-      input.addEventListener("change", () => scheduleApplyFilters(appState, els));
-    });
+    applyFilterSpecToUI(hasHashSpec ? hashSpec : {}, els);
 
     container.addEventListener("toggle", () => {
       state.moduleOpen = Boolean(container.open);
@@ -793,7 +882,6 @@
       Array.from(selectEl.options).forEach((option) => {
         option.selected = true;
       });
-      scheduleApplyFilters(appState, els);
     };
 
     if (els.routeTypesSelectAll) {
@@ -814,7 +902,12 @@
         if (els.routePrefix.value !== "custom" && els.routePrefixCustom) {
           els.routePrefixCustom.value = "";
         }
-        scheduleApplyFilters(appState, els);
+      });
+    }
+
+    if (els.applyButton) {
+      els.applyButton.addEventListener("click", () => {
+        applyFromUI(appState, els).catch(() => {});
       });
     }
 
@@ -925,10 +1018,14 @@
     window.addEventListener("hashchange", () => {
       const spec = getHashSpec();
       applyFilterSpecToUI(spec, els);
-      scheduleApplyFilters(appState, els);
+      applyFromUI(appState, els).catch(() => {});
     });
 
-    applyFilters(appState, els);
+    if (hasHashSpec) {
+      await applyFromUI(appState, els);
+    } else {
+      applyFilters(appState, els);
+    }
   };
 
   window.RouteMapsterAdvancedFilters = {

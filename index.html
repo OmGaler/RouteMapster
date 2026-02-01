@@ -1031,6 +1031,9 @@
     .leaflet-popup.hover-popup .leaflet-popup-content {
       margin: 8px 10px;
       font-size: 12px;
+      width: max-content;
+      max-width: 272px;
+      box-sizing: border-box;
     }
 
     .leaflet-popup.hover-popup .leaflet-popup-tip {
@@ -1048,7 +1051,8 @@
       display: flex;
       flex-direction: column;
       gap: 6px;
-      max-width: 240px;
+      width: max-content;
+      max-width: 272px;
     }
 
     .hover-popup__title {
@@ -1062,9 +1066,48 @@
     }
 
     .hover-popup__routes .route-pill-group {
-      display: flex;
+      display: inline-flex;
       flex-wrap: wrap;
       gap: 4px;
+      justify-content: center;
+      width: max-content;
+      max-width: 252px;
+      margin: 0 auto;
+    }
+
+    .hover-popup__routes {
+      display: flex;
+      justify-content: center;
+    }
+
+    .hover-popup__routes .route-pill {
+      min-width: 44px;
+      padding: 3px 8px;
+      text-align: center;
+    }
+
+    .analysis-pill-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .analysis-pill-row {
+      padding: 6px 0;
+      border-bottom: 1px dashed var(--panel-border);
+      cursor: pointer;
+    }
+
+    .analysis-pill-row.is-active {
+      background: rgba(16, 185, 129, 0.12);
+      border-radius: 10px;
+      padding: 6px 8px;
+      margin: 0 -8px;
+    }
+
+    .analysis-pill-row:last-child {
+      border-bottom: none;
+      padding-bottom: 0;
     }
 
     @keyframes rise {
@@ -1400,79 +1443,93 @@
                 <button id="advancedRouteTypesSelectAll" class="ghost-button compact" type="button">Select all</button>
               </div>
               <div class="field">
-                <label for="advancedOperators">Operators</label>
-                <select id="advancedOperators" class="select-field" multiple size="5"></select>
-                <button id="advancedOperatorsSelectAll" class="ghost-button compact" type="button">Select all</button>
-              </div>
-              <div class="field">
                 <label for="advancedGarages">Garages</label>
                 <select id="advancedGarages" class="select-field" multiple size="5"></select>
                 <button id="advancedGaragesSelectAll" class="ghost-button compact" type="button">Select all</button>
+              </div>
+              <div class="field">
+                <label for="advancedOperators">Operators</label>
+                <select id="advancedOperators" class="select-field" multiple size="5"></select>
+                <button id="advancedOperatorsSelectAll" class="ghost-button compact" type="button">Select all</button>
               </div>
               <div class="field">
                 <label for="advancedVehicles">Vehicles</label>
                 <select id="advancedVehicles" class="select-field" multiple size="4"></select>
                 <button id="advancedVehiclesSelectAll" class="ghost-button compact" type="button">Select all</button>
               </div>
+              <div class="field">
+                <label for="advancedExtremeSelect">Most extreme route</label>
+                <select id="advancedExtremeSelect" class="select-field">
+                  <option value="">None</option>
+                  <option value="north">Most northerly</option>
+                  <option value="south">Most southerly</option>
+                  <option value="east">Most easterly</option>
+                  <option value="west">Most westerly</option>
+                </select>
+                <div class="module-note">Uses route geometry. Loads on first apply.</div>
+              </div>
+            </div>
+            <div class="module-section">
+              <div class="section-title">Frequency ranges</div>
+              <div class="field">
+                <label>Peak AM (min / max)</label>
+                <div class="field-row">
+                  <input id="advancedPeakAmMin" type="number" min="0" step="0.1" placeholder="Min" />
+                  <input id="advancedPeakAmMax" type="number" min="0" step="0.1" placeholder="Max" />
+                </div>
+              </div>
+              <div class="field">
+                <label>Peak PM (min / max)</label>
+                <div class="field-row">
+                  <input id="advancedPeakPmMin" type="number" min="0" step="0.1" placeholder="Min" />
+                  <input id="advancedPeakPmMax" type="number" min="0" step="0.1" placeholder="Max" />
+                </div>
+              </div>
+              <div class="field">
+                <label>Off-peak (min / max)</label>
+                <div class="field-row">
+                  <input id="advancedOffpeakMin" type="number" min="0" step="0.1" placeholder="Min" />
+                  <input id="advancedOffpeakMax" type="number" min="0" step="0.1" placeholder="Max" />
+                </div>
+              </div>
+              <div class="field">
+                <label>Overnight (min / max)</label>
+                <div class="field-row">
+                  <input id="advancedOvernightMin" type="number" min="0" step="0.1" placeholder="Min" />
+                  <input id="advancedOvernightMax" type="number" min="0" step="0.1" placeholder="Max" />
+                </div>
+              </div>
             </div>
 
-            <details class="submodule">
-              <summary>Advanced service filters</summary>
-              <div class="module-section">
-                <div class="section-title">Frequency ranges</div>
-                <div class="field">
-                  <label>Peak AM (min / max)</label>
-                  <div class="field-row">
-                    <input id="advancedPeakAmMin" type="number" min="0" step="0.1" placeholder="Min" />
-                    <input id="advancedPeakAmMax" type="number" min="0" step="0.1" placeholder="Max" />
-                  </div>
-                </div>
-                <div class="field">
-                  <label>Peak PM (min / max)</label>
-                  <div class="field-row">
-                    <input id="advancedPeakPmMin" type="number" min="0" step="0.1" placeholder="Min" />
-                    <input id="advancedPeakPmMax" type="number" min="0" step="0.1" placeholder="Max" />
-                  </div>
-                </div>
-                <div class="field">
-                  <label>Off-peak (min / max)</label>
-                  <div class="field-row">
-                    <input id="advancedOffpeakMin" type="number" min="0" step="0.1" placeholder="Min" />
-                    <input id="advancedOffpeakMax" type="number" min="0" step="0.1" placeholder="Max" />
-                  </div>
-                </div>
-                <div class="field">
-                  <label>Overnight (min / max)</label>
-                  <div class="field-row">
-                    <input id="advancedOvernightMin" type="number" min="0" step="0.1" placeholder="Min" />
-                    <input id="advancedOvernightMax" type="number" min="0" step="0.1" placeholder="Max" />
-                  </div>
-                </div>
+            <div class="module-section">
+              <div class="section-title">Flags</div>
+              <label class="toggle">
+                <span>Has overnight service</span>
+                <input type="checkbox" id="advancedHasOvernight" />
+              </label>
+              <label class="toggle">
+                <span>High frequency (>=)</span>
+                <input type="checkbox" id="advancedHighFrequencyToggle" />
+              </label>
+              <input id="advancedHighFrequencyValue" type="number" min="0" step="0.1" placeholder="Frequency threshold" />
+              <div class="field">
+                <label for="advancedPeakinessMin">Peakiness delta (peak - offpeak)</label>
+                <input id="advancedPeakinessMin" type="number" min="0" step="0.1" placeholder="Min delta" />
               </div>
-              <div class="module-section">
-                <div class="section-title">Flags</div>
-                <label class="toggle">
-                  <span>Has overnight service</span>
-                  <input type="checkbox" id="advancedHasOvernight" />
-                </label>
-                <label class="toggle">
-                  <span>High frequency (>=)</span>
-                  <input type="checkbox" id="advancedHighFrequencyToggle" />
-                </label>
-                <input id="advancedHighFrequencyValue" type="number" min="0" step="0.1" placeholder="Frequency threshold" />
-                <div class="field">
-                  <label for="advancedPeakinessMin">Peakiness delta (peak - offpeak)</label>
-                  <input id="advancedPeakinessMin" type="number" min="0" step="0.1" placeholder="Min delta" />
-                </div>
+            </div>
+
+            <div class="module-section" id="advancedLengthWrap">
+              <div class="section-title">Length (miles)</div>
+              <div class="field-row">
+                <input id="advancedLengthMin" type="number" min="0" step="0.1" placeholder="Min" />
+                <input id="advancedLengthMax" type="number" min="0" step="0.1" placeholder="Max" />
               </div>
-              <div class="module-section" id="advancedLengthWrap">
-                <div class="section-title">Length (miles)</div>
-                <div class="field-row">
-                  <input id="advancedLengthMin" type="number" min="0" step="0.1" placeholder="Min" />
-                  <input id="advancedLengthMax" type="number" min="0" step="0.1" placeholder="Max" />
-                </div>
-              </div>
-            </details>
+            </div>
+
+            <div class="module-section">
+              <button id="advancedApplyFilters" class="ghost-button" type="button">Apply filters</button>
+              <div class="module-note">Filters only update when you apply.</div>
+            </div>
 
           </div>
         </details>

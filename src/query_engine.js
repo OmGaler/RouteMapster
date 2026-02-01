@@ -111,6 +111,7 @@
 
   const normaliseToken = (value) => String(value || "").trim();
   const normaliseLower = (value) => normaliseToken(value).toLowerCase();
+  const normaliseEndpointKey = (value) => normaliseToken(value).replace(/\s+/g, "");
 
   const resolveField = (row, keys) => {
     for (const key of keys) {
@@ -137,6 +138,15 @@
       : Number.isFinite(lengthKm)
         ? lengthKm * KM_TO_MILES
         : null;
+    const northmostLat = parseNumber(resolveField(row, ["northmost_lat", "northmostLat", "north_lat", "northLat"]));
+    const southmostLat = parseNumber(resolveField(row, ["southmost_lat", "southmostLat", "south_lat", "southLat"]));
+    const eastmostLon = parseNumber(resolveField(row, ["eastmost_lon", "eastmostLon", "east_lon", "eastLon"]));
+    const westmostLon = parseNumber(resolveField(row, ["westmost_lon", "westmostLon", "west_lon", "westLon"]));
+    const endpointStartLat = parseNumber(resolveField(row, ["endpoint_start_lat", "start_lat", "startLat"]));
+    const endpointStartLon = parseNumber(resolveField(row, ["endpoint_start_lon", "start_lon", "startLon"]));
+    const endpointEndLat = parseNumber(resolveField(row, ["endpoint_end_lat", "end_lat", "endLat"]));
+    const endpointEndLon = parseNumber(resolveField(row, ["endpoint_end_lon", "end_lon", "endLon"]));
+    const endpointPairKey = normaliseEndpointKey(resolveField(row, ["endpoint_pair_key", "endpointPair", "endpoint_pair"]));
 
     const operatorList = splitList(operatorsRaw);
     const operatorNorm = operatorList.map(normaliseLower);
@@ -166,7 +176,16 @@
       frequency_offpeak: parseNumber(resolveField(row, ["frequency_offpeak", "offpeak", "offPeak"])),
       frequency_overnight: parseNumber(resolveField(row, ["frequency_overnight", "overnight"])),
       length_km: lengthKm,
-      length_miles: lengthMiles
+      length_miles: lengthMiles,
+      northmost_lat: northmostLat,
+      southmost_lat: southmostLat,
+      eastmost_lon: eastmostLon,
+      westmost_lon: westmostLon,
+      endpoint_start_lat: endpointStartLat,
+      endpoint_start_lon: endpointStartLon,
+      endpoint_end_lat: endpointEndLat,
+      endpoint_end_lon: endpointEndLon,
+      endpoint_pair_key: endpointPairKey
     };
   };
 
@@ -248,6 +267,10 @@
       : spec.length_km && typeof spec.length_km === "object"
         ? spec.length_km
         : undefined;
+    const extreme = spec.extreme && ["north", "south", "east", "west"].includes(String(spec.extreme).toLowerCase())
+      ? String(spec.extreme).toLowerCase()
+      : undefined;
+
     const normalised = {
       route_ids: Array.isArray(spec.route_ids) ? spec.route_ids.map(normaliseToken).filter(Boolean) : undefined,
       route_prefix: spec.route_prefix ? normaliseToken(spec.route_prefix) : undefined,
@@ -257,7 +280,8 @@
       vehicle_types: Array.isArray(spec.vehicle_types) ? spec.vehicle_types.map((value) => normaliseToken(value).toUpperCase()).filter(Boolean) : undefined,
       freq: spec.freq && typeof spec.freq === "object" ? spec.freq : undefined,
       flags: spec.flags && typeof spec.flags === "object" ? spec.flags : undefined,
-      length_miles: lengthSpec
+      length_miles: lengthSpec,
+      extreme
     };
     return normalised;
   };
@@ -282,7 +306,7 @@
       ? new Set(spec.vehicle_types)
       : null;
 
-    return list.filter((row) => {
+    const filtered = list.filter((row) => {
       if (!row || !row.route_id_norm) {
         return false;
       }
@@ -373,6 +397,27 @@
       }
       return true;
     });
+    if (spec.extreme) {
+      const fieldByExtreme = {
+        north: "northmost_lat",
+        south: "southmost_lat",
+        east: "eastmost_lon",
+        west: "westmost_lon"
+      };
+      const field = fieldByExtreme[spec.extreme];
+      const values = filtered
+        .map((row) => row?.[field])
+        .filter((value) => Number.isFinite(value));
+      if (values.length === 0) {
+        return [];
+      }
+      const target = (spec.extreme === "north" || spec.extreme === "east")
+        ? Math.max(...values)
+        : Math.min(...values);
+      const epsilon = 1e-6;
+      return filtered.filter((row) => Number.isFinite(row?.[field]) && Math.abs(row[field] - target) <= epsilon);
+    }
+    return filtered;
   };
 
   const compactFilterSpec = (spec) => {
@@ -433,6 +478,9 @@
         ...(Number.isFinite(spec.length_miles.min) ? { min: spec.length_miles.min } : {}),
         ...(Number.isFinite(spec.length_miles.max) ? { max: spec.length_miles.max } : {})
       };
+    }
+    if (spec.extreme) {
+      cleaned.extreme = spec.extreme;
     }
     return cleaned;
   };

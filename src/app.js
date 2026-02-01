@@ -16,6 +16,8 @@ const GARAGES_GEOJSON_PATH = "/data/processed/garages.geojson";
 const VEHICLE_LOOKUP_PATH = "/data/vehicles.json";
 const FREQUENCY_DATA_PATH = "/data/processed/frequencies.json";
 const ABOUT_METADATA_PATH = "/data/processed/last_updated.json";
+const EARTH_RADIUS_KM = 6371.0088;
+const ENDPOINT_KEY_PRECISION = 3;
 
 const ROUTE_COLOURS = {
 	regular: "#ef4444",
@@ -106,7 +108,10 @@ const appState = {
 	useRouteTypeColours: false,
 	selectedFeature: null,
 	busStationHighlightLayer: null,
+	endpointHighlightLayer: null,
 	routeGeometryCache: new Map(),
+	routeSpatialCache: new Map(),
+	routeSpatialPromises: new Map(),
 	filteredRoutesLayer: null,
 	garageRouteLayer: null,
 	networkRouteLayer: null,
@@ -132,6 +137,10 @@ const appState = {
 	geocodeLastAt: 0,
 	selectedFeatureToken: 0,
 	advancedFiltersState: null,
+	analysisRouteLayer: null,
+	analysisRouteLoadToken: 0,
+	analysisActive: false,
+	analysisPrevSuppress: null,
 };
 
 
@@ -1584,6 +1593,122 @@ function extractRouteGeometryFromCollection(geojson) {
 	return segments;
 }
 
+function toRadians(value) {
+	return (Number(value) * Math.PI) / 180;
+}
+
+function haversineKm(lat1, lon1, lat2, lon2) {
+	const phi1 = toRadians(lat1);
+	const phi2 = toRadians(lat2);
+	const dphi = toRadians(lat2 - lat1);
+	const dlambda = toRadians(lon2 - lon1);
+	const a = Math.sin(dphi / 2) ** 2 + Math.cos(phi1) * Math.cos(phi2) * Math.sin(dlambda / 2) ** 2;
+	return 2 * EARTH_RADIUS_KM * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function segmentLengthKm(segment) {
+	if (!Array.isArray(segment) || segment.length < 2) {
+		return 0;
+	}
+	let total = 0;
+	for (let i = 1; i < segment.length; i += 1) {
+		const prev = segment[i - 1];
+		const next = segment[i];
+		if (!Array.isArray(prev) || !Array.isArray(next)) {
+			continue;
+		}
+		total += haversineKm(prev[0], prev[1], next[0], next[1]);
+	}
+	return total;
+}
+
+function roundCoord(value, decimals = ENDPOINT_KEY_PRECISION) {
+	if (!Number.isFinite(value)) {
+		return "";
+	}
+	return Number(value).toFixed(decimals);
+}
+
+function buildEndpointPairKey(start, end) {
+	if (!Array.isArray(start) || !Array.isArray(end)) {
+		return "";
+	}
+	const startKey = `${roundCoord(start[0])},${roundCoord(start[1])}`;
+	const endKey = `${roundCoord(end[0])},${roundCoord(end[1])}`;
+	if (!startKey || !endKey) {
+		return "";
+	}
+	return startKey < endKey ? `${startKey}|${endKey}` : `${endKey}|${startKey}`;
+}
+
+function computeSpatialStats(segments) {
+	if (!Array.isArray(segments) || segments.length === 0) {
+		return null;
+	}
+	let north = -Infinity;
+	let south = Infinity;
+	let east = -Infinity;
+	let west = Infinity;
+	let longest = null;
+	let longestLength = 0;
+
+	segments.forEach((segment) => {
+		if (!Array.isArray(segment) || segment.length === 0) {
+			return;
+		}
+		const length = segmentLengthKm(segment);
+		if (length > longestLength) {
+			longestLength = length;
+			longest = segment;
+		}
+		segment.forEach((point) => {
+			if (!Array.isArray(point) || point.length < 2) {
+				return;
+			}
+			const lat = Number(point[0]);
+			const lon = Number(point[1]);
+			if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+				return;
+			}
+			if (lat > north) {
+				north = lat;
+			}
+			if (lat < south) {
+				south = lat;
+			}
+			if (lon > east) {
+				east = lon;
+			}
+			if (lon < west) {
+				west = lon;
+			}
+		});
+	});
+
+	if (!Number.isFinite(north) || !Number.isFinite(south) || !Number.isFinite(east) || !Number.isFinite(west)) {
+		return null;
+	}
+
+	let start = null;
+	let end = null;
+	if (Array.isArray(longest) && longest.length > 0) {
+		start = longest[0];
+		end = longest[longest.length - 1];
+	}
+
+	return {
+		northmost_lat: north,
+		southmost_lat: south,
+		eastmost_lon: east,
+		westmost_lon: west,
+		endpoint_start_lat: Array.isArray(start) ? Number(start[0]) : null,
+		endpoint_start_lon: Array.isArray(start) ? Number(start[1]) : null,
+		endpoint_end_lat: Array.isArray(end) ? Number(end[0]) : null,
+		endpoint_end_lon: Array.isArray(end) ? Number(end[1]) : null,
+		endpoint_pair_key: buildEndpointPairKey(start, end)
+	};
+}
+
 async function loadRouteGeometryRouteIds() {
 	if (appState.geometryRouteIds instanceof Set) {
 		return appState.geometryRouteIds;
@@ -2136,12 +2261,47 @@ async function loadRouteGeometry(routeId) {
 			const geojson = await response.json();
 			const extracted = extractRouteGeometryFromCollection(geojson);
 			segments = extracted.length > 0 ? extracted : null;
+			if (segments) {
+				appState.routeGeometryCache.set(normalised, segments);
+			}
+			return segments;
+		}
+		if (response.status === 404) {
+			appState.routeGeometryCache.set(normalised, null);
 		}
 	} catch (error) {
 		segments = null;
 	}
-	appState.routeGeometryCache.set(normalised, segments);
 	return segments;
+}
+
+async function loadRouteSpatialStats(routeId) {
+	const normalised = String(routeId || "").toUpperCase();
+	if (!normalised || isExcludedRoute(normalised)) {
+		return null;
+	}
+	if (appState.routeSpatialCache.has(normalised)) {
+		return appState.routeSpatialCache.get(normalised);
+	}
+	if (appState.routeSpatialPromises.has(normalised)) {
+		return appState.routeSpatialPromises.get(normalised);
+	}
+	const promise = loadRouteGeometry(normalised)
+		.then((segments) => {
+			const stats = computeSpatialStats(segments || []);
+			if (stats) {
+				appState.routeSpatialCache.set(normalised, stats);
+			}
+			return stats;
+		})
+		.catch(() => {
+			return null;
+		})
+		.finally(() => {
+			appState.routeSpatialPromises.delete(normalised);
+		});
+	appState.routeSpatialPromises.set(normalised, promise);
+	return promise;
 }
 
 function formatGaragePvr(props) {
@@ -2786,6 +2946,142 @@ function highlightBusStation(station) {
 	}).addTo(layer);
 	layer.addTo(appState.map);
 	appState.busStationHighlightLayer = layer;
+}
+
+function clearEndpointHighlight() {
+	if (appState.endpointHighlightLayer && appState.map) {
+		appState.map.removeLayer(appState.endpointHighlightLayer);
+		appState.endpointHighlightLayer = null;
+	}
+}
+
+function showEndpointPairOnMap(pair) {
+	if (!appState.map) {
+		return;
+	}
+	const points = [];
+	if (Array.isArray(pair?.a) && Number.isFinite(pair.a[0]) && Number.isFinite(pair.a[1])) {
+		points.push(L.latLng(pair.a[0], pair.a[1]));
+	}
+	if (Array.isArray(pair?.b) && Number.isFinite(pair.b[0]) && Number.isFinite(pair.b[1])) {
+		points.push(L.latLng(pair.b[0], pair.b[1]));
+	}
+	if (points.length === 0) {
+		return;
+	}
+	clearEndpointHighlight();
+	const layer = L.layerGroup().addTo(appState.map);
+	const styles = [
+		{ color: "#0ea5e9", fill: "#7dd3fc" },
+		{ color: "#f97316", fill: "#fdba74" }
+	];
+	points.forEach((latlng, index) => {
+		const style = styles[index % styles.length];
+		L.circleMarker(latlng, {
+			radius: 10,
+			weight: 3,
+			color: style.color,
+			fillColor: style.fill,
+			fillOpacity: 0.5,
+			interactive: false,
+			pane: HIGHLIGHT_PANE
+		}).addTo(layer);
+	});
+	appState.endpointHighlightLayer = layer;
+	if (points.length > 1) {
+		const bounds = L.latLngBounds(points).pad(0.25);
+		appState.map.fitBounds(bounds);
+	} else {
+		appState.map.setView(points[0], 13);
+	}
+}
+
+function clearAnalysisRoutes() {
+	if (appState.analysisRouteLayer && appState.map) {
+		appState.map.removeLayer(appState.analysisRouteLayer);
+		appState.analysisRouteLayer = null;
+	}
+	appState.analysisRouteLoadToken += 1;
+	if (!appState.analysisActive) {
+		return;
+	}
+	const restoreSuppress = appState.analysisPrevSuppress;
+	appState.analysisActive = false;
+	appState.analysisPrevSuppress = null;
+	appState.suppressNetworkRoutes = Boolean(restoreSuppress);
+	if (!appState.suppressNetworkRoutes) {
+		appState.networkRouteLoadToken += 1;
+		renderNetworkRoutes(appState.networkRouteLoadToken);
+	}
+}
+
+async function showAnalysisRoutes(routeIds) {
+	if (!appState.map) {
+		return;
+	}
+	const list = Array.isArray(routeIds)
+		? Array.from(new Set(routeIds.map((id) => String(id || "").trim().toUpperCase()).filter(Boolean)))
+		: [];
+	if (list.length === 0) {
+		clearAnalysisRoutes();
+		return;
+	}
+	if (!appState.analysisActive) {
+		appState.analysisPrevSuppress = appState.suppressNetworkRoutes;
+	}
+	appState.analysisActive = true;
+	appState.suppressNetworkRoutes = true;
+	appState.networkRouteLoadToken += 1;
+	clearNetworkRoutes();
+	clearActiveRouteSelections();
+	if (appState.focusRouteId) {
+		appState.focusRouteId = null;
+		appState.focusRouteLoadToken += 1;
+		clearFocusedRouteLayer();
+	}
+	if (appState.filteredRoutesLayer) {
+		appState.filteredRoutesLayer.clearLayers();
+	}
+	if (appState.analysisRouteLayer && appState.map) {
+		appState.map.removeLayer(appState.analysisRouteLayer);
+		appState.analysisRouteLayer = null;
+	}
+	const loadToken = appState.analysisRouteLoadToken + 1;
+	appState.analysisRouteLoadToken = loadToken;
+	const layerGroup = L.layerGroup().addTo(appState.map);
+	appState.analysisRouteLayer = layerGroup;
+
+	const routeSets = appState.useRouteTypeColours ? await loadNetworkRouteSets() : null;
+	const concurrency = 6;
+	let index = 0;
+	const worker = async () => {
+		while (index < list.length) {
+			const routeId = list[index];
+			index += 1;
+			const segments = await loadRouteGeometry(routeId);
+			if (loadToken !== appState.analysisRouteLoadToken) {
+				return;
+			}
+			if (!segments || segments.length === 0) {
+				continue;
+			}
+			const color = getFocusedRouteColour(routeId, routeSets);
+			segments.forEach((segment) => {
+				const line = L.polyline(segment, {
+					color,
+					weight: 3.2,
+					opacity: 0.85,
+					pane: ROUTE_PANE
+				}).addTo(layerGroup);
+				line._routeId = routeId;
+				bindRouteHoverPopup(line, layerGroup);
+			});
+		}
+	};
+	await Promise.all(Array.from({ length: concurrency }, () => worker()));
+	if (loadToken === appState.analysisRouteLoadToken) {
+		updateSelectedInfo(`Shared endpoint routes: ${list.length}`);
+	}
 }
 
 function clearBusStationRoutes() {
@@ -4008,10 +4304,16 @@ function setupFrequencyModule() {
 window.RouteMapsterAPI = {
 	appState,
 	loadRouteGeometry,
+	loadRouteSpatialStats,
 	sortRouteIds,
 	compareRouteIds,
 	getRoutePillClass,
 	escapeHtml,
+	setLoadingModalVisible,
+	showEndpointPairOnMap,
+	clearEndpointHighlight,
+	showAnalysisRoutes,
+	clearAnalysisRoutes,
 	showAdvancedStops: (stops) => renderAdvancedStopsLayer(stops),
 	clearAdvancedStops: () => clearAdvancedStopsLayer()
 };
