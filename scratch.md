@@ -1,3 +1,6 @@
+## add most north/e/w/s to advanced filters
+
+
 # ci data 
 1. garages data (garages.csv from lbr.net -? geojson)
 2. bus route geometries (xml from tfl -> geojson)

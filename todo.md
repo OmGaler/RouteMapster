@@ -1,4 +1,12 @@
+### TODO: Stop Centrality
+### Resizable sidebars
+todo: advance stop analysis - prevent overflow and also when opening card
+todo: advance stop analysis - remove all stops/ stops with routes (redundant)
+remove mds from gh ...
 
+
+show all digits
+e.g. 40 140 240 340 440 .. 
 ---
 To check (at some point):
 
