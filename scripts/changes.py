@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import argparse
 import json
+import math
 import subprocess
 from pathlib import Path
 from typing import Dict, Set, List, Tuple, Optional
@@ -12,6 +14,7 @@ except ModuleNotFoundError:  # pragma: no cover - script execution fallback
     from utils.route_ids import is_excluded_route_id, normalize_route_id
 ROUTES_DIR = Path("data/processed/routes")
 GARAGES_FILE = Path("data/processed/garages.geojson")
+FREQS_FILE = Path("data/processed/frequencies.json")
 
 STOPS_FILE = Path("data/processed/stops.geojson")
 ROUTES_INDEX = Path("data/processed/routes/index.json")
@@ -82,6 +85,51 @@ def extract_allocations_from_garages(gj: dict) -> Dict[str, str]:
                 out[r] = garage
     return out
 
+def normalize_bph(value: object) -> Optional[float]:
+    if value is None:
+        return None
+    try:
+        num = float(value)
+    except (TypeError, ValueError):
+        return None
+    if math.isnan(num):
+        return None
+    return round(num, 1)
+
+FREQ_BANDS: List[Tuple[str, str]] = [
+    ("peak_am", "am peak"),
+    ("peak_pm", "pm peak"),
+    ("offpeak", "offpeak"),
+    ("overnight", "overnight"),
+    ("weekend", "weekend"),
+]
+
+def build_frequency_changes(old_freqs: dict, new_freqs: dict) -> List[str]:
+    changes: List[str] = []
+    if not isinstance(old_freqs, dict):
+        old_freqs = {}
+    if not isinstance(new_freqs, dict):
+        new_freqs = {}
+    route_ids = sorted(set(old_freqs.keys()) | set(new_freqs.keys()))
+    for route_id in route_ids:
+        old_entry = old_freqs.get(route_id) or {}
+        new_entry = new_freqs.get(route_id) or {}
+        for key, label in FREQ_BANDS:
+            old_val = normalize_bph(old_entry.get(key))
+            new_val = normalize_bph(new_entry.get(key))
+            if old_val == new_val:
+                continue
+            if old_val is None and new_val is None:
+                continue
+            if old_val is None:
+                changes.append(f"{route_id} {label} added at {new_val} bph")
+            elif new_val is None:
+                changes.append(f"{route_id} {label} removed (was {old_val} bph)")
+            else:
+                direction = "increased" if new_val > old_val else "decreased"
+                changes.append(f"{route_id} {label} {direction} from {old_val} to {new_val} bph")
+    return changes
+
 # ---- ROUTE ADDS / REMOVES ----
 old_routes = git_ls_routes("HEAD")
 new_routes = {
@@ -131,6 +179,11 @@ if old_stops and new_stops:
     stops_added = sorted(new_ids - old_ids)
     stops_removed = sorted(old_ids - new_ids)
 
+# ---- FREQUENCY CHANGES ----
+old_freqs = load_json_from_git("HEAD", FREQS_FILE) or {}
+new_freqs = load_json_from_fs(FREQS_FILE) or {}
+freq_changes = build_frequency_changes(old_freqs, new_freqs)
+
 
 # ---- GEOMETRY UPDATES ----
 def git_diff_names(path: str) -> List[str]:
@@ -168,6 +221,9 @@ if added or removed or geom_updated:
 if stops_added or stops_removed:
     lines.append(f"Stops (+{len(stops_added)} -{len(stops_removed)})")
 
+if freq_changes:
+    lines.append(f"Freq (~{len(freq_changes)})")
+
 alloc_messages: List[str] = []
 if moves:
     alloc_messages.extend([f"{r} {a} -> {b}" for (r, a, b) in moves])
@@ -181,4 +237,35 @@ if alloc_messages:
 if not lines:
     lines.append("Processed data update")
 
-print(" | ".join(lines))
+summary_line = " | ".join(lines)
+
+def print_details() -> None:
+    print("### Data update")
+    print(f"- {summary_line}")
+
+    if freq_changes:
+        print("\n### Frequency changes")
+        limit = 30
+        for line in freq_changes[:limit]:
+            print(f"- {line}")
+        if len(freq_changes) > limit:
+            print(f"- ...and {len(freq_changes) - limit} more")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Summarize processed data changes.")
+    parser.add_argument("--summary", action="store_true", help="Print one-line summary.")
+    parser.add_argument("--details", action="store_true", help="Print detailed change log.")
+    args = parser.parse_args()
+
+    if not args.summary and not args.details:
+        args.summary = True
+
+    if args.summary:
+        print(summary_line)
+    if args.details:
+        print_details()
+
+
+if __name__ == "__main__":
+    main()

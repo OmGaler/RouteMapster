@@ -141,6 +141,30 @@ const appState = {
 	analysisRouteLoadToken: 0,
 	analysisActive: false,
 	analysisPrevSuppress: null,
+	omniRouteLayer: null,
+	omniStopsLayer: null,
+	omniRouteLoadToken: 0,
+	omniStopsLoadToken: 0,
+	omniSearchIndex: [],
+	omniSearchReady: false,
+	omniSearchLoadPromise: null,
+	omniActive: false,
+	omniPrevSuppress: null,
+	routeSummaryRows: null,
+	routeSummaryIndex: null,
+	routeHoverPopup: null,
+	routeHoverFrame: null,
+	routeHoverLastKey: ""
+};
+
+const omniSearchState = {
+	elements: null,
+	isOpen: false,
+	items: [],
+	filteredItems: [],
+	selectedIndex: 0,
+	lastActiveElement: null,
+	lastQuery: ""
 };
 
 
@@ -272,6 +296,1175 @@ function setAboutModalVisible(visible) {
 	}
 	modal.classList.toggle("is-visible", visible);
 	modal.setAttribute("aria-hidden", visible ? "false" : "true");
+}
+
+async function loadRouteSummaryRows() {
+	if (Array.isArray(appState.routeSummaryRows)) {
+		return appState.routeSummaryRows;
+	}
+	const engine = window.RouteMapsterQueryEngine;
+	if (!engine || typeof engine.loadRouteSummary !== "function") {
+		appState.routeSummaryRows = [];
+		return appState.routeSummaryRows;
+	}
+	try {
+		appState.routeSummaryRows = await engine.loadRouteSummary();
+	} catch (error) {
+		appState.routeSummaryRows = [];
+	}
+	return appState.routeSummaryRows;
+}
+
+async function ensureRouteSummaryIndex() {
+	if (appState.routeSummaryIndex instanceof Map) {
+		return appState.routeSummaryIndex;
+	}
+	const rows = await loadRouteSummaryRows();
+	const index = new Map();
+	rows.forEach((row) => {
+		if (row?.route_id_norm) {
+			index.set(row.route_id_norm, row);
+		}
+	});
+	appState.routeSummaryIndex = index;
+	return index;
+}
+
+function formatRouteTypeLabel(routeType) {
+	const token = String(routeType || "").trim().toLowerCase();
+	if (!token) {
+		return "";
+	}
+	if (token === "twentyfour" || token === "24hr" || token === "24" || token === "24-hour") {
+		return "24-hour";
+	}
+	if (token === "night") {
+		return "Night";
+	}
+	if (token === "school") {
+		return "School";
+	}
+	if (token === "prefix") {
+		return "Prefix";
+	}
+	if (token === "regular") {
+		return "Regular";
+	}
+	return token.charAt(0).toUpperCase() + token.slice(1);
+}
+
+function formatBphValue(value) {
+	if (!Number.isFinite(value)) {
+		return "";
+	}
+	const rounded = Math.round(value * 10) / 10;
+	return Number.isInteger(rounded) ? String(Math.trunc(rounded)) : rounded.toFixed(1);
+}
+
+function buildRouteFrequencySummary(freqs) {
+	if (!freqs || typeof freqs !== "object") {
+		return "";
+	}
+	const parts = [];
+	const peakAm = formatBphValue(freqs.peak_am);
+	const peakPm = formatBphValue(freqs.peak_pm);
+	const offpeak = formatBphValue(freqs.offpeak);
+	const overnight = formatBphValue(freqs.overnight);
+	if (peakAm) {
+		parts.push(`AM ${peakAm}`);
+	}
+	if (peakPm) {
+		parts.push(`PM ${peakPm}`);
+	}
+	if (offpeak) {
+		parts.push(`Off ${offpeak}`);
+	}
+	if (overnight) {
+		parts.push(`Night ${overnight}`);
+	}
+	if (parts.length === 0) {
+		return "";
+	}
+	return `${parts.join(" · ")} bph`;
+}
+
+function normalisePostcodeValue(value) {
+	const cleaned = String(value || "").trim().toUpperCase();
+	return cleaned;
+}
+
+function buildOmniSearchText(parts) {
+	return parts
+		.filter(Boolean)
+		.map((part) => String(part))
+		.join(" ")
+		.toLowerCase();
+}
+
+function getOmniTypeLabel(type) {
+	if (type === "route") {
+		return "Route";
+	}
+	if (type === "station") {
+		return "Bus station";
+	}
+	if (type === "garage") {
+		return "Garage";
+	}
+	if (type === "operator") {
+		return "Operator";
+	}
+	if (type === "postcode") {
+		return "Postcode district";
+	}
+	return "Result";
+}
+
+function getRouteMetaFromRow(row) {
+	if (!row || typeof row !== "object") {
+		return {};
+	}
+	const operator = Array.isArray(row.operator_names_arr) && row.operator_names_arr.length > 0
+		? row.operator_names_arr[0]
+		: row.operator_names || "";
+	const garage = Array.isArray(row.garage_codes_arr) && row.garage_codes_arr.length > 0
+		? row.garage_codes_arr[0]
+		: Array.isArray(row.garage_names_arr) && row.garage_names_arr.length > 0
+			? row.garage_names_arr[0]
+			: row.garage_codes || row.garage_names || "";
+	const routeType = row.route_type || "";
+	const lengthMiles = Number.isFinite(row.length_miles) ? row.length_miles : null;
+	const freqs = {
+		peak_am: Number.isFinite(row.frequency_peak_am) ? row.frequency_peak_am : null,
+		peak_pm: Number.isFinite(row.frequency_peak_pm) ? row.frequency_peak_pm : null,
+		offpeak: Number.isFinite(row.frequency_offpeak) ? row.frequency_offpeak : null,
+		overnight: Number.isFinite(row.frequency_overnight) ? row.frequency_overnight : null
+	};
+	return { operator, garage, routeType, lengthMiles, freqs };
+}
+
+function collectGarageGroupRoutes(group) {
+	if (!group || !Array.isArray(group.features)) {
+		return [];
+	}
+	const routeSets = buildGarageRouteSets(group.features);
+	const combined = new Set();
+	[routeSets.regular, routeSets.night, routeSets.school].forEach((set) => {
+		if (!set) {
+			return;
+		}
+		set.forEach((route) => combined.add(route));
+	});
+	return Array.from(combined);
+}
+
+function buildPostcodeAggregates(geojson) {
+	const districtMap = new Map();
+	const features = Array.isArray(geojson?.features) ? geojson.features : [];
+	features.forEach((feature) => {
+		const props = feature?.properties || {};
+		const postcode = normalisePostcodeValue(props?.POSTCODE);
+		if (!postcode) {
+			return;
+		}
+		const district = normalisePostcodeDistrict(postcode);
+		if (!district) {
+			return;
+		}
+		const coords = feature?.geometry?.coordinates;
+		const lon = Array.isArray(coords) ? Number(coords[0]) : null;
+		const lat = Array.isArray(coords) ? Number(coords[1]) : null;
+		const routes = extractRouteTokens(props?.ROUTES).filter((routeId) => !isExcludedRoute(routeId));
+
+		const ensureEntry = (map, key) => {
+			if (!map.has(key)) {
+				map.set(key, {
+					key,
+					district,
+					stopCount: 0,
+					coordCount: 0,
+					latSum: 0,
+					lonSum: 0,
+					routes: new Set(),
+					postcodes: new Set()
+				});
+			}
+			return map.get(key);
+		};
+
+		const districtEntry = ensureEntry(districtMap, district);
+		districtEntry.stopCount += 1;
+		districtEntry.postcodes.add(postcode);
+		if (Number.isFinite(lat) && Number.isFinite(lon)) {
+			districtEntry.coordCount += 1;
+			districtEntry.latSum += lat;
+			districtEntry.lonSum += lon;
+		}
+		routes.forEach((routeId) => districtEntry.routes.add(routeId));
+	});
+	return { districtMap };
+}
+
+function buildGarageGroupDetails(group) {
+	if (!group || !Array.isArray(group.features)) {
+		return { label: "Garage", subtitle: "Garage", searchTokens: [] };
+	}
+	const names = new Set();
+	const codes = new Set();
+	const operators = new Set();
+	group.features.forEach((feature) => {
+		const props = feature?.properties || {};
+		const name = String(props?.["Garage name"] || "").trim();
+		const code = getGarageCode(props);
+		const operator = String(props?.["Company name"] || props?.["Group name"] || "").trim();
+		if (name) {
+			names.add(name);
+		}
+		if (code) {
+			codes.add(code);
+		}
+		if (operator) {
+			operators.add(operator);
+		}
+	});
+	const nameList = Array.from(names);
+	const codeList = Array.from(codes);
+	const operatorList = Array.from(operators);
+	const primaryName = nameList[0] || codeList[0] || "Garage";
+	const codeLabel = codeList.length > 0
+		? codeList.length > 3
+			? `${codeList.slice(0, 3).join(", ")} +${codeList.length - 3}`
+			: codeList.join(", ")
+		: "";
+	const label = codeLabel ? `${primaryName} (${codeLabel})` : primaryName;
+	const subtitleParts = [];
+	if (operatorList.length > 0) {
+		subtitleParts.push(operatorList.join(" · "));
+	}
+	if (nameList.length > 1) {
+		subtitleParts.push(`${nameList.length} garages`);
+	}
+	const subtitle = subtitleParts.length > 0 ? subtitleParts.join(" · ") : "Garage";
+	const searchTokens = ["garage", ...nameList, ...codeList, ...operatorList];
+	return { label, subtitle, searchTokens, operators: operatorList, codes: codeList };
+}
+
+async function buildOmniSearchIndex() {
+	const [routeIds, stations, garagesGeojson, summaryRows, stopsGeojson] = await Promise.all([
+		loadRouteGeometryRouteIds(),
+		loadBusStationData().catch(() => []),
+		loadGaragesGeojson().catch(() => null),
+		loadRouteSummaryRows(),
+		loadBusStopsGeojson().catch(() => null)
+	]);
+
+	const summaryIndex = await ensureRouteSummaryIndex();
+	const routeSetsForPills = appState.useRouteTypeColours ? await loadNetworkRouteSets() : null;
+	const items = [];
+
+	if (routeIds && routeIds.size > 0) {
+		Array.from(routeIds).forEach((routeId) => {
+			const row = summaryIndex.get(routeId) || null;
+			const meta = getRouteMetaFromRow(row);
+			const typeLabel = formatRouteTypeLabel(meta.routeType);
+			const subtitleParts = [typeLabel, meta.operator, meta.garage].filter(Boolean);
+			const subtitle = subtitleParts.length > 0 ? subtitleParts.join(" · ") : "Bus route";
+			const freqText = buildRouteFrequencySummary(meta.freqs);
+			const title = `Route ${routeId}`;
+			const searchText = buildOmniSearchText([
+				"route",
+				routeId,
+				meta.operator,
+				meta.garage,
+				meta.routeType
+			]);
+			items.push({
+				id: `route:${routeId}`,
+				type: "route",
+				typeLabel: getOmniTypeLabel("route"),
+				title,
+				subtitle,
+				freqText,
+				searchText,
+				titleLower: title.toLowerCase(),
+				routeId,
+				meta
+			});
+		});
+	}
+
+	if (Array.isArray(stations)) {
+		stations.forEach((station) => {
+			const name = station?.name || "Bus station";
+			const routeCount = Number.isFinite(station?.routes?.size)
+				? station.routes.size
+				: Number.isFinite(station?.routeCount)
+					? station.routeCount
+					: 0;
+			const subtitle = routeCount > 0 ? `${routeCount} routes` : "Bus station";
+			const routes = Array.from(station?.routes || []);
+			const routePills = routes.length > 0
+				? renderRoutePills(routes, routeSetsForPills)
+				: "";
+			const searchText = buildOmniSearchText(["station", name, station?.key]);
+			items.push({
+				id: `station:${station?.key || name}`,
+				type: "station",
+				typeLabel: getOmniTypeLabel("station"),
+				title: name,
+				subtitle,
+				metaHtml: routePills,
+				searchText,
+				titleLower: String(name).toLowerCase(),
+				station
+			});
+		});
+	}
+
+	if (garagesGeojson && Array.isArray(garagesGeojson.features)) {
+		const groups = groupGaragesByLocation(garagesGeojson)
+			.filter((group) => group.features.some((feature) => garageHasRoutes(feature)));
+		groups.forEach((group) => {
+			const details = buildGarageGroupDetails(group);
+			const routes = collectGarageGroupRoutes(group);
+			const routePills = routes.length > 0
+				? renderRoutePills(routes, routeSetsForPills)
+				: "";
+			const searchText = buildOmniSearchText(details.searchTokens);
+			items.push({
+				id: `garage:${details.label}`,
+				type: "garage",
+				typeLabel: getOmniTypeLabel("garage"),
+				title: details.label,
+				subtitle: details.subtitle,
+				metaHtml: routePills,
+				searchText,
+				titleLower: details.label.toLowerCase(),
+				garageGroup: group,
+				garageDetails: details
+			});
+		});
+	}
+
+	if (stopsGeojson && Array.isArray(stopsGeojson.features)) {
+		const { districtMap } = buildPostcodeAggregates(stopsGeojson);
+		const makePostcodeItem = (entry) => {
+			if (!entry || entry.stopCount <= 0) {
+				return null;
+			}
+			const coordCount = entry.coordCount || 0;
+			const lat = coordCount > 0 ? entry.latSum / coordCount : null;
+			const lon = coordCount > 0 ? entry.lonSum / coordCount : null;
+			const routes = Array.from(entry.routes || []);
+			const routePills = routes.length > 0
+				? renderRoutePills(routes, routeSetsForPills)
+				: "";
+			const subtitleParts = [
+				"Postcode district",
+				`${entry.stopCount} stops`
+			].filter(Boolean);
+			const subtitle = subtitleParts.join(" · ");
+			const searchText = buildOmniSearchText([
+				"postcode district",
+				entry.key,
+				entry.key.replace(/\s+/g, "")
+			]);
+			return {
+				id: `postcode:${entry.key}`,
+				type: "postcode",
+				typeLabel: "Postcode district",
+				title: `Postcode district ${entry.key}`,
+				subtitle,
+				metaHtml: routePills,
+				searchText,
+				titleLower: String(`Postcode district ${entry.key}`).toLowerCase(),
+				postcodeData: {
+					key: entry.key,
+					district: entry.key,
+					isDistrict: true,
+					stopCount: entry.stopCount,
+					routes,
+					lat,
+					lon
+				}
+			};
+		};
+
+		districtMap.forEach((entry) => {
+			const item = makePostcodeItem(entry);
+			if (item) {
+				items.push(item);
+			}
+		});
+	}
+
+	const operatorMap = new Map();
+	if (Array.isArray(summaryRows)) {
+		summaryRows.forEach((row) => {
+			const routeId = row?.route_id_norm;
+			if (!routeId) {
+				return;
+			}
+			const operators = Array.isArray(row.operator_names_arr) ? row.operator_names_arr : [];
+			operators.forEach((operator) => {
+				const cleaned = String(operator || "").trim();
+				if (!cleaned) {
+					return;
+				}
+				const key = cleaned.toLowerCase();
+				if (!operatorMap.has(key)) {
+					operatorMap.set(key, { name: cleaned, routes: new Set() });
+				}
+				operatorMap.get(key).routes.add(routeId);
+			});
+		});
+	}
+
+	operatorMap.forEach((entry, key) => {
+		const routes = Array.from(entry.routes);
+		const subtitle = routes.length > 0 ? `${routes.length} routes` : "No routes listed";
+		const searchText = buildOmniSearchText(["operator", entry.name, key]);
+		items.push({
+			id: `operator:${entry.name}`,
+			type: "operator",
+			typeLabel: getOmniTypeLabel("operator"),
+			title: entry.name,
+			subtitle,
+			searchText,
+			titleLower: entry.name.toLowerCase(),
+			operatorName: entry.name,
+			operatorRoutes: routes
+		});
+	});
+
+	return items;
+}
+
+async function ensureOmniSearchIndex() {
+	if (appState.omniSearchReady && Array.isArray(appState.omniSearchIndex)) {
+		return appState.omniSearchIndex;
+	}
+	if (appState.omniSearchLoadPromise) {
+		return appState.omniSearchLoadPromise;
+	}
+	appState.omniSearchLoadPromise = buildOmniSearchIndex()
+		.then((items) => {
+			appState.omniSearchIndex = items;
+			appState.omniSearchReady = true;
+			return items;
+		})
+		.catch(() => {
+			appState.omniSearchIndex = [];
+			appState.omniSearchReady = false;
+			return appState.omniSearchIndex;
+		})
+		.finally(() => {
+			appState.omniSearchLoadPromise = null;
+		});
+	return appState.omniSearchLoadPromise;
+}
+
+function setOmniSearchVisible(visible) {
+	const modal = omniSearchState.elements?.modal;
+	if (!modal) {
+		return;
+	}
+	omniSearchState.isOpen = visible;
+	modal.classList.toggle("is-visible", visible);
+	modal.setAttribute("aria-hidden", visible ? "false" : "true");
+	document.body.classList.toggle("omni-open", visible);
+}
+
+function setOmniStatus(text) {
+	const status = omniSearchState.elements?.status;
+	if (!status) {
+		return;
+	}
+	status.textContent = text || "";
+}
+
+function renderOmniResults(items, totalCount) {
+	const results = omniSearchState.elements?.results;
+	if (!results) {
+		return;
+	}
+	if (!items || items.length === 0) {
+		results.innerHTML = "";
+		return;
+	}
+	const selectedIndex = omniSearchState.selectedIndex;
+	results.innerHTML = items.map((item, index) => {
+		const isSelected = index === selectedIndex;
+		const subtitle = item.subtitle || "";
+		const freqText = item.freqText || "";
+		const metaHtml = item.metaHtml || "";
+		const subtitleHtml = subtitle ? `<div class="omni-result-subtitle">${escapeHtml(subtitle)}</div>` : "";
+		const freqHtml = freqText ? `<div class="omni-result-freq">${escapeHtml(freqText)}</div>` : "";
+		const metaBlock = metaHtml ? `<div class="omni-result-meta">${metaHtml}</div>` : "";
+		return `
+			<button type="button" class="omni-result${isSelected ? " is-selected" : ""}" data-index="${index}"
+				role="option" aria-selected="${isSelected ? "true" : "false"}">
+				<div class="omni-result-type">${escapeHtml(item.typeLabel || getOmniTypeLabel(item.type))}</div>
+				<div class="omni-result-text">
+					<div class="omni-result-title">${escapeHtml(item.title || "")}</div>
+					${subtitleHtml}
+					${freqHtml}
+					${metaBlock}
+				</div>
+			</button>
+		`;
+	}).join("");
+
+	if (Number.isFinite(totalCount)) {
+		setOmniStatus(totalCount > items.length
+			? `Showing ${items.length} of ${totalCount} results.`
+			: `${totalCount} results.`);
+	}
+
+	const selected = results.querySelector(".omni-result.is-selected");
+	if (selected) {
+		selected.scrollIntoView({ block: "nearest" });
+	}
+}
+
+function parseOmniQuery(query) {
+	const trimmed = String(query || "").trim();
+	if (!trimmed) {
+		return { type: null, tokens: [] };
+	}
+	const match = trimmed.match(/^(route|station|garage|operator|postcode|district)\s*:\s*(.*)$/i);
+	if (match) {
+		const rawType = match[1].toLowerCase();
+		const type = rawType === "district" ? "postcode" : rawType;
+		const rest = match[2] || "";
+		const tokens = rest.toLowerCase().split(/\s+/).filter(Boolean);
+		return { type, tokens };
+	}
+	const tokens = trimmed.toLowerCase().split(/\s+/).filter(Boolean);
+	return { type: null, tokens };
+}
+
+function scoreOmniItem(item, tokens, rawLower) {
+	let score = 0;
+	const titleLower = item.titleLower || String(item.title || "").toLowerCase();
+	if (rawLower && titleLower === rawLower) {
+		score += 200;
+	}
+	if (rawLower && titleLower.startsWith(rawLower)) {
+		score += 120;
+	}
+	if (rawLower && item.searchText?.startsWith(rawLower)) {
+		score += 80;
+	}
+	tokens.forEach((token) => {
+		if (titleLower.includes(token)) {
+			score += 20;
+		}
+		if (item.searchText?.includes(token)) {
+			score += 8;
+		}
+	});
+	if (item.type === "route" && rawLower && item.routeId) {
+		if (String(item.routeId).toLowerCase() === rawLower) {
+			score += 200;
+		}
+	}
+	if (item.type === "postcode" && rawLower && item.postcodeData?.key) {
+		const compact = String(item.postcodeData.key).replace(/\s+/g, "").toLowerCase();
+		if (compact === rawLower) {
+			score += 180;
+		}
+		if (item.postcodeData.isDistrict && String(item.postcodeData.key).toLowerCase() === rawLower) {
+			score += 140;
+		}
+	}
+	return score;
+}
+
+function filterOmniSearchResults(query) {
+	omniSearchState.lastQuery = query || "";
+	const parsed = parseOmniQuery(query);
+	const tokens = parsed.tokens;
+	const rawLower = tokens.join(" ");
+	if (tokens.length === 0) {
+		omniSearchState.filteredItems = [];
+		omniSearchState.selectedIndex = 0;
+		renderOmniResults([], 0);
+		setOmniStatus("Start typing to search routes, stations, garages, or operators.");
+		return;
+	}
+	const matches = omniSearchState.items
+		.filter((item) => {
+			if (parsed.type && item.type !== parsed.type) {
+				return false;
+			}
+			return tokens.every((token) => item.searchText?.includes(token));
+		})
+		.map((item) => ({ item, score: scoreOmniItem(item, tokens, rawLower) }))
+		.sort((a, b) => b.score - a.score || String(a.item.title).localeCompare(String(b.item.title)))
+		.map((entry) => entry.item);
+
+	const totalCount = matches.length;
+	const limited = matches.slice(0, 12);
+	omniSearchState.filteredItems = limited;
+	omniSearchState.selectedIndex = 0;
+	if (limited.length === 0) {
+		renderOmniResults([], totalCount);
+		setOmniStatus("No matches. Try a different search term.");
+		return;
+	}
+	renderOmniResults(limited, totalCount);
+}
+
+function clearOmniRouteLayer() {
+	if (appState.omniRouteLayer && appState.map) {
+		appState.map.removeLayer(appState.omniRouteLayer);
+		appState.omniRouteLayer = null;
+	}
+	appState.omniRouteLoadToken += 1;
+}
+
+function clearOmniStopsLayer() {
+	if (appState.omniStopsLayer && appState.map) {
+		appState.map.removeLayer(appState.omniStopsLayer);
+		appState.omniStopsLayer = null;
+	}
+	appState.omniStopsLoadToken += 1;
+}
+
+function clearOmniSearchLayers({ restoreNetwork = true } = {}) {
+	clearOmniRouteLayer();
+	clearOmniStopsLayer();
+	if (!appState.omniActive) {
+		return;
+	}
+	const prevSuppress = appState.omniPrevSuppress;
+	appState.omniActive = false;
+	appState.omniPrevSuppress = null;
+	appState.suppressNetworkRoutes = Boolean(prevSuppress);
+	if (restoreNetwork && !appState.suppressNetworkRoutes) {
+		appState.networkRouteLoadToken += 1;
+		renderNetworkRoutes(appState.networkRouteLoadToken);
+	}
+}
+
+async function showOmniRoutes(routeIds, label) {
+	if (!appState.map) {
+		return;
+	}
+	const list = Array.isArray(routeIds)
+		? Array.from(new Set(routeIds.map((id) => String(id || "").trim().toUpperCase()).filter(Boolean)))
+		: [];
+	if (list.length === 0) {
+		clearOmniSearchLayers();
+		return;
+	}
+
+	if (!appState.omniActive) {
+		appState.omniPrevSuppress = appState.suppressNetworkRoutes;
+	}
+	appState.omniActive = true;
+	appState.suppressNetworkRoutes = true;
+	appState.networkRouteLoadToken += 1;
+	clearNetworkRoutes();
+	clearActiveRouteSelections();
+
+	if (appState.focusRouteId) {
+		appState.focusRouteId = null;
+		appState.focusRouteLoadToken += 1;
+		clearFocusedRouteLayer();
+	}
+	if (appState.filteredRoutesLayer) {
+		appState.filteredRoutesLayer.clearLayers();
+	}
+	if (appState.analysisRouteLayer) {
+		clearAnalysisRoutes();
+	}
+	clearOmniRouteLayer();
+
+	const loadToken = appState.omniRouteLoadToken + 1;
+	appState.omniRouteLoadToken = loadToken;
+	const layerGroup = L.layerGroup().addTo(appState.map);
+	appState.omniRouteLayer = layerGroup;
+
+	const routeSets = appState.useRouteTypeColours ? await loadNetworkRouteSets() : null;
+	const concurrency = 6;
+	let index = 0;
+	const worker = async () => {
+		while (index < list.length) {
+			const routeId = list[index];
+			index += 1;
+			const segments = await loadRouteGeometry(routeId);
+			if (loadToken !== appState.omniRouteLoadToken) {
+				return;
+			}
+			if (!segments || segments.length === 0) {
+				continue;
+			}
+			const color = getFocusedRouteColour(routeId, routeSets);
+			segments.forEach((segment) => {
+				const line = L.polyline(segment, {
+					color,
+					weight: 3.2,
+					opacity: 0.85,
+					pane: ROUTE_PANE
+				}).addTo(layerGroup);
+				line._routeId = routeId;
+				bindRouteHoverPopup(line, layerGroup);
+			});
+		}
+	};
+	await Promise.all(Array.from({ length: concurrency }, () => worker()));
+	if (loadToken === appState.omniRouteLoadToken) {
+		updateSelectedInfo(label ? `${label} (${list.length} routes)` : `${list.length} routes selected`);
+	}
+}
+
+async function renderOmniRouteStops(routeId) {
+	if (!appState.map) {
+		return 0;
+	}
+	clearOmniStopsLayer();
+	const normalised = String(routeId || "").trim().toUpperCase();
+	if (!normalised || isExcludedRoute(normalised)) {
+		return 0;
+	}
+	const loadToken = appState.omniStopsLoadToken + 1;
+	appState.omniStopsLoadToken = loadToken;
+	await ensureRouteStopData(normalised);
+	if (loadToken !== appState.omniStopsLoadToken) {
+		return 0;
+	}
+	const geojson = await loadBusStopsGeojson();
+	if (!geojson || !Array.isArray(geojson.features)) {
+		return 0;
+	}
+	if (loadToken !== appState.omniStopsLoadToken) {
+		return 0;
+	}
+	const layerGroup = L.layerGroup();
+	let count = 0;
+	geojson.features.forEach((feature) => {
+		const coords = feature?.geometry?.coordinates;
+		if (!Array.isArray(coords) || coords.length < 2) {
+			return;
+		}
+		const props = feature?.properties || {};
+		const routes = getStopRouteTokens(props);
+		if (!routes.includes(normalised)) {
+			return;
+		}
+		const lon = Number(coords[0]);
+		const lat = Number(coords[1]);
+		if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+			return;
+		}
+		const marker = L.circleMarker([lat, lon], {
+			radius: 4,
+			weight: 1,
+			color: "#0f766e",
+			fillColor: "#34d399",
+			fillOpacity: 0.85,
+			pane: STOP_PANE
+		});
+		bindHoverPopup(marker, () => buildBusStopPopup(props));
+		marker.on("click", () => {
+			setSelectedFeature("stop", props);
+			refreshSelectedInfoPanel().catch(() => {});
+			ensureStopPointRoutes(props)
+				.then(() => refreshSelectedInfoPanel().catch(() => {}))
+				.catch(() => {});
+		});
+		marker.addTo(layerGroup);
+		count += 1;
+	});
+	if (loadToken !== appState.omniStopsLoadToken) {
+		return 0;
+	}
+	layerGroup.addTo(appState.map);
+	appState.omniStopsLayer = layerGroup;
+	return count;
+}
+
+async function renderOmniPostcodeStops(postcodeData) {
+	if (!appState.map || !postcodeData) {
+		return 0;
+	}
+	clearOmniStopsLayer();
+	const loadToken = appState.omniStopsLoadToken + 1;
+	appState.omniStopsLoadToken = loadToken;
+
+	const geojson = await loadBusStopsGeojson();
+	if (!geojson || !Array.isArray(geojson.features)) {
+		return 0;
+	}
+	if (loadToken !== appState.omniStopsLoadToken) {
+		return 0;
+	}
+	const layerGroup = L.layerGroup();
+	let count = 0;
+	geojson.features.forEach((feature) => {
+		const coords = feature?.geometry?.coordinates;
+		if (!Array.isArray(coords) || coords.length < 2) {
+			return;
+		}
+		const props = feature?.properties || {};
+		const rawPostcode = normalisePostcodeValue(props?.POSTCODE);
+		if (!rawPostcode) {
+			return;
+		}
+		const matches = postcodeData.isDistrict
+			? normalisePostcodeDistrict(rawPostcode) === postcodeData.key
+			: rawPostcode === postcodeData.key;
+		if (!matches) {
+			return;
+		}
+		const lon = Number(coords[0]);
+		const lat = Number(coords[1]);
+		if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+			return;
+		}
+		const marker = L.circleMarker([lat, lon], {
+			radius: 4,
+			weight: 1,
+			color: "#0f766e",
+			fillColor: "#38bdf8",
+			fillOpacity: 0.85,
+			pane: STOP_PANE
+		});
+		bindHoverPopup(marker, () => buildBusStopPopup(props));
+		marker.on("click", () => {
+			setSelectedFeature("stop", props);
+			refreshSelectedInfoPanel().catch(() => {});
+			ensureStopPointRoutes(props)
+				.then(() => refreshSelectedInfoPanel().catch(() => {}))
+				.catch(() => {});
+		});
+		marker.addTo(layerGroup);
+		count += 1;
+	});
+	if (loadToken !== appState.omniStopsLoadToken) {
+		return 0;
+	}
+	layerGroup.addTo(appState.map);
+	appState.omniStopsLayer = layerGroup;
+	return count;
+}
+
+function setRouteInfoPanelFromOmni(item, stopCount) {
+	const routeId = item?.routeId || "";
+	const meta = item?.meta || {};
+	const details = [];
+	const typeLabel = formatRouteTypeLabel(meta.routeType);
+	if (typeLabel) {
+		details.push(`Type: ${escapeHtml(typeLabel)}`);
+	}
+	if (meta.operator) {
+		details.push(`Operator: ${escapeHtml(meta.operator)}`);
+	}
+	if (meta.garage) {
+		details.push(`Garage: ${escapeHtml(meta.garage)}`);
+	}
+	if (Number.isFinite(meta.lengthMiles)) {
+		details.push(`Length: ${escapeHtml(meta.lengthMiles.toFixed(1))} miles`);
+	}
+	const lines = details.length > 0
+		? details.map((line) => `<div>${line}</div>`).join("")
+		: '<div class="info-empty">No extra route details listed.</div>';
+	const subtitle = Number.isFinite(stopCount) && stopCount > 0 ? `${stopCount} stops` : "Bus route";
+	setInfoPanel({
+		title: routeId ? `Route ${routeId}` : "Route",
+		subtitle,
+		bodyHtml: `
+			<div class="info-section">
+				<div class="info-label">Route details</div>
+				${lines}
+			</div>
+		`
+	});
+	clearSelectedFeature();
+}
+
+async function setOperatorInfoPanel(operatorName, routeIds) {
+	const list = Array.isArray(routeIds) ? routeIds.slice() : [];
+	const sorted = sortRouteIds(list);
+	const routeSets = appState.useRouteTypeColours ? await loadNetworkRouteSets() : null;
+	setInfoPanel({
+		title: operatorName || "Operator",
+		subtitle: `${sorted.length} routes`,
+		bodyHtml: `
+			<div class="info-section">
+				<div class="info-label">Routes operated</div>
+				${renderRoutePills(sorted, routeSets)}
+			</div>
+		`
+	});
+	clearSelectedFeature();
+}
+
+function ensureGaragesVisible() {
+	const checkbox = document.getElementById("showGarages");
+	if (!checkbox) {
+		return;
+	}
+	if (!checkbox.checked) {
+		checkbox.checked = true;
+		appState.garageLoadToken += 1;
+		addGaragesLayer(appState.map);
+	}
+}
+
+async function applyOmniRouteSelection(item) {
+	if (!item?.routeId) {
+		return;
+	}
+	clearOmniSearchLayers({ restoreNetwork: false });
+	if (window.RouteMapsterAdvancedFilters?.clearMapHighlights) {
+		window.RouteMapsterAdvancedFilters.clearMapHighlights(appState);
+	}
+	if (appState.analysisRouteLayer) {
+		clearAnalysisRoutes();
+	}
+	clearAdvancedStopsLayer();
+
+	const layerToggles = ["showGarages", "showBusStations", "showBusStops"];
+	layerToggles.forEach((id) => {
+		const checkbox = document.getElementById(id);
+		if (checkbox && checkbox.checked) {
+			checkbox.checked = false;
+			checkbox.dispatchEvent(new Event("change"));
+		}
+	});
+
+	await focusRoute(item.routeId);
+	const stopCount = await renderOmniRouteStops(item.routeId);
+	setRouteInfoPanelFromOmni(item, stopCount);
+	updateSelectedInfo(`Focused route: ${item.routeId} · ${stopCount} stops`);
+}
+
+function applyOmniStationSelection(item) {
+	const station = item?.station;
+	if (!station) {
+		return;
+	}
+	clearOmniSearchLayers({ restoreNetwork: false });
+	ensureBusStationsVisible();
+	highlightBusStation(station);
+	setBusStationSelectValue(station.key);
+	setSelectedFeature("station", station);
+	refreshSelectedInfoPanel().catch(() => {});
+	selectBusStationRoutes(station);
+	if (appState.map && station.latlng) {
+		appState.map.flyTo(station.latlng, Math.max(appState.map.getZoom(), 13));
+	}
+}
+
+function applyOmniGarageSelection(item) {
+	const group = item?.garageGroup;
+	if (!group) {
+		return;
+	}
+	clearOmniSearchLayers({ restoreNetwork: false });
+	ensureGaragesVisible();
+	setSelectedFeature("garage", group.features);
+	refreshSelectedInfoPanel().catch(() => {});
+	selectGarageRoutes(group.features);
+	if (appState.map && group.latlng) {
+		appState.map.flyTo(group.latlng, Math.max(appState.map.getZoom(), 12));
+	}
+}
+
+async function applyOmniOperatorSelection(item) {
+	const operatorName = item?.operatorName;
+	const routes = Array.isArray(item?.operatorRoutes) ? item.operatorRoutes : [];
+	if (!operatorName || routes.length === 0) {
+		return;
+	}
+	clearOmniSearchLayers({ restoreNetwork: false });
+	clearAdvancedStopsLayer();
+	await showOmniRoutes(routes, operatorName);
+	await setOperatorInfoPanel(operatorName, routes);
+}
+
+async function applyOmniPostcodeSelection(item) {
+	const data = item?.postcodeData;
+	if (!data) {
+		return;
+	}
+	clearOmniSearchLayers({ restoreNetwork: false });
+	clearAdvancedStopsLayer();
+	const stopCount = await renderOmniPostcodeStops(data);
+	const routeSets = appState.useRouteTypeColours ? await loadNetworkRouteSets() : null;
+	const routes = Array.isArray(data.routes) ? data.routes : [];
+	const routeHtml = routes.length > 0
+		? renderRoutePills(routes, routeSets)
+		: '<div class="info-empty">No routes listed.</div>';
+	const title = `Postcode district ${data.key}`;
+	const subtitle = "Postcode district";
+	setInfoPanel({
+		title,
+		subtitle,
+		bodyHtml: `
+			<div class="info-section">
+				<div class="info-label">Stops</div>
+				<div>${stopCount} stops matched.</div>
+			</div>
+			<div class="info-section">
+				<div class="info-label">Routes serving</div>
+				${routeHtml}
+			</div>
+		`
+	});
+	if (appState.map && Number.isFinite(data.lat) && Number.isFinite(data.lon)) {
+		appState.map.flyTo([data.lat, data.lon], Math.max(appState.map.getZoom(), 13));
+	}
+	updateSelectedInfo(`${title} · ${stopCount} stops`);
+}
+
+function handleOmniSelection(item) {
+	if (!item) {
+		return;
+	}
+	closeOmniSearch();
+	if (item.type === "route") {
+		applyOmniRouteSelection(item).catch(() => {});
+		return;
+	}
+	if (item.type === "station") {
+		applyOmniStationSelection(item);
+		return;
+	}
+	if (item.type === "garage") {
+		applyOmniGarageSelection(item);
+		return;
+	}
+	if (item.type === "operator") {
+		applyOmniOperatorSelection(item).catch(() => {});
+		return;
+	}
+	if (item.type === "postcode") {
+		applyOmniPostcodeSelection(item).catch(() => {});
+	}
+}
+
+function openOmniSearch() {
+	const els = omniSearchState.elements;
+	if (!els) {
+		return;
+	}
+	omniSearchState.lastActiveElement = document.activeElement;
+	setOmniSearchVisible(true);
+	els.input.value = "";
+	els.input.disabled = true;
+	omniSearchState.filteredItems = [];
+	omniSearchState.selectedIndex = 0;
+	els.results.innerHTML = "";
+	setOmniStatus("Loading search catalog...");
+	ensureOmniSearchIndex()
+		.then((items) => {
+			omniSearchState.items = items;
+			els.input.disabled = false;
+			els.input.focus();
+			setOmniStatus("Start typing to search routes, stations, garages, or operators.");
+		})
+		.catch(() => {
+			els.input.disabled = false;
+			setOmniStatus("Search catalog unavailable.");
+		});
+}
+
+function closeOmniSearch() {
+	const els = omniSearchState.elements;
+	if (!els) {
+		return;
+	}
+	setOmniSearchVisible(false);
+	const last = omniSearchState.lastActiveElement;
+	if (last && typeof last.focus === "function") {
+		last.focus();
+	}
+}
+
+function setupOmniSearch() {
+	const modal = document.getElementById("omniSearchModal");
+	const input = document.getElementById("omniSearchInput");
+	const results = document.getElementById("omniSearchResults");
+	const status = document.getElementById("omniSearchStatus");
+	const openButton = document.getElementById("openOmniSearch");
+	if (!modal || !input || !results || !status || !openButton) {
+		return;
+	}
+	omniSearchState.elements = { modal, input, results, status, openButton };
+
+	openButton.addEventListener("click", () => {
+		openOmniSearch();
+	});
+
+	modal.addEventListener("click", (event) => {
+		if (event.target === modal) {
+			closeOmniSearch();
+		}
+	});
+
+	results.addEventListener("click", (event) => {
+		const button = event.target.closest(".omni-result");
+		if (!button) {
+			return;
+		}
+		const index = Number(button.dataset.index || 0);
+		const item = omniSearchState.filteredItems[index];
+		if (item) {
+			handleOmniSelection(item);
+		}
+	});
+
+	input.addEventListener("input", () => {
+		filterOmniSearchResults(input.value);
+	});
+
+	input.addEventListener("keydown", (event) => {
+		if (event.key === "ArrowDown") {
+			event.preventDefault();
+			const next = Math.min(
+				omniSearchState.selectedIndex + 1,
+				omniSearchState.filteredItems.length - 1
+			);
+			omniSearchState.selectedIndex = Math.max(next, 0);
+			renderOmniResults(omniSearchState.filteredItems, omniSearchState.filteredItems.length);
+			return;
+		}
+		if (event.key === "ArrowUp") {
+			event.preventDefault();
+			const next = Math.max(omniSearchState.selectedIndex - 1, 0);
+			omniSearchState.selectedIndex = next;
+			renderOmniResults(omniSearchState.filteredItems, omniSearchState.filteredItems.length);
+			return;
+		}
+		if (event.key === "Enter") {
+			event.preventDefault();
+			const item = omniSearchState.filteredItems[omniSearchState.selectedIndex];
+			if (item) {
+				handleOmniSelection(item);
+			}
+			return;
+		}
+		if (event.key === "Escape") {
+			event.preventDefault();
+			closeOmniSearch();
+		}
+	});
+
+	document.addEventListener("keydown", (event) => {
+		const isFind = (event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === "f";
+		if (isFind) {
+			event.preventDefault();
+			openOmniSearch();
+		}
+		if (event.key === "Escape" && omniSearchState.isOpen) {
+			event.preventDefault();
+			closeOmniSearch();
+		}
+	});
 }
 
 function formatDateToken(token) {
@@ -503,6 +1696,7 @@ function clearGarageRoutes() {
 		appState.map.removeLayer(appState.garageRouteLayer);
 		appState.garageRouteLayer = null;
 	}
+	closeRouteHoverPopup();
 }
 
 function clearBusStopsLayer() {
@@ -1277,6 +2471,7 @@ function clearActiveRouteSelections() {
 }
 
 function selectGarageRoutes(features) {
+	clearOmniSearchLayers({ restoreNetwork: false });
 	if (!appState.suppressNetworkRoutes) {
 		appState.suppressNetworkRoutes = true;
 	}
@@ -2030,13 +3225,14 @@ async function renderGarageRoutes(loadToken) {
 						return;
 					}
 					segments.forEach((segment) => {
-						const weighted = hasFrequency ? getFrequencyLineWeight(segment, frequencyContext) : null;
-						const line = L.polyline(segment, {
-							color: resolveRouteColour(category.color),
-							weight: weighted ?? baseWeight,
-							opacity: 0.85,
-							pane: ROUTE_PANE
-						}).addTo(layerGroup);
+					const weighted = hasFrequency ? getFrequencyLineWeight(segment, frequencyContext) : null;
+					const line = L.polyline(segment, {
+						color: resolveRouteColour(category.color),
+						weight: weighted ?? baseWeight,
+						opacity: 0.85,
+						interactive: true,
+						pane: ROUTE_PANE
+					}).addTo(layerGroup);
 						line._routeId = routeId;
 						bindRouteHoverPopup(line, layerGroup);
 					});
@@ -2353,13 +3549,22 @@ function bindHoverPopup(layer, html) {
 		autoPan: false,
 		offset: [0, -12]
 	});
-	layer.on("mouseover", (event) => {
+	const openPopupAtEvent = (event) => {
 		const content = getContent(event);
 		if (content !== undefined) {
 			layer.setPopupContent(content);
 		}
-		layer.openPopup(event?.latlng);
-	});
+		const latlng = event?.latlng || (layer.getBounds ? layer.getBounds().getCenter() : null);
+		if (latlng) {
+			layer.openPopup(latlng);
+		} else {
+			layer.openPopup();
+		}
+	};
+	layer.on("mouseover", openPopupAtEvent);
+	if (typeof layer.getLatLngs === "function") {
+		layer.on("mousemove", openPopupAtEvent);
+	}
 	layer.on("mouseout", () => {
 		layer.closePopup();
 	});
@@ -2459,9 +3664,12 @@ function buildRouteGeometryHoverHtml(routes, routeSets, frequencyTotal) {
 	const frequencyLine = Number.isFinite(frequencyTotal) && frequencyTotal > 0
 		? `<div class="hover-popup__meta">Combined frequency: ${formatFrequencyValue(frequencyTotal)}</div>`
 		: "";
+	const title = routes && routes.length === 1
+		? `Route ${escapeHtml(routes[0])}`
+		: "Routes here";
 	return `
 		<div class="hover-popup__content">
-			<div class="hover-popup__title">Routes here</div>
+			<div class="hover-popup__title">${title}</div>
 			${frequencyLine}
 			<div class="hover-popup__routes">${renderRoutePills(routes, routeSets)}</div>
 		</div>
@@ -2474,7 +3682,10 @@ function bindRouteHoverPopup(line, layerGroup) {
 	}
 	bindHoverPopup(line, (event) => {
 		const tolerance = appState.showFrequencyLayer ? 16 : 8;
-		const routes = collectRoutesNearLatLng(layerGroup, event?.latlng, line._routeId, tolerance);
+		let routes = collectRoutesNearLatLng(layerGroup, event?.latlng, line._routeId, tolerance);
+		if ((!routes || routes.length === 0) && line._routeId) {
+			routes = [line._routeId];
+		}
 		const routeSets = appState.useRouteTypeColours ? appState.networkRouteSets : null;
 		let displayRoutes = routes;
 		let frequencyTotal = null;
@@ -2485,6 +3696,105 @@ function bindRouteHoverPopup(line, layerGroup) {
 		}
 		return buildRouteGeometryHoverHtml(displayRoutes, routeSets, frequencyTotal);
 	});
+}
+
+function ensureRouteHoverPopup() {
+	if (!appState.map) {
+		return null;
+	}
+	if (!appState.routeHoverPopup) {
+		appState.routeHoverPopup = L.popup({
+			className: "hover-popup",
+			closeButton: false,
+			autoClose: false,
+			closeOnClick: false,
+			autoPan: false,
+			offset: [0, -12]
+		});
+	}
+	return appState.routeHoverPopup;
+}
+
+function closeRouteHoverPopup() {
+	if (!appState.routeHoverPopup || !appState.map) {
+		appState.routeHoverLastKey = "";
+		return;
+	}
+	appState.map.closePopup(appState.routeHoverPopup);
+	appState.routeHoverLastKey = "";
+}
+
+function shouldUseRouteHoverFallback() {
+	if (!appState.map || appState.focusRouteId) {
+		return false;
+	}
+	if (appState.activeGarageRoutes && appState.garageRouteLayer) {
+		return true;
+	}
+	if (appState.activeBusStationRoutes && appState.busStationRouteLayer) {
+		return true;
+	}
+	return false;
+}
+
+function getActiveHoverLayerGroup() {
+	if (appState.activeGarageRoutes && appState.garageRouteLayer) {
+		return appState.garageRouteLayer;
+	}
+	if (appState.activeBusStationRoutes && appState.busStationRouteLayer) {
+		return appState.busStationRouteLayer;
+	}
+	return null;
+}
+
+function updateRouteHoverPopup(latlng) {
+	if (!shouldUseRouteHoverFallback()) {
+		closeRouteHoverPopup();
+		return;
+	}
+	const layerGroup = getActiveHoverLayerGroup();
+	if (!layerGroup || !latlng) {
+		closeRouteHoverPopup();
+		return;
+	}
+	if (appState.useRouteTypeColours && !appState.networkRouteSets) {
+		loadNetworkRouteSets().catch(() => {});
+	}
+	const tolerance = appState.showFrequencyLayer ? 16 : 8;
+	let routes = collectRoutesNearLatLng(layerGroup, latlng, null, tolerance);
+	if (!routes || routes.length === 0) {
+		closeRouteHoverPopup();
+		return;
+	}
+	const routeSets = appState.useRouteTypeColours ? appState.networkRouteSets : null;
+	let displayRoutes = routes;
+	let frequencyTotal = null;
+	if (appState.showFrequencyLayer) {
+		const band = appState.frequencyBand || "peak_am";
+		displayRoutes = filterRoutesByFrequency(routes, band);
+		frequencyTotal = getFrequencyTotalForRoutes(displayRoutes, band);
+	}
+	if (!displayRoutes || displayRoutes.length === 0) {
+		closeRouteHoverPopup();
+		return;
+	}
+	const popup = ensureRouteHoverPopup();
+	if (!popup) {
+		return;
+	}
+	const key = `${displayRoutes.join(",")}|${appState.frequencyBand || ""}|${frequencyTotal ?? ""}`;
+	if (key !== appState.routeHoverLastKey) {
+		popup.setContent(buildRouteGeometryHoverHtml(displayRoutes, routeSets, frequencyTotal));
+		appState.routeHoverLastKey = key;
+	}
+	popup.setLatLng(latlng);
+	if (!popup.isOpen || !popup.isOpen()) {
+		popup.openOn(appState.map);
+	} else if (!appState.map.hasLayer(popup)) {
+		popup.openOn(appState.map);
+	} else {
+		popup.update();
+	}
 }
 
 function isBusStationStop(props) {
@@ -3089,6 +4399,7 @@ function clearBusStationRoutes() {
 		appState.map.removeLayer(appState.busStationRouteLayer);
 		appState.busStationRouteLayer = null;
 	}
+	closeRouteHoverPopup();
 }
 
 function clearFocusedRouteLayer() {
@@ -3123,6 +4434,7 @@ async function focusRoute(routeId) {
 	if (!normalised || isExcludedRoute(normalised)) {
 		return;
 	}
+	clearOmniSearchLayers({ restoreNetwork: false });
 	ensureRouteStopData(normalised)
 		.then(() => {
 			if (appState.selectedFeature?.type === "stop") {
@@ -3170,6 +4482,7 @@ function clearFocusedRoute() {
 	appState.focusRouteId = null;
 	appState.focusRouteLoadToken += 1;
 	clearFocusedRouteLayer();
+	clearOmniStopsLayer();
 	updateSelectedInfo("Route focus cleared.");
 	if (appState.activeGarageRoutes) {
 		appState.routeLoadToken += 1;
@@ -3307,6 +4620,7 @@ async function addBusStationsLayer(map) {
 }
 
 function selectBusStationRoutes(station) {
+	clearOmniSearchLayers({ restoreNetwork: false });
 	if (!appState.suppressNetworkRoutes) {
 		appState.suppressNetworkRoutes = true;
 	}
@@ -3407,6 +4721,7 @@ async function renderBusStationRoutes(loadToken) {
 						color: getBusStationRouteColour(routeId, routeSets),
 						weight: weighted ?? baseWeight,
 						opacity: 0.85,
+						interactive: true,
 						pane: ROUTE_PANE
 					}).addTo(layerGroup);
 					line._routeId = routeId;
@@ -3464,6 +4779,7 @@ function setupUI() {
 	setupBusStationSelect();
 	setupNetworkFilterDrag();
 	setupAboutModal();
+	setupOmniSearch();
 
 	const advancedFiltersModule = document.querySelector('[data-module="advanced-filters"]');
 	if (advancedFiltersModule && window.RouteMapsterAdvancedFilters?.initAdvancedFilters) {
@@ -3479,6 +4795,26 @@ function setupUI() {
 	if (stopAnalysesModule && window.RouteMapsterStopAnalyses?.initStopAnalyses) {
 		const stopContainer = stopAnalysesModule.querySelector("#stopAnalysesContainer");
 		window.RouteMapsterStopAnalyses.initStopAnalyses(stopContainer || stopAnalysesModule, appState);
+	}
+
+	if (appState.map) {
+		appState.map.on("mousemove", (event) => {
+			if (!event?.latlng) {
+				return;
+			}
+			if (appState.routeHoverFrame) {
+				cancelAnimationFrame(appState.routeHoverFrame);
+			}
+			appState.routeHoverFrame = requestAnimationFrame(() => {
+				appState.routeHoverFrame = null;
+				updateRouteHoverPopup(event.latlng);
+			});
+		});
+		["mouseout", "dragstart", "zoomstart", "click"].forEach((eventName) => {
+			appState.map.on(eventName, () => {
+				closeRouteHoverPopup();
+			});
+		});
 	}
 
 	document.getElementById('showGarages').addEventListener('change', (e) => {
@@ -3766,6 +5102,7 @@ function setupUI() {
 			clearBusStationHighlight();
 			clearBusStationRoutes();
 			clearNetworkRoutes();
+			clearOmniSearchLayers({ restoreNetwork: false });
 			if (window.RouteMapsterAdvancedFilters?.clearMapHighlights) {
 				window.RouteMapsterAdvancedFilters.clearMapHighlights(appState);
 			}
@@ -3794,6 +5131,7 @@ function setupUI() {
 			clearGarageRoutes();
 			clearBusStationRoutes();
 			clearNetworkRoutes();
+			clearOmniSearchLayers({ restoreNetwork: false });
 			if (window.RouteMapsterAdvancedFilters?.clearMapHighlights) {
 				window.RouteMapsterAdvancedFilters.clearMapHighlights(appState);
 			}

@@ -715,6 +715,7 @@
       flex: 1;
       min-height: 0;
       height: 100%;
+      position: relative;
       border-radius: 24px;
       overflow: hidden;
       background: #e8eee8;
@@ -826,6 +827,190 @@
     .info-empty {
       color: var(--muted);
       font-size: 13px;
+    }
+
+    .omni-launch {
+      position: absolute;
+      top: 18px;
+      right: 18px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      border: 1px solid var(--panel-border);
+      background: rgba(255, 250, 241, 0.94);
+      color: var(--ink);
+      font-weight: 600;
+      box-shadow: 0 10px 20px rgba(15, 23, 42, 0.12);
+      cursor: pointer;
+      z-index: 8;
+      transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+    }
+
+    .omni-launch:hover {
+      transform: translateY(-1px);
+      border-color: var(--accent);
+      box-shadow: 0 14px 24px rgba(15, 23, 42, 0.16);
+    }
+
+    .omni-launch svg {
+      width: 16px;
+      height: 16px;
+      display: block;
+    }
+
+    .omni-modal {
+      position: fixed;
+      inset: 0;
+      display: none;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 80px 24px;
+      background: rgba(15, 23, 42, 0.4);
+      backdrop-filter: blur(4px);
+      z-index: 40;
+    }
+
+    .omni-modal.is-visible {
+      display: flex;
+    }
+
+    .omni-card {
+      width: min(980px, 95vw);
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      border-radius: 20px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      animation: fadeIn 0.35s ease;
+    }
+
+    .omni-input-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 16px;
+      background: #fbf8f1;
+      border-bottom: 1px solid var(--panel-border);
+    }
+
+    .omni-title {
+      font-size: 11px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    .omni-input-row input {
+      border: none;
+      outline: none;
+      flex: 1;
+      font-size: 16px;
+      background: transparent;
+      font-family: inherit;
+      color: var(--ink);
+    }
+
+    .omni-hint {
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      border: 1px solid var(--panel-border);
+      border-radius: 8px;
+      padding: 4px 6px;
+      background: #fffaf1;
+    }
+
+    .omni-status {
+      padding: 10px 16px;
+      font-size: 12px;
+      color: var(--muted);
+      border-bottom: 1px dashed var(--panel-border);
+      background: #fffdf8;
+    }
+
+    .omni-results {
+      max-height: 520px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .omni-result {
+      border: none;
+      text-align: left;
+      width: 100%;
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+      padding: 12px 16px;
+      background: #ffffff;
+      border-bottom: 1px solid var(--panel-border);
+      cursor: pointer;
+      transition: background 0.2s ease, color 0.2s ease;
+    }
+
+    .omni-result:last-child {
+      border-bottom: none;
+    }
+
+    .omni-result:hover,
+    .omni-result.is-selected {
+      background: var(--accent-soft);
+    }
+
+    .omni-result-type {
+      min-width: 80px;
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--muted);
+      padding-top: 2px;
+    }
+
+    .omni-result-text {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .omni-result-title {
+      font-weight: 600;
+      font-size: 14px;
+      color: var(--ink);
+    }
+
+    .omni-result-subtitle {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .omni-result-freq {
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .omni-result-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .omni-result .route-pill-group {
+      gap: 6px;
+    }
+
+    .omni-result .route-pill {
+      font-size: 11px;
+      padding: 2px 8px;
+    }
+
+
+    body.omni-open {
+      overflow: hidden;
     }
 
     .loading-modal {
@@ -1149,6 +1334,21 @@
 
       #map {
         min-height: 420px;
+      }
+
+      .omni-launch {
+        top: 12px;
+        right: 12px;
+        padding: 8px 12px;
+        font-size: 13px;
+      }
+
+      .omni-modal {
+        padding: 60px 16px;
+      }
+
+      .omni-result-type {
+        min-width: 64px;
       }
     }
   </style>
@@ -1585,6 +1785,12 @@
     <main id="mapArea">
       <div id="mapContainer">
         <div id="map"></div>
+        <button id="openOmniSearch" class="omni-launch" type="button" aria-label="Open omnisearch">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M11 3a8 8 0 1 1 5.3 14l3.6 3.6a1 1 0 0 1-1.4 1.4L14.9 18A8 8 0 0 1 11 3zm0 2a6 6 0 1 0 0 12a6 6 0 0 0 0-12z" fill="currentColor"></path>
+          </svg>
+          <span>Search</span>
+        </button>
       </div>
     </main>
 
@@ -1616,6 +1822,18 @@
         </div>
       </div>
     </aside>
+  </div>
+
+  <div id="omniSearchModal" class="omni-modal" aria-hidden="true">
+    <div class="omni-card" role="dialog" aria-modal="true" aria-labelledby="omniSearchTitle">
+      <div class="omni-input-row">
+        <span id="omniSearchTitle" class="omni-title">Omnisearch</span>
+        <input id="omniSearchInput" type="search" placeholder="Search routes, stations, garages, operators" autocomplete="off" aria-describedby="omniSearchStatus" />
+        <span class="omni-hint">Ctrl+F</span>
+      </div>
+      <div id="omniSearchStatus" class="omni-status">Start typing to search routes, stations, garages, or operators.</div>
+      <div id="omniSearchResults" class="omni-results" role="listbox" aria-label="Search results"></div>
+    </div>
   </div>
 
   <div id="loadingModal" class="loading-modal" aria-hidden="true">
