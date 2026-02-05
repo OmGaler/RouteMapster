@@ -506,7 +506,7 @@
           const number = Number(match[2]);
           const numberStr = match[2] || "";
           const suffix2 = numberStr.length >= 2 ? Number(numberStr.slice(-2)) : null;
-          const prefixType = prefix === "" ? "base" : prefix === "N" ? "night" : "other";
+          const prefixType = prefix === "" ? "base" : prefix === "N" ? "night" : prefix === "SL" ? "superloop" : "other";
           return {
             raw,
             prefix,
@@ -585,7 +585,7 @@
           if (Number.isFinite(a.suffix2) && Number.isFinite(b.suffix2) && a.suffix2 === b.suffix2) {
             const bothBig = a.number >= 100 && b.number >= 100;
             let score = bothBig ? 0.25 : 0.2;
-            if (a.prefixType === "other" || b.prefixType === "other") {
+            if (a.prefixType === "other" || b.prefixType === "other" || a.prefixType === "superloop" || b.prefixType === "superloop") {
               score -= 0.05;
             }
             return Math.max(0.1, score);
@@ -605,16 +605,49 @@
           .filter(Boolean);
 
         const suffixSeriesCounts = new Map();
+        const suffixSeriesMembers = new Map();
         enriched.forEach((entry) => {
           const suffix = entry.parsed.suffix2;
           if (!Number.isFinite(suffix)) {
             return;
           }
-          if (entry.parsed.prefixType === "other") {
+          if (entry.parsed.prefixType === "other" || entry.parsed.prefixType === "superloop") {
             return;
           }
           const key = String(suffix).padStart(2, "0");
           suffixSeriesCounts.set(key, (suffixSeriesCounts.get(key) || 0) + 1);
+          if (!suffixSeriesMembers.has(key)) {
+            suffixSeriesMembers.set(key, []);
+          }
+          suffixSeriesMembers.get(key).push(entry);
+        });
+
+        const suffixSeriesStats = new Map();
+        suffixSeriesMembers.forEach((members, key) => {
+          let scoreSum = 0;
+          let scoreCount = 0;
+          const maxByRoute = new Map();
+          for (let i = 0; i < members.length; i += 1) {
+            for (let j = i + 1; j < members.length; j += 1) {
+              const a = members[i];
+              const b = members[j];
+              const spatialScore = endpointSimilarity(a.row, b.row) + bboxOverlapScore(a.row, b.row);
+              if (spatialScore > 0) {
+                scoreSum += spatialScore;
+                scoreCount += 1;
+              }
+              const prevA = maxByRoute.get(a.routeId) || 0;
+              const prevB = maxByRoute.get(b.routeId) || 0;
+              if (spatialScore > prevA) {
+                maxByRoute.set(a.routeId, spatialScore);
+              }
+              if (spatialScore > prevB) {
+                maxByRoute.set(b.routeId, spatialScore);
+              }
+            }
+          }
+          const cohesion = scoreCount > 0 ? scoreSum / scoreCount : 0;
+          suffixSeriesStats.set(key, { cohesion, maxByRoute });
         });
 
         const parent = new Map();
@@ -648,21 +681,28 @@
             const score = numericScore + endpointScore + overlapScore;
             const hasSpatial = endpointScore >= 0.2 || overlapScore >= 0.25;
             const strongSpatial = endpointScore >= 0.4 || overlapScore >= 0.4;
+            const allowNightExact = (a.parsed.prefixType === "night" && b.parsed.prefixType === "base")
+              || (a.parsed.prefixType === "base" && b.parsed.prefixType === "night");
             const suffixKey = Number.isFinite(a.parsed.suffix2) ? String(a.parsed.suffix2).padStart(2, "0") : "";
             const seriesCount = suffixKey ? suffixSeriesCounts.get(suffixKey) || 0 : 0;
+            const seriesStats = suffixKey ? suffixSeriesStats.get(suffixKey) : null;
             const sameSuffixSeries = seriesCount >= 3
               && a.parsed.prefixType !== "other"
+              && a.parsed.prefixType !== "superloop"
               && b.parsed.prefixType !== "other"
+              && b.parsed.prefixType !== "superloop"
               && Number.isFinite(a.parsed.suffix2)
               && Number.isFinite(b.parsed.suffix2)
               && a.parsed.suffix2 === b.parsed.suffix2;
-
             if (
               (numericScore >= 0.4 && hasSpatial) ||
               (strongSpatial && numericScore >= 0.2) ||
               score >= 0.85 ||
               (sameSuffixSeries && numericScore >= 0.2 && hasSpatial)
             ) {
+              if (allowNightExact && !hasSpatial) {
+                continue;
+              }
               union(a.routeId, b.routeId);
             }
           }
@@ -685,7 +725,23 @@
           .filter((group) => group.count >= 2)
           .sort((a, b) => b.count - a.count);
 
-        if (groups.length === 0) {
+        const hasNonNight = (group) => group.routes.some((route) => {
+          const parsed = parseRouteId(route?.id || route?.routeId || route?.route || "");
+          return parsed.prefixType !== "night";
+        });
+        const hasNight = (group) => group.routes.some((route) => {
+          const parsed = parseRouteId(route?.id || route?.routeId || route?.route || "");
+          return parsed.prefixType === "night";
+        });
+
+        const filteredGroups = groups.filter((group) => {
+          if (group.count !== 2) {
+            return true;
+          }
+          return !(hasNight(group) && hasNonNight(group));
+        });
+
+        if (filteredGroups.length === 0) {
           return {
             type: "route-pills",
             groups: [],
@@ -695,7 +751,7 @@
 
         return {
           type: "route-pills",
-          groups
+          groups: filteredGroups
         };
       }
     },
