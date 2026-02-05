@@ -11,6 +11,7 @@ const LONDON_BOUNDS = {
 const ROUTE_GEOMETRY_DIR = "/data/processed/routes";
 const ROUTE_GEOMETRY_INDEX_PATH = "/data/processed/routes/index.json";
 const BUS_STOPS_GEOJSON_PATH = "/data/processed/stops.geojson";
+const BUS_STOPS_ENRICHED_GEOJSON_PATH = "/data/processed/stop_analysis/stops_enriched.geojson";
 const BUS_STATIONS_GEOJSON_PATH = "/data/processed/bus_stations.geojson";
 const GARAGES_GEOJSON_PATH = "/data/processed/garages.geojson";
 const VEHICLE_LOOKUP_PATH = "/data/vehicles.json";
@@ -88,10 +89,14 @@ const appState = {
 	garageMarkers: [],
 	garageLoadToken: 0,
 	busStopsGeojson: null,
+	busStopsEnriched: false,
+	busStopsArePlaces: false,
 	busStationsGeojson: null,
 	busStopLayer: null,
 	busStopLoadToken: 0,
 	busStopFilterDistrict: [],
+	busStopFilterBoroughs: [],
+	busStopBoroughLookup: new Map(),
 	advancedStopsLayer: null,
 	stopRoutesIndex: null,
 	stopRoutesFromLines: new Map(),
@@ -183,7 +188,7 @@ function getStopName(props) {
 }
 
 function getStopDisplayName(props) {
-	return getStopName(props) || props?.STOP_CODE || props?.NAPTAN_ID || props?.NAPTAN_ATCO || "Bus stop";
+	return getStopName(props) || props?.PLACE_ID || props?.STOP_CODE || props?.NAPTAN_ID || props?.NAPTAN_ATCO || "Stop area";
 }
 
 function getStopRoadName(props) {
@@ -191,7 +196,7 @@ function getStopRoadName(props) {
 }
 
 function getStopCode(props) {
-	return props?.STOP_CODE || props?.NAPTAN_ID || props?.NAPTAN_ATCO || "";
+	return props?.PLACE_ID || props?.STOP_CODE || props?.NAPTAN_ID || props?.NAPTAN_ATCO || "";
 }
 
 function escapeHtml(value) {
@@ -359,6 +364,53 @@ function formatBphValue(value) {
 	}
 	const rounded = Math.round(value * 10) / 10;
 	return Number.isInteger(rounded) ? String(Math.trunc(rounded)) : rounded.toFixed(1);
+}
+
+function parseCentralityValue(value) {
+	const num = Number(value);
+	return Number.isFinite(num) ? num : null;
+}
+
+function formatCentralityValue(value) {
+	if (!Number.isFinite(value)) {
+		return "";
+	}
+	const abs = Math.abs(value);
+	if (abs > 0 && abs < 0.001) {
+		return value.toExponential(2);
+	}
+	return value.toFixed(4);
+}
+
+function buildCentralitySummaryFromProps(props) {
+	const betweenness = parseCentralityValue(props?.betweenness_global ?? props?.betweenness);
+	const closeness = parseCentralityValue(props?.closeness_topo);
+	const eigenvector = parseCentralityValue(props?.eigenvector);
+	const parts = [];
+	if (Number.isFinite(betweenness)) {
+		parts.push(`Betw ${formatCentralityValue(betweenness)}`);
+	}
+	if (Number.isFinite(closeness)) {
+		parts.push(`Close ${formatCentralityValue(closeness)}`);
+	}
+	if (Number.isFinite(eigenvector)) {
+		parts.push(`Eig ${formatCentralityValue(eigenvector)}`);
+	}
+	return parts.length > 0 ? parts.join(" | ") : "";
+}
+
+function buildCentralityDetailLines(props) {
+	const entries = [
+		["Betweenness", parseCentralityValue(props?.betweenness_global ?? props?.betweenness)],
+		["Closeness (topo)", parseCentralityValue(props?.closeness_topo)],
+		["Eigenvector", parseCentralityValue(props?.eigenvector)],
+		["Degree", parseCentralityValue(props?.degree)],
+		["Degree (normalized)", parseCentralityValue(props?.degree_norm)],
+		["Route degree", parseCentralityValue(props?.route_degree)]
+	];
+	return entries
+		.filter(([, value]) => Number.isFinite(value))
+		.map(([label, value]) => `<div>${escapeHtml(label)}: ${escapeHtml(formatCentralityValue(value))}</div>`);
 }
 
 function buildRouteFrequencySummary(freqs) {
@@ -1713,19 +1765,131 @@ function clearAdvancedStopsLayer() {
 	}
 }
 
-function buildAdvancedStopPopup(stop) {
-	const name = stop?.name || "Bus stop";
+const ADVANCED_STOP_METRIC_LABELS = {
+	route_count: "Routes per place",
+	betweenness: "Betweenness (LCC)",
+	closeness_topo: "Closeness (topo, LCC)",
+	eigenvector: "Eigenvector (LCC)",
+	degree: "Degree",
+	degree_norm: "Degree (normalized)",
+	route_degree: "Route degree"
+};
+const ADVANCED_STOP_GRADIENT = {
+	low: "#ccfbf1",
+	high: "#0f766e",
+	fallback: "#e2e8f0",
+	fallbackStroke: "#94a3b8"
+};
+
+function getAdvancedStopMetricValue(stop, metric) {
+	if (!stop || !metric) {
+		return null;
+	}
+	const value = stop[metric];
+	const num = Number(value);
+	return Number.isFinite(num) ? num : null;
+}
+
+function formatAdvancedStopMetricValue(metric, value) {
+	if (!Number.isFinite(value)) {
+		return "";
+	}
+	if (metric === "route_count") {
+		return String(Math.round(value));
+	}
+	return formatCentralityValue(value);
+}
+
+function hexToRgb(hex) {
+	const cleaned = String(hex || "").replace("#", "");
+	if (cleaned.length !== 6) {
+		return null;
+	}
+	const r = parseInt(cleaned.slice(0, 2), 16);
+	const g = parseInt(cleaned.slice(2, 4), 16);
+	const b = parseInt(cleaned.slice(4, 6), 16);
+	if ([r, g, b].some((value) => Number.isNaN(value))) {
+		return null;
+	}
+	return { r, g, b };
+}
+
+function lerp(a, b, t) {
+	return a + (b - a) * t;
+}
+
+function lerpColor(lowHex, highHex, t) {
+	const low = hexToRgb(lowHex);
+	const high = hexToRgb(highHex);
+	if (!low || !high) {
+		return lowHex;
+	}
+	const clamped = Math.min(1, Math.max(0, t));
+	const r = Math.round(lerp(low.r, high.r, clamped));
+	const g = Math.round(lerp(low.g, high.g, clamped));
+	const b = Math.round(lerp(low.b, high.b, clamped));
+	return `rgb(${r}, ${g}, ${b})`;
+}
+
+function getAdvancedStopMetricRange(stops, metric) {
+	let min = Number.POSITIVE_INFINITY;
+	let max = Number.NEGATIVE_INFINITY;
+	let found = false;
+	stops.forEach((stop) => {
+		const value = getAdvancedStopMetricValue(stop, metric);
+		if (!Number.isFinite(value)) {
+			return;
+		}
+		found = true;
+		if (value < min) {
+			min = value;
+		}
+		if (value > max) {
+			max = value;
+		}
+	});
+	return found ? { min, max } : null;
+}
+
+function buildAdvancedStopPopup(stop, options = {}) {
+	const name = stop?.name || "Stop area";
 	const routes = Array.isArray(stop?.routes) ? stop.routes : [];
 	const routeSets = appState.useRouteTypeColours ? appState.networkRouteSets : null;
+	const centrality = stop?.centralitySummary || buildCentralitySummaryFromProps(stop);
+	const metaParts = [];
+	if (centrality) {
+		metaParts.push(`Centrality: ${centrality}`);
+	}
+	const metricKey = options?.colorBy || "";
+	if (metricKey) {
+		const value = getAdvancedStopMetricValue(stop, metricKey);
+		if (Number.isFinite(value)) {
+			const label = ADVANCED_STOP_METRIC_LABELS[metricKey] || metricKey;
+			const formatted = formatAdvancedStopMetricValue(metricKey, value);
+			if (formatted) {
+				metaParts.push(`${label}: ${formatted}`);
+			}
+		}
+	}
+	if (stop?.borough && stop?.borough !== "Unknown") {
+		metaParts.push(String(stop.borough));
+	}
+	if (stop?.region && stop?.region !== "Unknown") {
+		metaParts.push(`Region ${stop.region}`);
+	}
+	const metaLine = metaParts.length > 0
+		? `<div class="hover-popup__meta">${escapeHtml(metaParts.join(" | "))}</div>`
+		: "";
 	return `
 		<div class="hover-popup__content">
 			<div class="hover-popup__title">${escapeHtml(name)}</div>
 			<div class="hover-popup__routes">${renderRoutePills(routes, routeSets)}</div>
+			${metaLine}
 		</div>
 	`;
 }
 
-function renderAdvancedStopsLayer(stops) {
+function renderAdvancedStopsLayer(stops, options = {}) {
 	if (!appState.map) {
 		return;
 	}
@@ -1733,6 +1897,8 @@ function renderAdvancedStopsLayer(stops) {
 	if (!Array.isArray(stops) || stops.length === 0) {
 		return;
 	}
+	const colorMetric = options?.colorBy || "";
+	const metricRange = colorMetric ? getAdvancedStopMetricRange(stops, colorMetric) : null;
 	const layerGroup = L.layerGroup();
 	stops.forEach((stop) => {
 		const lat = Number(stop?.lat);
@@ -1740,15 +1906,29 @@ function renderAdvancedStopsLayer(stops) {
 		if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
 			return;
 		}
+		let fillColor = "#14b8a6";
+		let strokeColor = "#0f766e";
+		if (colorMetric && metricRange) {
+			const value = getAdvancedStopMetricValue(stop, colorMetric);
+			if (Number.isFinite(value)) {
+				const t = metricRange.max === metricRange.min
+					? 1
+					: (value - metricRange.min) / (metricRange.max - metricRange.min);
+				fillColor = lerpColor(ADVANCED_STOP_GRADIENT.low, ADVANCED_STOP_GRADIENT.high, t);
+			} else {
+				fillColor = ADVANCED_STOP_GRADIENT.fallback;
+				strokeColor = ADVANCED_STOP_GRADIENT.fallbackStroke;
+			}
+		}
 		const marker = L.circleMarker([lat, lon], {
 			radius: 4,
 			weight: 1,
-			color: "#0f766e",
-			fillColor: "#14b8a6",
+			color: strokeColor,
+			fillColor,
 			fillOpacity: 0.75,
 			pane: STOP_PANE
 		});
-		bindHoverPopup(marker, () => buildAdvancedStopPopup(stop));
+		bindHoverPopup(marker, () => buildAdvancedStopPopup(stop, options));
 		marker.addTo(layerGroup);
 	});
 	layerGroup.addTo(appState.map);
@@ -1767,7 +1947,7 @@ async function addBusStopsLayer(map) {
 
 	clearBusStopsLayer();
 	const routeSets = appState.useRouteTypeColours ? await loadNetworkRouteSets() : null;
-	const result = filterBusStops(geojson, appState.busStopFilterDistrict);
+	const result = filterBusStops(geojson, appState.busStopFilterDistrict, appState.busStopFilterBoroughs);
 	const layerGroup = L.layerGroup();
 
 	result.features.forEach((feature) => {
@@ -1802,7 +1982,7 @@ async function addBusStopsLayer(map) {
 
 	layerGroup.addTo(map);
 	appState.busStopLayer = layerGroup;
-	updateBusStopFilterStatus(result.count, result.district);
+	updateBusStopFilterStatus(result.count, result.district, result.borough);
 	return layerGroup;
 }
 
@@ -1819,11 +1999,31 @@ async function loadBusStopsGeojson() {
 	if (appState.busStopsGeojson) {
 		return appState.busStopsGeojson;
 	}
-	const res = await fetch(BUS_STOPS_GEOJSON_PATH);
-	appState.busStopsGeojson = await res.json();
+	const tryFetchGeojson = async (path) => {
+		const res = await fetch(path, { cache: "no-store" });
+		if (!res.ok) {
+			return null;
+		}
+		return res.json();
+	};
+	const enriched = await tryFetchGeojson(BUS_STOPS_ENRICHED_GEOJSON_PATH);
+	if (enriched) {
+		appState.busStopsGeojson = enriched;
+		appState.busStopsEnriched = true;
+	} else {
+		const base = await tryFetchGeojson(BUS_STOPS_GEOJSON_PATH);
+		appState.busStopsGeojson = base;
+		appState.busStopsEnriched = false;
+	}
 	if (!appState.stopRoutesIndex) {
 		appState.stopRoutesIndex = buildStopRouteIndex(appState.busStopsGeojson);
 	}
+	appState.busStopBoroughLookup = buildStopBoroughLookup(appState.busStopsGeojson);
+	appState.busStopsArePlaces = Boolean(
+		appState.busStopsGeojson?.features?.[0]?.properties?.PLACE_ID
+		|| appState.busStopsGeojson?.features?.[0]?.properties?.child_stop_count
+		|| appState.busStopsGeojson?.features?.[0]?.properties?.CHILD_STOP_COUNT
+	);
 	return appState.busStopsGeojson;
 }
 
@@ -1854,6 +2054,45 @@ function getPostcodeDistrict(props) {
 	return normalisePostcodeDistrict(props?.POSTCODE);
 }
 
+function normaliseBoroughToken(value) {
+	if (!value) {
+		return "";
+	}
+	return String(value).trim().toLowerCase();
+}
+
+function normaliseBoroughTokens(value) {
+	if (!value) {
+		return [];
+	}
+	const tokens = Array.isArray(value)
+		? value
+		: String(value).split(/[;,]+/);
+	const cleaned = tokens
+		.map((token) => normaliseBoroughToken(token))
+		.filter(Boolean);
+	return Array.from(new Set(cleaned));
+}
+
+function formatBoroughToken(token) {
+	const normalised = normaliseBoroughToken(token);
+	if (!normalised) {
+		return "";
+	}
+	const lookup = appState.busStopBoroughLookup;
+	if (lookup && lookup.has(normalised)) {
+		return lookup.get(normalised);
+	}
+	return normalised
+		.split(/\s+/)
+		.map((word) => (word ? word[0].toUpperCase() + word.slice(1) : ""))
+		.join(" ");
+}
+
+function getStopBoroughToken(props) {
+	return normaliseBoroughToken(props?.borough || props?.BOROUGH || props?.Borough || props?.["Borough"]);
+}
+
 function normalisePostcodeDistrictTokens(value) {
 	if (!value) {
 		return [];
@@ -1865,6 +2104,33 @@ function normalisePostcodeDistrictTokens(value) {
 		.map((token) => normalisePostcodeDistrict(token))
 		.filter(Boolean);
 	return Array.from(new Set(cleaned));
+}
+
+function buildStopBoroughLookup(geojson) {
+	const lookup = new Map();
+	const features = Array.isArray(geojson?.features) ? geojson.features : [];
+	features.forEach((feature) => {
+		const props = feature?.properties || {};
+		if (!hasStopRoutes(props)) {
+			return;
+		}
+		const raw = props?.borough || props?.BOROUGH || props?.Borough || props?.["Borough"];
+		if (!raw) {
+			return;
+		}
+		const display = String(raw).trim();
+		if (!display) {
+			return;
+		}
+		const token = normaliseBoroughToken(display);
+		if (!token) {
+			return;
+		}
+		if (!lookup.has(token)) {
+			lookup.set(token, display);
+		}
+	});
+	return lookup;
 }
 
 function formatRouteList(routes) {
@@ -2000,10 +2266,15 @@ function buildBusStopPopup(props) {
 	const name = getStopDisplayName(props);
 	const routes = getStopRouteTokens(props);
 	const routeSets = appState.useRouteTypeColours ? appState.networkRouteSets : null;
+	const centrality = buildCentralitySummaryFromProps(props);
+	const metaLine = centrality
+		? `<div class="hover-popup__meta">Centrality: ${escapeHtml(centrality)}</div>`
+		: "";
 	return `
 		<div class="hover-popup__content">
 			<div class="hover-popup__title">${escapeHtml(name)}</div>
 			<div class="hover-popup__routes">${renderStopRoutePills(props, routes, routeSets)}</div>
+			${metaLine}
 		</div>
 	`;
 }
@@ -2013,10 +2284,17 @@ function buildBusStopInfoHtml(props, routeSets) {
 	const road = getStopRoadName(props);
 	const postcode = props?.POSTCODE || "";
 	const stopCode = getStopCode(props);
+	const placeId = props?.PLACE_ID || "";
+	const childStopCount = props?.child_stop_count ?? props?.CHILD_STOP_COUNT;
+	const borough = props?.borough || props?.BOROUGH || "";
+	const region = props?.region || "";
 	const details = [
 		road ? `Road: ${escapeHtml(road)}` : "",
 		postcode ? `Postcode: ${escapeHtml(postcode)}` : "",
-		stopCode ? `Stop code: ${escapeHtml(stopCode)}` : ""
+		placeId ? `Place ID: ${escapeHtml(placeId)}` : (stopCode ? `Stop code: ${escapeHtml(stopCode)}` : ""),
+		Number.isFinite(Number(childStopCount)) ? `Child stops: ${escapeHtml(Number(childStopCount))}` : "",
+		borough ? `Borough: ${escapeHtml(borough)}` : "",
+		region ? `Region: ${escapeHtml(region)}` : ""
 	].filter(Boolean);
 
 	const detailLines = details.length > 0
@@ -2024,18 +2302,28 @@ function buildBusStopInfoHtml(props, routeSets) {
 		: '<div class="info-empty">No extra stop details listed.</div>';
 
 	const routes = getStopRouteTokens(props);
+	const centralityLines = buildCentralityDetailLines(props);
+	const centralitySection = centralityLines.length > 0
+		? `
+			<div class="info-section">
+				<div class="info-label">Centrality</div>
+				${centralityLines.join("")}
+			</div>
+		`
+		: "";
 	return {
 		title: name,
-		subtitle: "Bus stop",
+		subtitle: "Stop area",
 		bodyHtml: `
 			<div class="info-section">
-				<div class="info-label">Stop details</div>
+				<div class="info-label">Place details</div>
 				${detailLines}
 			</div>
 			<div class="info-section">
 				<div class="info-label">Routes serving</div>
 				${renderStopRoutePills(props, routes, routeSets)}
 			</div>
+			${centralitySection}
 		`
 	};
 }
@@ -2182,47 +2470,69 @@ function hasStopRoutes(props) {
 	return getStopRouteTokens(props).length > 0;
 }
 
-function filterBusStops(geojson, district) {
+function filterBusStops(geojson, district, boroughs) {
 	const features = Array.isArray(geojson?.features) ? geojson.features : [];
 	const districts = normalisePostcodeDistrictTokens(district);
-	if (districts.length === 0) {
+	const boroughTokens = normaliseBoroughTokens(boroughs);
+	const needsDistrict = districts.length > 0;
+	const needsBorough = boroughTokens.length > 0;
+	if (!needsDistrict && !needsBorough) {
 		const withRoutes = features.filter((feature) => {
 			const props = feature?.properties || {};
 			return hasStopRoutes(props);
 		});
-		return { features: withRoutes, count: withRoutes.length, district: [] };
+		return { features: withRoutes, count: withRoutes.length, district: [], borough: [] };
 	}
-	const districtSet = new Set(districts);
+	const districtSet = needsDistrict ? new Set(districts) : null;
+	const boroughSet = needsBorough ? new Set(boroughTokens) : null;
 	const filtered = features.filter((feature) => {
 		const props = feature?.properties || {};
 		if (!hasStopRoutes(props)) {
 			return false;
 		}
-		return districtSet.has(getPostcodeDistrict(props));
+		if (districtSet && !districtSet.has(getPostcodeDistrict(props))) {
+			return false;
+		}
+		if (boroughSet) {
+			const token = getStopBoroughToken(props);
+			if (!token || !boroughSet.has(token)) {
+				return false;
+			}
+		}
+		return true;
 	});
-	return { features: filtered, count: filtered.length, district: districts };
+	return { features: filtered, count: filtered.length, district: districts, borough: boroughTokens };
 }
 
-function updateBusStopFilterStatus(count, district) {
+function updateBusStopFilterStatus(count, district, boroughs) {
 	const status = document.getElementById("busStopFilterStatus");
 	if (!status) {
 		return;
 	}
 	const districts = normalisePostcodeDistrictTokens(district);
+	const boroughTokens = normaliseBoroughTokens(boroughs);
+	const unitLabel = appState.busStopsArePlaces ? "places" : "stops";
+	const parts = [];
 	if (districts.length > 0) {
-		const label = districts.length > 3
-			? `${districts.length} districts`
-			: districts.join(", ");
-		status.textContent = `Showing ${count} stops in ${label}.`;
+		parts.push(districts.length > 3 ? `${districts.length} districts` : districts.join(", "));
+	}
+	if (boroughTokens.length > 0) {
+		const label = boroughTokens.length > 3
+			? `${boroughTokens.length} boroughs`
+			: boroughTokens.map((token) => formatBoroughToken(token)).join(", ");
+		parts.push(label);
+	}
+	if (parts.length > 0) {
+		status.textContent = `Showing ${count} ${unitLabel} in ${parts.join(" + ")}.`;
 	} else {
-		status.textContent = "Showing all stops.";
+		status.textContent = `Showing all ${unitLabel}.`;
 	}
 }
 
 async function refreshBusStopFilterStatus() {
 	const geojson = await loadBusStopsGeojson();
-	const result = filterBusStops(geojson, appState.busStopFilterDistrict);
-	updateBusStopFilterStatus(result.count, result.district);
+	const result = filterBusStops(geojson, appState.busStopFilterDistrict, appState.busStopFilterBoroughs);
+	updateBusStopFilterStatus(result.count, result.district, result.borough);
 }
 
 function isGarageScaleEnabled() {
@@ -3728,6 +4038,9 @@ function shouldUseRouteHoverFallback() {
 	if (!appState.map || appState.focusRouteId) {
 		return false;
 	}
+	if (appState.analysisActive && appState.analysisRouteLayer) {
+		return true;
+	}
 	if (appState.activeGarageRoutes && appState.garageRouteLayer) {
 		return true;
 	}
@@ -3738,6 +4051,9 @@ function shouldUseRouteHoverFallback() {
 }
 
 function getActiveHoverLayerGroup() {
+	if (appState.analysisActive && appState.analysisRouteLayer) {
+		return appState.analysisRouteLayer;
+	}
 	if (appState.activeGarageRoutes && appState.garageRouteLayer) {
 		return appState.garageRouteLayer;
 	}
@@ -4311,6 +4627,7 @@ function clearAnalysisRoutes() {
 		appState.map.removeLayer(appState.analysisRouteLayer);
 		appState.analysisRouteLayer = null;
 	}
+	closeRouteHoverPopup();
 	appState.analysisRouteLoadToken += 1;
 	if (!appState.analysisActive) {
 		return;
@@ -4381,6 +4698,7 @@ async function showAnalysisRoutes(routeIds) {
 					color,
 					weight: 3.2,
 					opacity: 0.85,
+					interactive: true,
 					pane: ROUTE_PANE
 				}).addTo(layerGroup);
 				line._routeId = routeId;
@@ -4770,6 +5088,96 @@ function getGarageMarkerRadius(value, scaleEnabled, maxPercent) {
 	return minRadius + (maxRadius - minRadius) * t;
 }
 
+function setupSidebarResize() {
+	const sidebar = document.getElementById("sidebar");
+	const handle = document.getElementById("sidebarResizeHandle");
+	if (!sidebar || !handle) {
+		return;
+	}
+	const parsePx = (value, fallback) => {
+		const num = Number.parseFloat(String(value || "").trim());
+		return Number.isFinite(num) ? num : fallback;
+	};
+	let startX = 0;
+	let startWidth = 0;
+	let minWidth = 0;
+	let maxWidth = 0;
+	let isResizing = false;
+
+	const refreshBounds = () => {
+		const rootStyles = getComputedStyle(document.documentElement);
+		minWidth = parsePx(rootStyles.getPropertyValue("--sidebar-min"), 300);
+		maxWidth = parsePx(rootStyles.getPropertyValue("--sidebar-max"), 480);
+	};
+
+	const applyWidth = (clientX) => {
+		const delta = clientX - startX;
+		const next = Math.min(maxWidth, Math.max(minWidth, startWidth + delta));
+		document.documentElement.style.setProperty("--sidebar-width", `${Math.round(next)}px`);
+	};
+
+	const onMouseMove = (event) => {
+		if (!isResizing) {
+			return;
+		}
+		applyWidth(event.clientX);
+	};
+
+	const onTouchMove = (event) => {
+		if (!isResizing || !event.touches || event.touches.length === 0) {
+			return;
+		}
+		applyWidth(event.touches[0].clientX);
+		event.preventDefault();
+	};
+
+	const stopResize = () => {
+		if (!isResizing) {
+			return;
+		}
+		isResizing = false;
+		document.body.classList.remove("is-resizing");
+		window.removeEventListener("mousemove", onMouseMove);
+		window.removeEventListener("mouseup", stopResize);
+		window.removeEventListener("touchmove", onTouchMove);
+		window.removeEventListener("touchend", stopResize);
+		window.removeEventListener("touchcancel", stopResize);
+	};
+
+	const startResize = (clientX) => {
+		refreshBounds();
+		startX = clientX;
+		startWidth = sidebar.getBoundingClientRect().width;
+		isResizing = true;
+		document.body.classList.add("is-resizing");
+		window.addEventListener("mousemove", onMouseMove);
+		window.addEventListener("mouseup", stopResize, { once: true });
+		window.addEventListener("touchmove", onTouchMove, { passive: false });
+		window.addEventListener("touchend", stopResize, { once: true });
+		window.addEventListener("touchcancel", stopResize, { once: true });
+	};
+
+	handle.addEventListener("mousedown", (event) => {
+		if (event.button !== 0 || isResizing) {
+			return;
+		}
+		event.preventDefault();
+		startResize(event.clientX);
+	});
+
+	handle.addEventListener(
+		"touchstart",
+		(event) => {
+			if (!event.touches || event.touches.length !== 1 || isResizing) {
+				return;
+			}
+			startResize(event.touches[0].clientX);
+			event.preventDefault();
+		},
+		{ passive: false }
+	);
+}
+
 
 function setupUI() {
 	setupModuleAccordion();
@@ -4780,6 +5188,7 @@ function setupUI() {
 	setupNetworkFilterDrag();
 	setupAboutModal();
 	setupOmniSearch();
+	setupSidebarResize();
 
 	const advancedFiltersModule = document.querySelector('[data-module="advanced-filters"]');
 	if (advancedFiltersModule && window.RouteMapsterAdvancedFilters?.initAdvancedFilters) {
@@ -4847,7 +5256,7 @@ function setupUI() {
 				return;
 			}
 			clearBusStopsLayer();
-			updateSelectedInfo("Bus stops hidden.");
+			updateSelectedInfo("Stop areas hidden.");
 			if (appState.selectedFeature?.type === "stop") {
 				resetInfoPanel();
 			}
@@ -5180,6 +5589,25 @@ function setupUI() {
 	}
 
 	if (appState.map) {
+		const mapContainer = appState.map.getContainer();
+		if (mapContainer) {
+			mapContainer.addEventListener("click", (event) => {
+				const target = event.target.closest(".hover-popup .route-pill");
+				if (!target) {
+					return;
+				}
+				const routeId = target.dataset.route;
+				if (!routeId) {
+					return;
+				}
+				event.preventDefault();
+				event.stopPropagation();
+				focusRoute(routeId);
+			});
+		}
+	}
+
+	if (appState.map) {
 		appState.map.on("click", () => {
 			if (appState.focusRouteId) {
 				clearFocusedRoute();
@@ -5304,31 +5732,46 @@ function setupRouteFilterInput() {
 }
 
 function setupBusStopFilterInput() {
-	const input = document.getElementById("busStopDistrictEntry");
-	const list = document.getElementById("busStopDistrictTags");
+	const districtInput = document.getElementById("busStopDistrictEntry");
+	const districtList = document.getElementById("busStopDistrictTags");
+	const boroughInput = document.getElementById("busStopBoroughEntry");
+	const boroughList = document.getElementById("busStopBoroughTags");
+	const boroughOptions = document.getElementById("busStopBoroughOptions");
 	const applyButton = document.getElementById("applyBusStopFilter");
 	const clearButton = document.getElementById("clearBusStopFilter");
-	if (!input || !list || !applyButton || !clearButton) {
+	if (!districtInput || !districtList || !applyButton || !clearButton) {
 		return;
 	}
 
-	let tokens = [];
+	let districtTokens = normalisePostcodeDistrictTokens(appState.busStopFilterDistrict);
+	let boroughTokens = normaliseBoroughTokens(appState.busStopFilterBoroughs);
 
-	const syncTags = () => {
-		list.innerHTML = tokens
+	const renderTagList = (tokens, listEl, formatter) => {
+		if (!listEl) {
+			return;
+		}
+		listEl.innerHTML = tokens
 			.map((token) => {
-				const safe = token.replace(/"/g, "&quot;");
-				return `<span class="tag-chip" data-token="${safe}">
-					<span>${safe}</span>
-					<button type="button" class="tag-remove" aria-label="Remove ${safe}">x</button>
+				const label = formatter ? formatter(token) : token;
+				const safeToken = escapeHtml(token);
+				const safeLabel = escapeHtml(label);
+				return `<span class="tag-chip" data-token="${safeToken}">
+					<span>${safeLabel}</span>
+					<button type="button" class="tag-remove" aria-label="Remove ${safeLabel}">x</button>
 				</span>`;
 			})
 			.join("");
-		clearButton.disabled = tokens.length === 0;
+	};
+
+	const syncTags = () => {
+		renderTagList(districtTokens, districtList, (token) => token);
+		renderTagList(boroughTokens, boroughList, (token) => formatBoroughToken(token));
+		clearButton.disabled = districtTokens.length === 0 && boroughTokens.length === 0;
 	};
 
 	const applyTokens = async () => {
-		appState.busStopFilterDistrict = tokens.slice();
+		appState.busStopFilterDistrict = districtTokens.slice();
+		appState.busStopFilterBoroughs = boroughTokens.slice();
 		await refreshBusStopFilterStatus();
 		const showStops = document.getElementById("showBusStops");
 		if (showStops && showStops.checked) {
@@ -5341,15 +5784,15 @@ function setupBusStopFilterInput() {
 		applyTokens().catch(() => {});
 	};
 
-	const addTokensFromValue = (value) => {
+	const addDistrictTokensFromValue = (value) => {
 		const newTokens = normalisePostcodeDistrictTokens(value);
 		if (newTokens.length === 0) {
 			return;
 		}
-		const tokenSet = new Set(tokens);
+		const tokenSet = new Set(districtTokens);
 		newTokens.forEach((token) => {
 			if (!tokenSet.has(token)) {
-				tokens.push(token);
+				districtTokens.push(token);
 				tokenSet.add(token);
 			}
 		});
@@ -5357,46 +5800,79 @@ function setupBusStopFilterInput() {
 		applyAndRefresh();
 	};
 
-	const commitInput = () => {
-		const value = input.value.trim();
+	const addBoroughTokensFromValue = (value) => {
+		const newTokens = normaliseBoroughTokens(value);
+		if (newTokens.length === 0) {
+			return;
+		}
+		const tokenSet = new Set(boroughTokens);
+		newTokens.forEach((token) => {
+			if (!tokenSet.has(token)) {
+				boroughTokens.push(token);
+				tokenSet.add(token);
+			}
+		});
+		syncTags();
+		applyAndRefresh();
+	};
+
+	const commitDistrictInput = () => {
+		const value = districtInput.value.trim();
 		if (!value) {
 			return;
 		}
-		addTokensFromValue(value);
-		input.value = "";
+		addDistrictTokensFromValue(value);
+		districtInput.value = "";
+	};
+
+	const commitBoroughInput = () => {
+		if (!boroughInput) {
+			return;
+		}
+		const value = boroughInput.value.trim();
+		if (!value) {
+			return;
+		}
+		addBoroughTokensFromValue(value);
+		boroughInput.value = "";
 	};
 
 	applyButton.addEventListener("click", () => {
-		commitInput();
+		commitDistrictInput();
+		commitBoroughInput();
 		applyAndRefresh();
 	});
 
 	clearButton.addEventListener("click", () => {
-		tokens = [];
-		input.value = "";
+		districtTokens = [];
+		boroughTokens = [];
+		districtInput.value = "";
+		if (boroughInput) {
+			boroughInput.value = "";
+		}
 		syncTags();
 		applyAndRefresh();
 	});
 
-	input.addEventListener("keydown", (event) => {
+	districtInput.addEventListener("keydown", (event) => {
 		if (event.key === "Enter" || event.key === " " || event.key === "Spacebar") {
 			event.preventDefault();
-			commitInput();
+			commitDistrictInput();
 			return;
 		}
-		if (event.key === "Backspace" && input.value.trim() === "" && tokens.length > 0) {
+		if (event.key === "Backspace" && districtInput.value.trim() === "" && districtTokens.length > 0) {
 			event.preventDefault();
-			tokens = tokens.slice(0, -1);
+			districtTokens = districtTokens.slice(0, -1);
 			syncTags();
 			applyAndRefresh();
 		}
 	});
 
-	input.addEventListener("blur", () => {
-		commitInput();
+	districtInput.addEventListener("blur", () => {
+		commitDistrictInput();
 	});
 
-	list.addEventListener("click", (event) => {
+	districtList.addEventListener("click", (event) => {
 		const button = event.target.closest(".tag-remove");
 		if (!button) {
 			return;
@@ -5409,10 +5885,66 @@ function setupBusStopFilterInput() {
 		if (!token) {
 			return;
 		}
-		tokens = tokens.filter((entry) => entry !== token);
+		districtTokens = districtTokens.filter((entry) => entry !== token);
 		syncTags();
 		applyAndRefresh();
 	});
+
+	if (boroughInput) {
+		boroughInput.addEventListener("keydown", (event) => {
+			if (event.key === "Enter") {
+				event.preventDefault();
+				commitBoroughInput();
+				return;
+			}
+			if (event.key === "Backspace" && boroughInput.value.trim() === "" && boroughTokens.length > 0) {
+				event.preventDefault();
+				boroughTokens = boroughTokens.slice(0, -1);
+				syncTags();
+				applyAndRefresh();
+			}
+		});
+
+		boroughInput.addEventListener("blur", () => {
+			commitBoroughInput();
+		});
+	}
+
+	if (boroughList) {
+		boroughList.addEventListener("click", (event) => {
+			const button = event.target.closest(".tag-remove");
+			if (!button) {
+				return;
+			}
+			const chip = button.closest(".tag-chip");
+			if (!chip) {
+				return;
+			}
+			const token = chip.getAttribute("data-token");
+			if (!token) {
+				return;
+			}
+			boroughTokens = boroughTokens.filter((entry) => entry !== token);
+			syncTags();
+			applyAndRefresh();
+		});
+	}
+
+	if (boroughOptions) {
+		loadBusStopsGeojson()
+			.then(() => {
+				const lookup = appState.busStopBoroughLookup || buildStopBoroughLookup(appState.busStopsGeojson);
+				appState.busStopBoroughLookup = lookup;
+				const options = Array.from(lookup.entries())
+					.map(([token, label]) => ({ token, label }))
+					.sort((a, b) => a.label.localeCompare(b.label));
+				boroughOptions.innerHTML = options
+					.map((option) => `<option value="${escapeHtml(option.label)}"></option>`)
+					.join("");
+				syncTags();
+			})
+			.catch(() => {});
+	}
 
 	syncTags();
 }
@@ -5652,7 +6184,7 @@ window.RouteMapsterAPI = {
 	clearEndpointHighlight,
 	showAnalysisRoutes,
 	clearAnalysisRoutes,
-	showAdvancedStops: (stops) => renderAdvancedStopsLayer(stops),
+	showAdvancedStops: (stops, options) => renderAdvancedStopsLayer(stops, options),
 	clearAdvancedStops: () => clearAdvancedStopsLayer()
 };
 

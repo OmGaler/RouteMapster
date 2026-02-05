@@ -27,6 +27,9 @@
       --route-school: #3b82f6;
       --route-prefix: #10b981;
       --shadow: 0 12px 30px rgba(15, 23, 42, 0.12);
+      --sidebar-width: 340px;
+      --sidebar-min: 300px;
+      --sidebar-max: 480px;
     }
 
     * { box-sizing: border-box; }
@@ -55,7 +58,7 @@
       position: relative;
       z-index: 1;
       display: grid;
-      grid-template-columns: 340px 1fr;
+      grid-template-columns: auto 1fr;
       grid-template-rows: 1fr;
       gap: 24px;
       padding: 24px;
@@ -65,15 +68,30 @@
 
     #app.has-details,
     #app.has-advanced-results {
-      grid-template-columns: 340px 1fr 320px;
+      grid-template-columns: auto 1fr 320px;
     }
 
     #sidebar {
       display: flex;
       flex-direction: column;
-      gap: 16px;
-      overflow-y: auto;
+      gap: 0;
       min-height: 0;
+      min-width: 0;
+      width: var(--sidebar-width);
+      min-width: var(--sidebar-min);
+      max-width: var(--sidebar-max);
+      overflow: visible;
+      position: relative;
+    }
+
+    .sidebar-scroll {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      min-height: 0;
+      overflow-y: auto;
+      overflow-x: hidden;
+      padding-right: 6px;
       overscroll-behavior: contain;
     }
 
@@ -82,7 +100,9 @@
       flex-direction: column;
       gap: 16px;
       overflow-y: auto;
+      overflow-x: hidden;
       min-height: 0;
+      min-width: 0;
       overscroll-behavior: contain;
     }
 
@@ -565,11 +585,27 @@
       letter-spacing: 0.1em;
       color: var(--muted);
       padding-bottom: 6px;
+      white-space: nowrap;
     }
 
     .analysis-table td {
       padding: 6px 0;
       border-bottom: 1px dashed var(--panel-border);
+      white-space: nowrap;
+    }
+
+    .analysis-table th,
+    .analysis-table td {
+      padding-right: 12px;
+    }
+
+    .analysis-table th:last-child,
+    .analysis-table td:last-child {
+      min-width: 160px;
+    }
+
+    .analysis-table td:last-child {
+      white-space: normal;
     }
 
     .analysis-summary {
@@ -582,6 +618,26 @@
     .analysis-summary strong {
       color: var(--ink);
       font-weight: 600;
+    }
+
+    .analysis-table-wrap {
+      overflow-x: auto;
+    }
+
+    .map-legend {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .map-legend__bar {
+      flex: 1;
+      height: 8px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, #ccfbf1, #0f766e);
+      border: 1px solid rgba(15, 118, 110, 0.2);
     }
 
     #advancedResultsPanel {
@@ -838,20 +894,47 @@
       gap: 8px;
       padding: 10px 14px;
       border-radius: 999px;
-      border: 1px solid var(--panel-border);
-      background: rgba(255, 250, 241, 0.94);
-      color: var(--ink);
+      border: 1px solid rgba(15, 118, 110, 0.85);
+      background: linear-gradient(135deg, #0f766e, #22c55e);
+      color: #f8fafc;
       font-weight: 600;
-      box-shadow: 0 10px 20px rgba(15, 23, 42, 0.12);
+      box-shadow: 0 16px 28px rgba(15, 23, 42, 0.2);
+      pointer-events: auto;
       cursor: pointer;
-      z-index: 8;
+      z-index: 1200;
       transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
     }
 
     .omni-launch:hover {
       transform: translateY(-1px);
-      border-color: var(--accent);
-      box-shadow: 0 14px 24px rgba(15, 23, 42, 0.16);
+      border-color: rgba(15, 118, 110, 0.85);
+      box-shadow: 0 18px 32px rgba(15, 23, 42, 0.24);
+    }
+
+    .sidebar-resize-handle {
+      position: absolute;
+      top: 50%;
+      right: -6px;
+      transform: translateY(-50%);
+      width: 8px;
+      height: 44px;
+      border-radius: 999px;
+      background: rgba(15, 23, 42, 0.18);
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.2), inset 0 0 0 1px rgba(255, 255, 255, 0.75);
+      cursor: ew-resize;
+      touch-action: none;
+      opacity: 0.7;
+      transition: opacity 0.2s ease, transform 0.2s ease;
+      z-index: 6;
+    }
+
+    #sidebar:hover .sidebar-resize-handle {
+      opacity: 1;
+    }
+
+    body.is-resizing {
+      cursor: ew-resize;
+      user-select: none;
     }
 
     .omni-launch svg {
@@ -1322,6 +1405,13 @@
 
       #sidebar {
         overflow: visible;
+        resize: none;
+        width: auto;
+        max-width: none;
+      }
+
+      .sidebar-resize-handle {
+        display: none;
       }
 
       #rightpanel {
@@ -1357,34 +1447,35 @@
 
   <div id="app">
     <aside id="sidebar">
-      <div class="brand">
-        <div class="brand-mark">
-          <img src="assets/routemapster.svg" alt="RouteMapster logo" />
-        </div>
-        <div>
-          <div class="brand-title">RouteMapster</div>
-          <div class="brand-subtitle">Garage-led route explorer</div>
-          <div class="brand-actions">
-            <button id="openAbout" class="ghost-button tiny" type="button">About</button>
+      <div class="sidebar-scroll">
+        <div class="brand">
+          <div class="brand-mark">
+            <img src="assets/routemapster.svg" alt="RouteMapster logo" />
+          </div>
+          <div>
+            <div class="brand-title">RouteMapster</div>
+            <div class="brand-subtitle">London Bus Explorer</div>
+            <div class="brand-actions">
+              <button id="openAbout" class="ghost-button tiny" type="button">About</button>
+            </div>
           </div>
         </div>
-      </div>
 
-      <div id="selectedInfo" class="status-card">Ready</div>
+        <div id="selectedInfo" class="status-card">Ready</div>
 
-      <div class="global-controls">
-        <div class="section-title">Global controls</div>
-        <button id="clearAllLayers" class="ghost-button clear-button" type="button">Clear all layers</button>
-        <button id="clearAllRoutes" class="ghost-button clear-button clear-button-soft" type="button">Clear all routes</button>
-        <label class="toggle">
-          <span>Colour routes by type</span>
-          <input type="checkbox" id="colourRoutesByType" checked />
-        </label>
-        <div class="module-note">When off, routes render in red.</div>
-      </div>
+        <div class="global-controls">
+          <div class="section-title">Global controls</div>
+          <button id="clearAllLayers" class="ghost-button clear-button" type="button">Clear all layers</button>
+          <button id="clearAllRoutes" class="ghost-button clear-button clear-button-soft" type="button">Clear all routes</button>
+          <label class="toggle">
+            <span>Colour routes by type</span>
+            <input type="checkbox" id="colourRoutesByType" checked />
+          </label>
+          <div class="module-note">When off, routes render in red.</div>
+        </div>
 
-      <div id="controls">
-        <details class="module" data-module="routes" open>
+        <div id="controls">
+          <details class="module" data-module="routes" open>
           <summary>
             <span class="module-title">Bus routes</span>
             <span class="module-tag">Core</span>
@@ -1478,27 +1569,36 @@
 
         <details class="module" data-module="stops">
           <summary>
-            <span class="module-title">Bus stops</span>
+            <span class="module-title">Stop areas</span>
             <span class="module-tag">Live</span>
           </summary>
           <div class="module-body">
             <div class="module-section">
               <div class="section-title">Visibility</div>
               <label class="toggle">
-                <span>Show bus stops</span>
+                <span>Show stop areas</span>
                 <input type="checkbox" id="showBusStops" />
               </label>
-              <div class="module-note">Hover or click a stop to see routes.</div>
+              <div class="module-note">Hover or click a place to see routes.</div>
             </div>
 
             <div class="module-section">
-              <div class="section-title">Postcode district</div>
+              <div class="section-title">Stop filters</div>
               <div class="field">
                 <label for="busStopDistrictEntry">Filter by district</label>
                 <div class="tag-input" id="busStopDistrictInput">
                   <div class="tag-list" id="busStopDistrictTags"></div>
                   <input id="busStopDistrictEntry" type="search" placeholder="e.g. N1, SW1" autocomplete="off" />
                 </div>
+              </div>
+              <div class="field">
+                <label for="busStopBoroughEntry">Filter by borough</label>
+                <div class="tag-input" id="busStopBoroughInput">
+                  <div class="tag-list" id="busStopBoroughTags"></div>
+                  <input id="busStopBoroughEntry" type="search" placeholder="e.g. Camden" autocomplete="off" list="busStopBoroughOptions" />
+                </div>
+                <datalist id="busStopBoroughOptions"></datalist>
+                <div class="module-note">Use commas to add multiple boroughs.</div>
               </div>
               <div class="button-row">
                 <button id="applyBusStopFilter" class="ghost-button compact" type="button">Apply filter</button>
@@ -1653,6 +1753,12 @@
                 <button id="advancedOperatorsSelectAll" class="ghost-button compact" type="button">Select all</button>
               </div>
               <div class="field">
+                <label for="advancedBoroughs">Boroughs</label>
+                <select id="advancedBoroughs" class="select-field" multiple size="5"></select>
+                <button id="advancedBoroughsSelectAll" class="ghost-button compact" type="button">Select all</button>
+                <div id="advancedBoroughsNote" class="module-note"></div>
+              </div>
+              <div class="field">
                 <label for="advancedVehicles">Vehicles</label>
                 <select id="advancedVehicles" class="select-field" multiple size="4"></select>
                 <button id="advancedVehiclesSelectAll" class="ghost-button compact" type="button">Select all</button>
@@ -1771,7 +1877,7 @@
 
         <details class="module" data-module="stop-analyses">
           <summary>
-            <span class="module-title">Stop analyses</span>
+            <span class="module-title">Stop area analyses</span>
             <span class="module-tag">New</span>
           </summary>
           <div class="module-body">
@@ -1779,7 +1885,9 @@
           </div>
         </details>
 
+        </div>
       </div>
+      <div id="sidebarResizeHandle" class="sidebar-resize-handle" aria-hidden="true"></div>
     </aside>
 
     <main id="mapArea">
@@ -1787,7 +1895,7 @@
         <div id="map"></div>
         <button id="openOmniSearch" class="omni-launch" type="button" aria-label="Open omnisearch">
           <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-            <path d="M11 3a8 8 0 1 1 5.3 14l3.6 3.6a1 1 0 0 1-1.4 1.4L14.9 18A8 8 0 0 1 11 3zm0 2a6 6 0 1 0 0 12a6 6 0 0 0 0-12z" fill="currentColor"></path>
+            <path d="M10.5 2.5a8 8 0 1 1 5.154 14.118l4.124 4.124a1 1 0 0 1-1.414 1.414l-4.124-4.124A8 8 0 0 1 10.5 2.5zm0 2a6 6 0 1 0 0 12a6 6 0 0 0 0-12z" fill="currentColor"></path>
           </svg>
           <span>Search</span>
         </button>
@@ -1813,7 +1921,7 @@
       </div>
       <div class="info-panel">
         <h2 id="infoTitle" class="info-title">Details</h2>
-        <p id="infoSubtitle" class="info-subtitle">Click a stop, station, or garage to view details.</p>
+        <p id="infoSubtitle" class="info-subtitle">Click a stop area, station, or garage to view details.</p>
         <div id="infoBody" class="info-body">
           <div class="info-section">
             <div class="info-label">Status</div>
@@ -1857,7 +1965,7 @@
       <div class="about-body">
         <div class="about-section">
           <h3>What this is</h3>
-          <div>RouteMapster is a garage-led view of London bus routes, built to explore coverage, operators, and service patterns quickly without drowning in raw data.</div>
+          <div>RouteMapster is a unified London bus route explorer, built to explore coverage, operators, and service patterns quickly without drowning in raw data.</div>
         </div>
 
         <div class="about-section">

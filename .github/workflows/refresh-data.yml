@@ -38,6 +38,26 @@ jobs:
       - name: Fetch bus stops
         run: python scripts/fetch_bus_stops.py
 
+      - name: Determine stop sequence changes
+        id: seq_changes
+        run: |
+          python scripts/sequence_changes.py --output data/processed/stop_analysis/route_sequences_changes.json
+          routes=$(python -c "import json; d=json.load(open('data/processed/stop_analysis/route_sequences_changes.json')); print(','.join(d.get('routes_to_fetch', [])))")
+          drop=$(python -c "import json; d=json.load(open('data/processed/stop_analysis/route_sequences_changes.json')); print(','.join(d.get('routes_to_drop', [])))")
+          trigger=$(python -c "import json; d=json.load(open('data/processed/stop_analysis/route_sequences_changes.json')); print('true' if d.get('trigger') else 'false')")
+          echo \"routes=${routes}\" >> $GITHUB_OUTPUT
+          echo \"drop=${drop}\" >> $GITHUB_OUTPUT
+          echo \"trigger=${trigger}\" >> $GITHUB_OUTPUT
+
+      - name: Fetch stop sequences (changed routes only)
+        if: steps.seq_changes.outputs.trigger == 'true' && (steps.seq_changes.outputs.routes != '' || steps.seq_changes.outputs.drop != '')
+        run: |
+          if [ -n \"${{ steps.seq_changes.outputs.routes }}\" ]; then
+            python scripts/fetch_stop_sequences.py --line-ids \"${{ steps.seq_changes.outputs.routes }}\" --replace-existing --drop-routes \"${{ steps.seq_changes.outputs.drop }}\"
+          else
+            python scripts/fetch_stop_sequences.py --no-index --drop-routes \"${{ steps.seq_changes.outputs.drop }}\"
+          fi
+
       - name: Build timetable frequency cache
         run: python scripts/build_frequency_cache.py
 

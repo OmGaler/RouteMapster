@@ -268,12 +268,44 @@
       run: (rows) => {
         const PRIMARY_PRECISION = 3;
         const FALLBACK_PRECISION = 2;
+        const MIN_ENDPOINT_DISTANCE_KM = 0.3;
 
         const roundCoord = (value, decimals) => {
           if (!Number.isFinite(value)) {
             return "";
           }
           return Number(value).toFixed(decimals);
+        };
+
+        const toRad = (value) => (Number(value) * Math.PI) / 180;
+
+        const distanceKm = (a, b) => {
+          if (!Array.isArray(a) || !Array.isArray(b) || a.length < 2 || b.length < 2) {
+            return Infinity;
+          }
+          const lat1 = Number(a[0]);
+          const lon1 = Number(a[1]);
+          const lat2 = Number(b[0]);
+          const lon2 = Number(b[1]);
+          if (![lat1, lon1, lat2, lon2].every(Number.isFinite)) {
+            return Infinity;
+          }
+          const dLat = toRad(lat2 - lat1);
+          const dLon = toRad(lon2 - lon1);
+          const rLat1 = toRad(lat1);
+          const rLat2 = toRad(lat2);
+          const sinLat = Math.sin(dLat / 2);
+          const sinLon = Math.sin(dLon / 2);
+          const h = sinLat * sinLat + Math.cos(rLat1) * Math.cos(rLat2) * sinLon * sinLon;
+          return 2 * 6371 * Math.asin(Math.min(1, Math.sqrt(h)));
+        };
+
+        const isCircularPair = (startLat, startLon, endLat, endLon) => {
+          if (![startLat, startLon, endLat, endLon].every(Number.isFinite)) {
+            return false;
+          }
+          const distance = distanceKm([startLat, startLon], [endLat, endLon]);
+          return Number.isFinite(distance) && distance < MIN_ENDPOINT_DISTANCE_KM;
         };
 
         const orderEndpoints = (startLat, startLon, endLat, endLon) => {
@@ -325,15 +357,22 @@
 
         const normalisedRows = rows
           .map((row) => {
-            const routeId = row.route_id || row.route_id_norm || "";
+            const routeId = String(row.route_id || row.route_id_norm || "").trim().toUpperCase();
             if (!routeId) {
               return null;
             }
+            const startLat = row.endpoint_start_lat;
+            const startLon = row.endpoint_start_lon;
+            const endLat = row.endpoint_end_lat;
+            const endLon = row.endpoint_end_lon;
+            if (isCircularPair(startLat, startLon, endLat, endLon)) {
+              return null;
+            }
             const ordered = orderEndpoints(
-              row.endpoint_start_lat,
-              row.endpoint_start_lon,
-              row.endpoint_end_lat,
-              row.endpoint_end_lon
+              startLat,
+              startLon,
+              endLat,
+              endLon
             );
             if (!ordered) {
               return null;
@@ -348,15 +387,25 @@
           addToGroup(primaryGroups, key, row.routeId, row.routeType, row.a, row.b);
         });
 
-        const formatGroup = (entry) => ({
-          key: entry.key,
-          routes: Array.from(entry.routes.entries()).map(([id, type]) => ({ id, type })),
-          count: entry.routes.size,
-          endpoints: {
-            a: [entry.aLatSum / entry.count, entry.aLonSum / entry.count],
-            b: [entry.bLatSum / entry.count, entry.bLonSum / entry.count]
-          }
-        });
+        const formatGroup = (entry) => {
+          const routes = Array.from(entry.routes.entries()).map(([id, type]) => ({ id, type }));
+          const routeIds = Array.from(new Set(
+            routes
+              .map((route) => String(route?.id || "").trim().toUpperCase())
+              .filter(Boolean)
+          )).sort();
+          return {
+            key: entry.key,
+            routes,
+            count: routeIds.length,
+            endpoints: {
+              a: [entry.aLatSum / entry.count, entry.aLonSum / entry.count],
+              b: [entry.bLatSum / entry.count, entry.bLonSum / entry.count]
+            },
+            routeIds,
+            routeKey: routeIds.join("|")
+          };
+        };
 
         const primaryEntries = Array.from(primaryGroups.values())
           .map(formatGroup)
@@ -374,21 +423,17 @@
 
         const entries = [...primaryEntries];
         fallbackEntries.forEach((fallback) => {
-          const fallbackSet = new Set(fallback.routes);
+          const fallbackSet = new Set(fallback.routeIds || []);
           for (let i = entries.length - 1; i >= 0; i -= 1) {
             const entry = entries[i];
-            const isSubset = entry.routes.every((route) => fallbackSet.has(route));
+            const entryIds = entry.routeIds || [];
+            const isSubset = entryIds.length > 0 && entryIds.every((routeId) => fallbackSet.has(routeId));
             if (isSubset && fallback.count > entry.count) {
               entries.splice(i, 1);
             }
           }
-          const alreadyIncluded = entries.some((entry) => {
-            if (entry.routes.length !== fallback.routes.length) {
-              return false;
-            }
-            return entry.routes.every((route) => fallbackSet.has(route));
-          });
-          if (!alreadyIncluded) {
+          const alreadyIncluded = entries.some((entry) => entry.routeKey && entry.routeKey === fallback.routeKey);
+          if (!alreadyIncluded && fallback.routeKey) {
             entries.push(fallback);
           }
         });

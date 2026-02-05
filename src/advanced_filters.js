@@ -5,6 +5,8 @@
   const MAP_HIGHLIGHT_OPACITY = 0.9;
   const SHOW_ALL_CAP = Number.POSITIVE_INFINITY;
   const LIST_CAP = Number.POSITIVE_INFINITY;
+  const BUS_STOPS_ENRICHED_GEOJSON_PATH = "/data/processed/stop_analysis/stops_enriched.geojson";
+  const BUS_STOPS_GEOJSON_PATH = "/data/processed/stops.geojson";
 
   const escapeHtml = (value) => String(value || "")
     .replace(/&/g, "&amp;")
@@ -42,6 +44,37 @@
       .split(/[\s,]+/)
       .map((entry) => entry.trim())
       .filter(Boolean);
+  };
+
+  const normaliseBoroughToken = (value) => String(value || "").trim().toLowerCase();
+
+  const getStopBoroughToken = (props) => {
+    return normaliseBoroughToken(props?.borough || props?.BOROUGH || props?.Borough || props?.["Borough"]);
+  };
+
+  const isExcludedRoute = (routeId) => {
+    if (!routeId) {
+      return false;
+    }
+    const value = String(routeId).trim().toUpperCase();
+    if (!value) {
+      return false;
+    }
+    return value === "SCS" || value.startsWith("UL") || value.startsWith("Y");
+  };
+
+  const extractRouteTokens = (value) => {
+    if (!value) {
+      return [];
+    }
+    return String(value)
+      .split(/[\s,;/]+/)
+      .map((token) => token.trim())
+      .filter(Boolean)
+      .map((token) => token.replace(/[^A-Za-z0-9]/g, ""))
+      .filter(Boolean)
+      .map((token) => token.toUpperCase())
+      .filter((token) => !isExcludedRoute(token));
   };
 
   const getSelectedValues = (select) => {
@@ -176,6 +209,71 @@
     return options.sort((a, b) => a.label.localeCompare(b.label));
   };
 
+  const loadStopsGeojson = async () => {
+    const api = window.RouteMapsterAPI;
+    if (api?.appState?.busStopsGeojson) {
+      return api.appState.busStopsGeojson;
+    }
+    const tryFetch = async (path) => {
+      const res = await fetch(path, { cache: "no-store" });
+      if (!res.ok) {
+        return null;
+      }
+      return res.json();
+    };
+    const enriched = await tryFetch(BUS_STOPS_ENRICHED_GEOJSON_PATH);
+    const data = enriched || await tryFetch(BUS_STOPS_GEOJSON_PATH);
+    if (api?.appState && data) {
+      api.appState.busStopsGeojson = data;
+      api.appState.busStopsEnriched = Boolean(enriched);
+    }
+    return data;
+  };
+
+  const buildRouteBoroughIndex = (geojson) => {
+    const routeBoroughs = new Map();
+    const boroughLookup = new Map();
+    const features = Array.isArray(geojson?.features) ? geojson.features : [];
+    features.forEach((feature) => {
+      const props = feature?.properties || {};
+      const rawBorough = props?.borough || props?.BOROUGH || props?.Borough || props?.["Borough"];
+      if (!rawBorough) {
+        return;
+      }
+      const display = String(rawBorough).trim();
+      if (!display) {
+        return;
+      }
+      const boroughToken = normaliseBoroughToken(display);
+      if (!boroughToken) {
+        return;
+      }
+      const routes = extractRouteTokens(props?.ROUTES || props?.Routes || props?.routes);
+      if (routes.length === 0) {
+        return;
+      }
+      if (!boroughLookup.has(boroughToken)) {
+        boroughLookup.set(boroughToken, display);
+      }
+      routes.forEach((routeId) => {
+        if (!routeId) {
+          return;
+        }
+        const key = String(routeId).trim().toUpperCase();
+        if (!key || isExcludedRoute(key)) {
+          return;
+        }
+        let set = routeBoroughs.get(key);
+        if (!set) {
+          set = new Set();
+          routeBoroughs.set(key, set);
+        }
+        set.add(boroughToken);
+      });
+    });
+    return { routeBoroughs, boroughLookup };
+  };
+
   const state = {
     rows: [],
     derivedRows: [],
@@ -189,7 +287,9 @@
     elements: null,
     moduleOpen: false,
     spatialReady: false,
-    spatialPromise: null
+    spatialPromise: null,
+    boroughOptions: [],
+    boroughsReady: false
   };
 
   const ensureLayerGroup = (appState) => {
@@ -365,6 +465,32 @@
     return state.spatialPromise;
   };
 
+  const hydrateRouteBoroughs = async () => {
+    state.boroughOptions = [];
+    state.boroughsReady = false;
+    const geojson = await loadStopsGeojson();
+    if (!geojson || !Array.isArray(geojson.features)) {
+      return;
+    }
+    const { routeBoroughs, boroughLookup } = buildRouteBoroughIndex(geojson);
+    if (!boroughLookup || boroughLookup.size === 0) {
+      return;
+    }
+    state.boroughOptions = Array.from(boroughLookup.entries())
+      .map(([value, label]) => ({ value, label }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+    state.boroughsReady = state.boroughOptions.length > 0;
+    state.rows.forEach((row) => {
+      const routeId = row.route_id_norm;
+      if (!routeId) {
+        row.boroughs_norm = [];
+        return;
+      }
+      const set = routeBoroughs.get(routeId);
+      row.boroughs_norm = set ? Array.from(set) : [];
+    });
+  };
+
   const buildFilterSpecFromUI = (els) => {
     const routeIds = parseTokens(els.routeSearch?.value || "");
     let prefixValue = "";
@@ -429,6 +555,7 @@
       route_types: getSelectedValues(els.routeTypes),
       operators: getSelectedValues(els.operators),
       garages: getSelectedValues(els.garages),
+      boroughs: state.boroughsReady ? getSelectedValues(els.boroughs) : undefined,
       vehicle_types: getSelectedValues(els.vehicles),
       freq: Object.keys(freq).length > 0 ? freq : undefined,
       flags: Object.keys(flags).length > 0 ? flags : undefined,
@@ -475,6 +602,11 @@
     setMulti(els.routeTypes, normalized.route_types || []);
     setMulti(els.operators, normalized.operators || []);
     setMulti(els.garages, normalized.garages || []);
+    if (state.boroughsReady) {
+      setMulti(els.boroughs, normalized.boroughs || []);
+    } else {
+      setMulti(els.boroughs, []);
+    }
     setMulti(els.vehicles, normalized.vehicle_types || []);
 
     const setRange = (range, minEl, maxEl) => {
@@ -543,7 +675,7 @@
     if (normalized.route_prefix) {
       return true;
     }
-    if (hasList(normalized.route_types) || hasList(normalized.operators) || hasList(normalized.garages) || hasList(normalized.vehicle_types)) {
+    if (hasList(normalized.route_types) || hasList(normalized.operators) || hasList(normalized.garages) || hasList(normalized.boroughs) || hasList(normalized.vehicle_types)) {
       return true;
     }
     if (normalized.freq) {
@@ -755,6 +887,24 @@
         .map((option) => `<option value="${escapeHtml(option.value)}">${escapeHtml(option.label)}</option>`)
         .join("");
     }
+    if (els.boroughs) {
+      if (state.boroughsReady) {
+        els.boroughs.innerHTML = state.boroughOptions
+          .map((option) => `<option value="${escapeHtml(option.value)}">${escapeHtml(option.label)}</option>`)
+          .join("");
+      } else {
+        els.boroughs.innerHTML = "";
+      }
+      els.boroughs.disabled = !state.boroughsReady;
+    }
+    if (els.boroughsSelectAll) {
+      els.boroughsSelectAll.disabled = !state.boroughsReady;
+    }
+    if (els.boroughNote) {
+      els.boroughNote.textContent = state.boroughsReady
+        ? "Based on stops that serve each route."
+        : "Borough data unavailable in the stop dataset.";
+    }
     const vehicles = engine.getUniqueValues(rows, (row) => row.vehicle_type, (value) => String(value || "").toUpperCase());
     if (els.vehicles) {
       els.vehicles.innerHTML = buildOptionHtml(vehicles.filter((value) => !isUnknown(value)));
@@ -818,6 +968,9 @@
       operatorsSelectAll: container.querySelector("#advancedOperatorsSelectAll"),
       garages: container.querySelector("#advancedGarages"),
       garagesSelectAll: container.querySelector("#advancedGaragesSelectAll"),
+      boroughs: container.querySelector("#advancedBoroughs"),
+      boroughsSelectAll: container.querySelector("#advancedBoroughsSelectAll"),
+      boroughNote: container.querySelector("#advancedBoroughsNote"),
       vehicles: container.querySelector("#advancedVehicles"),
       vehiclesSelectAll: container.querySelector("#advancedVehiclesSelectAll"),
       peakAmMin: container.querySelector("#advancedPeakAmMin"),
@@ -852,6 +1005,7 @@
     updateResultsVisibility(els, false, state.moduleOpen);
 
     state.rows = await engine.loadRouteSummary();
+    await hydrateRouteBoroughs().catch(() => {});
     state.derivedRows = engine.computeDerivedFields(state.rows);
 
     populateSelects(state.derivedRows, els);
@@ -892,6 +1046,9 @@
     }
     if (els.garagesSelectAll) {
       els.garagesSelectAll.addEventListener("click", () => selectAll(els.garages));
+    }
+    if (els.boroughsSelectAll) {
+      els.boroughsSelectAll.addEventListener("click", () => selectAll(els.boroughs));
     }
     if (els.vehiclesSelectAll) {
       els.vehiclesSelectAll.addEventListener("click", () => selectAll(els.vehicles));

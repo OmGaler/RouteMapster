@@ -277,6 +277,7 @@
       route_types: Array.isArray(spec.route_types) ? spec.route_types.map(normaliseLower).filter(Boolean) : undefined,
       operators: Array.isArray(spec.operators) ? spec.operators.map(normaliseLower).filter(Boolean) : undefined,
       garages: Array.isArray(spec.garages) ? spec.garages.map(normaliseLower).filter(Boolean) : undefined,
+      boroughs: Array.isArray(spec.boroughs) ? spec.boroughs.map(normaliseLower).filter(Boolean) : undefined,
       vehicle_types: Array.isArray(spec.vehicle_types) ? spec.vehicle_types.map((value) => normaliseToken(value).toUpperCase()).filter(Boolean) : undefined,
       freq: spec.freq && typeof spec.freq === "object" ? spec.freq : undefined,
       flags: spec.flags && typeof spec.flags === "object" ? spec.flags : undefined,
@@ -301,6 +302,9 @@
       : null;
     const garageSet = spec.garages && spec.garages.length > 0
       ? new Set(spec.garages)
+      : null;
+    const boroughSet = spec.boroughs && spec.boroughs.length > 0
+      ? new Set(spec.boroughs)
       : null;
     const vehicleSet = spec.vehicle_types && spec.vehicle_types.length > 0
       ? new Set(spec.vehicle_types)
@@ -328,6 +332,13 @@
       if (garageSet) {
         const matchesGarage = row.garage_tokens_norm.some((name) => garageSet.has(name));
         if (!matchesGarage) {
+          return false;
+        }
+      }
+      if (boroughSet) {
+        const boroughs = Array.isArray(row.boroughs_norm) ? row.boroughs_norm : [];
+        const matchesBorough = boroughs.some((token) => boroughSet.has(String(token).toLowerCase()));
+        if (!matchesBorough) {
           return false;
         }
       }
@@ -439,6 +450,9 @@
     }
     if (Array.isArray(spec.garages) && spec.garages.length > 0) {
       cleaned.garages = spec.garages;
+    }
+    if (Array.isArray(spec.boroughs) && spec.boroughs.length > 0) {
+      cleaned.boroughs = spec.boroughs;
     }
     if (Array.isArray(spec.vehicle_types) && spec.vehicle_types.length > 0) {
       cleaned.vehicle_types = spec.vehicle_types;

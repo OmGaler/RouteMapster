@@ -1,5 +1,6 @@
 (() => {
   const STOP_GEOJSON_PATH = "/data/processed/stops.geojson";
+  const STOP_ENRICHED_GEOJSON_PATH = "/data/processed/stop_analysis/stops_enriched.geojson";
   const FREQUENCY_DATA_PATH = "/data/processed/frequencies.json";
   const DEBOUNCE_MS = 160;
   const FREQUENCY_BANDS = [
@@ -7,6 +8,24 @@
     { key: "peak_pm", label: "Peak PM" },
     { key: "offpeak", label: "Off-peak" },
     { key: "overnight", label: "Overnight" }
+  ];
+  const REGION_OPTIONS = [
+    { value: "", label: "All regions" },
+    { value: "C", label: "Central (C)" },
+    { value: "NW", label: "North West (NW)" },
+    { value: "NE", label: "North East (NE)" },
+    { value: "SW", label: "South West (SW)" },
+    { value: "SE", label: "South East (SE)" }
+  ];
+  const DEFAULT_MAP_TOP_N = 50;
+  const MAP_METRICS = [
+    { value: "route_count", label: "Routes per place" },
+    { value: "betweenness", label: "Betweenness (LCC)", requiresCentrality: true },
+    { value: "closeness_topo", label: "Closeness (topo, LCC)", requiresCentrality: true },
+    { value: "eigenvector", label: "Eigenvector (LCC)", requiresCentrality: true },
+    { value: "degree", label: "Degree", requiresCentrality: true },
+    { value: "degree_norm", label: "Degree (normalized)", requiresCentrality: true },
+    { value: "route_degree", label: "Route degree", requiresCentrality: true }
   ];
 
   const escapeHtml = (value) => String(value || "")
@@ -28,6 +47,59 @@
       return "";
     }
     return formatNumber(perHour, 1);
+  };
+
+  const parseCentralityValue = (value) => {
+    const num = Number(value);
+    return Number.isFinite(num) ? num : null;
+  };
+
+  const formatCentralityValue = (value) => {
+    if (!Number.isFinite(value)) {
+      return "";
+    }
+    const abs = Math.abs(value);
+    if (abs > 0 && abs < 0.001) {
+      return value.toExponential(2);
+    }
+    return formatNumber(value, 4);
+  };
+
+  const getMetricConfig = (metric) => MAP_METRICS.find((entry) => entry.value === metric) || null;
+
+  const isMetricAvailable = (metric, context) => {
+    if (!metric) {
+      return false;
+    }
+    const entry = getMetricConfig(metric);
+    if (!entry) {
+      return false;
+    }
+    if (entry.requiresCentrality && !context?.centralityAvailable) {
+      return false;
+    }
+    return true;
+  };
+
+  const getMetricLabel = (metric) => getMetricConfig(metric)?.label || metric || "Metric";
+
+  const getMetricValue = (row, metric) => {
+    if (!row || !metric) {
+      return null;
+    }
+    const value = row[metric];
+    const num = Number(value);
+    return Number.isFinite(num) ? num : null;
+  };
+
+  const formatMetricValue = (metric, value) => {
+    if (!Number.isFinite(value)) {
+      return "";
+    }
+    if (metric === "route_count") {
+      return formatNumber(value, 0);
+    }
+    return formatCentralityValue(value);
   };
 
   const isExcludedRoute = (routeId) => {
@@ -88,6 +160,22 @@
     return Array.from(new Set(tokens));
   };
 
+  const normaliseBoroughToken = (value) => String(value || "").trim().toLowerCase();
+
+  const parseBoroughTokens = (value) => {
+    if (!value) {
+      return [];
+    }
+    const tokens = String(value)
+      .split(/[;,]+/)
+      .map((token) => normaliseBoroughToken(token))
+      .filter(Boolean);
+    return Array.from(new Set(tokens));
+  };
+
+  const normaliseRegionToken = (value) => String(value || "").trim().toUpperCase();
+  const parseRegionToken = (value) => normaliseRegionToken(value || "");
+
   const sortRouteIds = (routes) => {
     const api = window.RouteMapsterAPI;
     if (api && typeof api.sortRouteIds === "function") {
@@ -108,10 +196,10 @@
   };
 
   const getStopName = (props) => props?.NAME || props?.STOP_NAME || props?.NAPTAN_NAME || "";
-  const getStopId = (props) => props?.NAPTAN_ID || props?.STOP_CODE || props?.NAPTAN_ATCO || "";
+  const getStopId = (props) => props?.PLACE_ID || props?.NAPTAN_ID || props?.STOP_CODE || props?.NAPTAN_ATCO || "";
 
   const formatStopLabel = (row) => {
-    const name = row.name || "Bus stop";
+    const name = row.name || "Stop area";
     const id = row.id || "";
     return id ? `${name} (${id})` : name;
   };
@@ -173,37 +261,169 @@
     return matched > 0 ? totals : null;
   };
 
+  const buildCentralitySummary = (row) => {
+    const parts = [];
+    if (Number.isFinite(row.betweenness)) {
+      parts.push(`Betw ${formatCentralityValue(row.betweenness)}`);
+    }
+    if (Number.isFinite(row.closeness_topo)) {
+      parts.push(`Close ${formatCentralityValue(row.closeness_topo)}`);
+    }
+    if (Number.isFinite(row.eigenvector)) {
+      parts.push(`Eig ${formatCentralityValue(row.eigenvector)}`);
+    }
+    return parts.length > 0 ? parts.join(" | ") : "";
+  };
+
+  const resolveMetricSelection = (metric, context, options = {}) => {
+    const allowNone = Boolean(options.allowNone);
+    if (!metric && allowNone) {
+      return "";
+    }
+    if (isMetricAvailable(metric, context)) {
+      return metric;
+    }
+    if (allowNone) {
+      return "";
+    }
+    const fallback = MAP_METRICS.find((entry) => !entry.requiresCentrality || context?.centralityAvailable);
+    return fallback ? fallback.value : "";
+  };
+
+  const buildMetricOptions = (selectEl, context, options = {}) => {
+    if (!selectEl) {
+      return;
+    }
+    const includeNone = Boolean(options.includeNone);
+    const items = [];
+    if (includeNone) {
+      items.push({ value: "", label: "None", disabled: false });
+    }
+    MAP_METRICS.forEach((entry) => {
+      const needsCentrality = entry.requiresCentrality && !context?.centralityAvailable;
+      const label = needsCentrality ? `${entry.label} (needs centrality)` : entry.label;
+      items.push({ value: entry.value, label, disabled: needsCentrality });
+    });
+    selectEl.innerHTML = items
+      .map((item) => `<option value="${escapeHtml(item.value)}"${item.disabled ? " disabled" : ""}>${escapeHtml(item.label)}</option>`)
+      .join("");
+  };
+
+  const normaliseTopN = (value) => {
+    if (!Number.isFinite(value)) {
+      return DEFAULT_MAP_TOP_N;
+    }
+    const rounded = Math.round(value);
+    return rounded > 0 ? rounded : DEFAULT_MAP_TOP_N;
+  };
+
+  const getTopStopsByMetric = (rows, metric, topN) => {
+    if (!metric) {
+      return [];
+    }
+    const limit = normaliseTopN(topN);
+    const candidates = rows
+      .map((row) => ({ row, value: getMetricValue(row, metric) }))
+      .filter((entry) => Number.isFinite(entry.value));
+    if (candidates.length === 0) {
+      return [];
+    }
+    candidates.sort((a, b) => b.value - a.value);
+    return candidates.slice(0, limit).map((entry) => entry.row);
+  };
+
+  const buildMetricStats = (rows, metric) => {
+    if (!metric) {
+      return null;
+    }
+    const values = rows
+      .map((row) => getMetricValue(row, metric))
+      .filter((value) => Number.isFinite(value))
+      .sort((a, b) => a - b);
+    if (values.length === 0) {
+      return null;
+    }
+    const mid = Math.floor(values.length / 2);
+    return {
+      min: values[0],
+      max: values[values.length - 1],
+      median: values[mid],
+      count: values.length,
+      total: rows.length
+    };
+  };
+
   const buildStopRow = (feature, frequencyData) => {
     const props = feature?.properties || {};
     const coords = feature?.geometry?.coordinates;
     const lon = Array.isArray(coords) ? Number(coords[0]) : null;
     const lat = Array.isArray(coords) ? Number(coords[1]) : null;
     const name = String(getStopName(props) || "").trim();
-    const id = String(getStopId(props) || "").trim();
+    const id = String(props?.PLACE_ID || getStopId(props) || "").trim();
     const postcode = String(props?.POSTCODE || "").trim();
     const district = normalisePostcodeDistrict(postcode) || "Unknown";
+    const boroughRaw = props?.borough || props?.BOROUGH || props?.Borough || "";
+    const borough = String(boroughRaw || "").trim() || "Unknown";
+    const region = normaliseRegionToken(props?.region || "") || "Unknown";
     const routes = extractRouteTokens(props?.ROUTES);
     const frequency = buildFrequencyTotals(routes, frequencyData);
+    const betweenness = parseCentralityValue(props?.betweenness_global ?? props?.betweenness);
+    const closeness_topo = parseCentralityValue(props?.closeness_topo);
+    const closeness_dist = null;
+    const eigenvector = parseCentralityValue(props?.eigenvector);
+    const degree = parseCentralityValue(props?.degree);
+    const degree_norm = parseCentralityValue(props?.degree_norm);
+    const route_degree = parseCentralityValue(props?.route_degree);
+    const child_stop_count = parseCentralityValue(props?.child_stop_count ?? props?.CHILD_STOP_COUNT);
+    const in_lcc = Boolean(props?.in_lcc);
     return {
       id,
-      name: name || "Bus stop",
+      name: name || "Stop area",
       postcode,
       district,
+      borough,
+      region,
       routes,
       route_count: routes.length,
       lat: Number.isFinite(lat) ? lat : null,
       lon: Number.isFinite(lon) ? lon : null,
       frequency,
+      betweenness,
+      closeness_topo,
+      closeness_dist,
+      eigenvector,
+      degree,
+      degree_norm,
+      route_degree,
+      child_stop_count,
+      in_lcc,
+      centralitySummary: buildCentralitySummary({
+        betweenness,
+        closeness_topo,
+        eigenvector
+      }),
       url: props?.URL || ""
     };
   };
 
-  const loadStopsGeojson = async () => {
-    const res = await fetch(STOP_GEOJSON_PATH, { cache: "no-store" });
+  const tryLoadGeojson = async (path) => {
+    const res = await fetch(path, { cache: "no-store" });
     if (!res.ok) {
       return null;
     }
     return res.json();
+  };
+
+  const loadStopsGeojson = async () => {
+    const enriched = await tryLoadGeojson(STOP_ENRICHED_GEOJSON_PATH);
+    if (enriched) {
+      return { geojson: enriched, source: "enriched" };
+    }
+    const base = await tryLoadGeojson(STOP_GEOJSON_PATH);
+    if (base) {
+      return { geojson: base, source: "base" };
+    }
+    return null;
   };
 
   const loadFrequencyData = async () => {
@@ -301,7 +521,7 @@
   const analysisRegistry = {
     "top-stops-routes": {
       id: "top-stops-routes",
-      label: "Top stops by route count",
+      label: "Top places by route count",
       run: (rows) => {
         const sorted = rows
           .filter((row) => row.route_count > 0)
@@ -310,7 +530,7 @@
           .slice(0, 25);
         return {
           type: "table",
-          columns: ["Rank", "Stop", "District", "Routes", "Route list"],
+          columns: ["Rank", "Place", "District", "Routes", "Route list"],
           rows: sorted.map((row, index) => {
             const fullList = sortRouteIds(row.routes || []).join(", ");
             return [
@@ -327,14 +547,14 @@
     },
     "top-stops-frequency": {
       id: "top-stops-frequency",
-      label: "Top stops by combined frequency",
+      label: "Top places by combined frequency",
       requiresFrequency: true,
       run: (rows, context) => {
         const band = context?.frequencyBand || "peak_am";
         const label = FREQUENCY_BANDS.find((entry) => entry.key === band)?.label || band;
         const candidates = rows.filter((row) => row.frequency && Number.isFinite(row.frequency[band]));
         if (candidates.length === 0) {
-          return { type: "note", message: "Frequency totals are unavailable for the selected stops." };
+          return { type: "note", message: "Frequency totals are unavailable for the selected places." };
         }
         const sorted = candidates
           .slice()
@@ -342,7 +562,7 @@
           .slice(0, 25);
         return {
           type: "table",
-          columns: ["Rank", "Stop", "District", `${label} (buses/hr)`, "Routes"],
+          columns: ["Rank", "Place", "District", `${label} (buses/hr)`, "Routes"],
           rows: sorted.map((row, index) => [
             index + 1,
             formatStopLabel(row),
@@ -355,7 +575,7 @@
     },
     "district-stop-counts": {
       id: "district-stop-counts",
-      label: "Stops by postcode district",
+      label: "Places by postcode district",
       run: (rows, context) => {
         const band = context?.frequencyBand || "peak_am";
         const label = FREQUENCY_BANDS.find((entry) => entry.key === band)?.label || band;
@@ -391,7 +611,7 @@
           .sort((a, b) => (b[1] || 0) - (a[1] || 0));
         return {
           type: "table",
-          columns: ["District", "Stops", "Stops w/ routes", "Avg routes", `Avg ${label}`],
+          columns: ["District", "Places", "Places w/ routes", "Avg routes", `Avg ${label}`],
           rows: rowsOut
         };
       }
@@ -421,19 +641,97 @@
           .slice(0, 30);
         return {
           type: "table",
-          columns: ["District", "Stops", "Avg routes"],
+          columns: ["District", "Places", "Avg routes"],
           rows: rowsOut
         };
       }
     },
     "routes-per-stop-distribution": {
       id: "routes-per-stop-distribution",
-      label: "Routes per stop distribution",
+      label: "Routes per place distribution",
       run: (rows) => {
         return {
           type: "table",
-          columns: ["Routes per stop", "Stops"],
+          columns: ["Routes per place", "Places"],
           rows: buildDistribution(rows)
+        };
+      }
+    },
+    "top-stops-betweenness": {
+      id: "top-stops-betweenness",
+      label: "Top places by betweenness",
+      requiresCentrality: true,
+      run: (rows) => {
+        const candidates = rows.filter((row) => Number.isFinite(row.betweenness));
+        if (candidates.length === 0) {
+          return { type: "note", message: "Betweenness values are not available for this dataset." };
+        }
+        const sorted = candidates
+          .slice()
+          .sort((a, b) => b.betweenness - a.betweenness)
+          .slice(0, 25);
+        return {
+          type: "table",
+          columns: ["Rank", "Place", "Borough", "Region", "Betweenness"],
+          rows: sorted.map((row, index) => [
+            index + 1,
+            formatStopLabel(row),
+            row.borough,
+            row.region,
+            formatCentralityValue(row.betweenness)
+          ])
+        };
+      }
+    },
+    "top-stops-closeness": {
+      id: "top-stops-closeness",
+      label: "Top places by closeness",
+      requiresCentrality: true,
+      run: (rows) => {
+        const candidates = rows.filter((row) => Number.isFinite(row.closeness_topo));
+        if (candidates.length === 0) {
+          return { type: "note", message: "Closeness values are not available for this dataset." };
+        }
+        const sorted = candidates
+          .slice()
+          .sort((a, b) => b.closeness_topo - a.closeness_topo)
+          .slice(0, 25);
+        return {
+          type: "table",
+          columns: ["Rank", "Place", "Borough", "Region", "Closeness (topo)"],
+          rows: sorted.map((row, index) => [
+            index + 1,
+            formatStopLabel(row),
+            row.borough,
+            row.region,
+            formatCentralityValue(row.closeness_topo)
+          ])
+        };
+      }
+    },
+    "top-stops-eigenvector": {
+      id: "top-stops-eigenvector",
+      label: "Top places by eigenvector",
+      requiresCentrality: true,
+      run: (rows) => {
+        const candidates = rows.filter((row) => Number.isFinite(row.eigenvector));
+        if (candidates.length === 0) {
+          return { type: "note", message: "Eigenvector values are not available for this dataset." };
+        }
+        const sorted = candidates
+          .slice()
+          .sort((a, b) => b.eigenvector - a.eigenvector)
+          .slice(0, 25);
+        return {
+          type: "table",
+          columns: ["Rank", "Place", "Borough", "Region", "Eigenvector"],
+          rows: sorted.map((row, index) => [
+            index + 1,
+            formatStopLabel(row),
+            row.borough,
+            row.region,
+            formatCentralityValue(row.eigenvector)
+          ])
         };
       }
     }
@@ -443,7 +741,7 @@
     {
       id: "connectivity-hotspots",
       name: "Connectivity hotspots",
-      description: "Top connected stops and frequency leaders.",
+      description: "Top connected places and frequency leaders.",
       icon: "++",
       analysisIds: ["top-stops-routes", "top-stops-frequency"]
     },
@@ -457,9 +755,16 @@
     {
       id: "district-overview",
       name: "District overview",
-      description: "Stops, routes, and distribution snapshot.",
+      description: "Places, routes, and distribution snapshot.",
       icon: "##",
       analysisIds: ["district-stop-counts", "routes-per-stop-distribution"]
+    },
+    {
+      id: "centrality-hotspots",
+      name: "Centrality hotspots",
+      description: "Top places by betweenness, closeness, and eigenvector (LCC).",
+      icon: "**",
+      analysisIds: ["top-stops-betweenness", "top-stops-closeness", "top-stops-eigenvector"]
     }
   ];
 
@@ -468,21 +773,34 @@
     filteredStops: [],
     frequencyBand: "peak_am",
     frequencyAvailable: false,
+    centralityAvailable: false,
     currentAnalysisIds: [],
     resultsByKey: new Map(),
     debounceHandle: null,
     districtTokens: [],
-    moduleOpen: true
+    boroughTokens: [],
+    regionToken: "",
+    moduleOpen: true,
+    mapMode: "filtered",
+    mapTopN: DEFAULT_MAP_TOP_N,
+    mapTopMetric: "betweenness",
+    mapColourMetric: "",
+    suppressedBaseStops: false,
+    suppressedBaseStopsPrev: null
   };
 
   const buildFilterSpec = (els) => {
     const scope = els.scopeSelect?.value || "all";
     const districts = state.districtTokens.slice();
+    const boroughs = state.boroughTokens.slice();
+    const region = parseRegionToken(els.regionSelect?.value || "");
     const minRoutes = parseNumberInput(els.minRoutes);
     const maxRoutes = parseNumberInput(els.maxRoutes);
     return {
       scope,
       districts,
+      boroughs,
+      region,
       minRoutes,
       maxRoutes
     };
@@ -493,11 +811,21 @@
     const districtSet = spec.districts && spec.districts.length > 0
       ? new Set(spec.districts)
       : null;
+    const boroughSet = spec.boroughs && spec.boroughs.length > 0
+      ? new Set(spec.boroughs)
+      : null;
+    const regionToken = spec.region || "";
     return list.filter((row) => {
       if (spec.scope === "with_routes" && row.route_count <= 0) {
         return false;
       }
       if (districtSet && !districtSet.has(row.district)) {
+        return false;
+      }
+      if (boroughSet && !boroughSet.has(normaliseBoroughToken(row.borough))) {
+        return false;
+      }
+      if (regionToken && regionToken !== "ALL" && row.region !== regionToken) {
         return false;
       }
       if (Number.isFinite(spec.minRoutes) && row.route_count < spec.minRoutes) {
@@ -535,16 +863,19 @@
     }
 
     const summaryLines = [
-      { label: "Total stops", value: total },
-      { label: "Stops with routes", value: withRoutes },
-      { label: "Avg routes per stop", value: formatNumber(avgRoutes, 2) },
-      { label: "Median routes per stop", value: medianRoutes }
+      { label: "Total places", value: total },
+      { label: "Places with routes", value: withRoutes },
+      { label: "Avg routes per place", value: formatNumber(avgRoutes, 2) },
+      { label: "Median routes per place", value: medianRoutes }
     ];
     if (context?.frequencyAvailable) {
       summaryLines.push({
         label: `Avg ${label}`,
         value: avgFreq === null ? "n/a" : formatNumber(avgFreq, 1)
       });
+    }
+    if (context?.centralityAvailable) {
+      summaryLines.push({ label: "Centrality data", value: "Available" });
     }
 
     container.innerHTML = `
@@ -572,6 +903,13 @@
             id: analysisId,
             title: entry.label,
             result: { type: "note", message: "Frequency dataset is unavailable in this build." }
+          };
+        }
+        if (entry.requiresCentrality && !context?.centralityAvailable) {
+          return {
+            id: analysisId,
+            title: entry.label,
+            result: { type: "note", message: "Centrality metrics are unavailable in this build." }
           };
         }
         const result = entry.run(rows, context);
@@ -621,7 +959,13 @@
     container.innerHTML = PRESETS.map((preset) => {
       const disabled = preset.analysisIds.some((analysisId) => {
         const entry = analysisRegistry[analysisId];
-        return entry?.requiresFrequency && !state.frequencyAvailable;
+        if (entry?.requiresFrequency && !state.frequencyAvailable) {
+          return true;
+        }
+        if (entry?.requiresCentrality && !state.centralityAvailable) {
+          return true;
+        }
+        return false;
       });
       return `
         <button type="button" class="preset-card${disabled ? " is-disabled" : ""}" data-preset="${escapeHtml(preset.id)}" ${disabled ? "disabled" : ""}>
@@ -638,7 +982,12 @@
       return;
     }
     const options = Object.values(analysisRegistry).map((entry) => {
-      const suffix = entry.requiresFrequency && !state.frequencyAvailable ? " (needs frequency data)" : "";
+      let suffix = "";
+      if (entry.requiresFrequency && !state.frequencyAvailable) {
+        suffix = " (needs frequency data)";
+      } else if (entry.requiresCentrality && !state.centralityAvailable) {
+        suffix = " (needs centrality data)";
+      }
       return `<option value="${escapeHtml(entry.id)}">${escapeHtml(entry.label + suffix)}</option>`;
     });
     selectEl.innerHTML = options.join("");
@@ -648,42 +997,188 @@
     if (!noteEl) {
       return;
     }
-    noteEl.textContent = `Analyzing ${count} stops.`;
+    noteEl.textContent = `Analyzing ${count} places.`;
   };
 
-  const syncMapStops = () => {
+  const syncMapControlState = (els) => {
+    if (!els) {
+      return;
+    }
+    if (els.mapMode) {
+      els.mapMode.value = state.mapMode;
+    }
+    if (els.mapTopN && (!els.mapTopN.value || els.mapTopN.value === "0")) {
+      if (document.activeElement !== els.mapTopN) {
+        els.mapTopN.value = String(state.mapTopN);
+      }
+    }
+    if (els.mapTopMetric) {
+      els.mapTopMetric.value = state.mapTopMetric;
+    }
+    if (els.mapColourMetric) {
+      els.mapColourMetric.value = state.mapColourMetric;
+    }
+    if (els.mapTopWrap) {
+      els.mapTopWrap.style.display = state.mapMode === "top" ? "" : "none";
+    }
+  };
+
+  const updateMapStateFromEls = (els) => {
+    if (!els) {
+      return;
+    }
+    if (els.mapMode) {
+      state.mapMode = els.mapMode.value || "filtered";
+    }
+    if (els.mapTopN) {
+      state.mapTopN = normaliseTopN(parseNumberInput(els.mapTopN));
+    }
+    if (els.mapTopMetric) {
+      state.mapTopMetric = resolveMetricSelection(
+        els.mapTopMetric.value,
+        state,
+        { allowNone: false }
+      );
+    }
+    if (els.mapColourMetric) {
+      state.mapColourMetric = resolveMetricSelection(
+        els.mapColourMetric.value,
+        state,
+        { allowNone: true }
+      );
+    }
+  };
+
+  const buildMapDisplay = (rows) => {
+    if (state.mapMode === "off") {
+      return { stops: [], note: "Map overlay is off.", showLegend: false, options: { colorBy: "" } };
+    }
+    const baseStops = Array.isArray(rows) ? rows : [];
+    let displayStops = baseStops;
+    let notePrefix = `Showing ${baseStops.length} filtered places.`;
+    if (state.mapMode === "top") {
+      const topMetric = resolveMetricSelection(state.mapTopMetric, state, { allowNone: false });
+      const topStops = getTopStopsByMetric(baseStops, topMetric, state.mapTopN);
+      displayStops = topStops;
+      const metricLabel = getMetricLabel(topMetric);
+      notePrefix = `Showing top ${displayStops.length} by ${metricLabel}.`;
+    }
+    if (displayStops.length === 0) {
+      return { stops: [], note: "No places matched the current map view.", showLegend: false, options: { colorBy: "" } };
+    }
+    const colorMetric = resolveMetricSelection(state.mapColourMetric, state, { allowNone: true });
+    if (!colorMetric) {
+      return {
+        stops: displayStops,
+        note: `${notePrefix} Using default marker colour.`,
+        showLegend: false,
+        options: { colorBy: "" }
+      };
+    }
+    const stats = buildMetricStats(displayStops, colorMetric);
+    if (!stats) {
+      return {
+        stops: displayStops,
+        note: `${notePrefix} ${getMetricLabel(colorMetric)} values are missing in this selection.`,
+        showLegend: false,
+        options: { colorBy: colorMetric }
+      };
+    }
+    const rangeText = `${formatMetricValue(colorMetric, stats.min)}-${formatMetricValue(colorMetric, stats.max)}`;
+    const note = `${notePrefix} ${getMetricLabel(colorMetric)} range ${rangeText} (n=${stats.count}).`;
+    return {
+      stops: displayStops,
+      note,
+      showLegend: true,
+      options: { colorBy: colorMetric }
+    };
+  };
+
+  const syncMapStops = (els) => {
     const api = window.RouteMapsterAPI;
     if (!api) {
       return;
     }
-    if (!state.moduleOpen || !state.filteredStops || state.filteredStops.length === 0) {
+    const showStopsToggle = document.getElementById("showBusStops");
+    const setBaseStopsVisible = (visible) => {
+      if (!showStopsToggle || showStopsToggle.checked === visible) {
+        return;
+      }
+      showStopsToggle.checked = visible;
+      showStopsToggle.dispatchEvent(new Event("change"));
+    };
+    const restoreBaseStops = () => {
+      if (!state.suppressedBaseStops) {
+        return;
+      }
+      if (state.suppressedBaseStopsPrev) {
+        setBaseStopsVisible(true);
+      }
+      state.suppressedBaseStops = false;
+      state.suppressedBaseStopsPrev = null;
+    };
+    if (!state.moduleOpen) {
       if (typeof api.clearAdvancedStops === "function") {
         api.clearAdvancedStops();
       }
+      if (els?.mapLegend) {
+        els.mapLegend.style.display = "none";
+      }
+      if (els?.mapNote) {
+        els.mapNote.textContent = "Map overlay paused while this panel is closed.";
+      }
+      restoreBaseStops();
       return;
     }
-    if (typeof api.showAdvancedStops === "function") {
-      api.showAdvancedStops(state.filteredStops);
+    const baseStops = Array.isArray(state.filteredStops) ? state.filteredStops : [];
+    const display = buildMapDisplay(baseStops);
+    const hasStops = Boolean(display && Array.isArray(display.stops) && display.stops.length > 0);
+    if (!hasStops) {
+      if (typeof api.clearAdvancedStops === "function") {
+        api.clearAdvancedStops();
+      }
+      restoreBaseStops();
+    } else if (typeof api.showAdvancedStops === "function") {
+      api.showAdvancedStops(display.stops, display.options);
+      if (showStopsToggle && showStopsToggle.checked) {
+        state.suppressedBaseStops = true;
+        state.suppressedBaseStopsPrev = true;
+        setBaseStopsVisible(false);
+      }
+    }
+    if (els?.mapNote) {
+      let noteText = display?.note || "";
+      if (state.suppressedBaseStops) {
+        noteText = noteText ? `${noteText} Base stop layer hidden.` : "Base stop layer hidden.";
+      }
+      els.mapNote.textContent = noteText;
+    }
+    if (els?.mapLegend) {
+      els.mapLegend.style.display = display.showLegend ? "" : "none";
     }
   };
 
   const applyFiltersAndRefresh = (els) => {
+    updateMapStateFromEls(els);
+    syncMapControlState(els);
     const spec = buildFilterSpec(els);
     const filtered = applyFilters(state.stops, spec);
     state.filteredStops = filtered;
     renderSummary(els.summary, filtered, {
       frequencyBand: state.frequencyBand,
-      frequencyAvailable: state.frequencyAvailable
+      frequencyAvailable: state.frequencyAvailable,
+      centralityAvailable: state.centralityAvailable
     });
     updateScopeNote(els.scopeNote, filtered.length);
     if (state.currentAnalysisIds.length > 0) {
       const results = runAnalyses(state.currentAnalysisIds, filtered, {
         frequencyBand: state.frequencyBand,
-        frequencyAvailable: state.frequencyAvailable
+        frequencyAvailable: state.frequencyAvailable,
+        centralityAvailable: state.centralityAvailable
       });
       renderResults(els.output, results);
     }
-    syncMapStops();
+    syncMapStops(els);
   };
 
   const scheduleRefresh = (els) => {
@@ -701,17 +1196,18 @@
     }
     const target = container.querySelector ? (container.querySelector("#stopAnalysesContainer") || container) : container;
     target.innerHTML = `
-      <div class="module-note" id="stopAnalysisStatus">Loading stop datasets...</div>
+      <div class="module-note">Topological connectivity model using stop areas (places), not demand or frequency.</div>
+      <div class="module-note" id="stopAnalysisStatus">Loading place datasets...</div>
       <div class="module-section">
         <div class="section-title">Scope</div>
         <div class="field">
-          <label for="stopScope">Stop scope</label>
+          <label for="stopScope">Place scope</label>
           <select id="stopScope" class="select-field">
-            <option value="all">All stops</option>
-            <option value="with_routes">Stops with routes</option>
+            <option value="all">All places</option>
+            <option value="with_routes">Places with routes</option>
           </select>
         </div>
-        <div id="stopScopeNote" class="module-note">Analyzing 0 stops.</div>
+        <div id="stopScopeNote" class="module-note">Analyzing 0 places.</div>
       </div>
       <div class="module-section">
         <div class="section-title">Filters</div>
@@ -725,7 +1221,20 @@
           <div class="module-note">Use commas or spaces to add multiple districts.</div>
         </div>
         <div class="field">
-          <label>Routes per stop</label>
+          <label for="stopBoroughEntry">Boroughs</label>
+          <div class="tag-input" id="stopBoroughInput">
+            <div class="tag-list" id="stopBoroughTags"></div>
+            <input id="stopBoroughEntry" type="search" placeholder="e.g. Camden" autocomplete="off" list="stopBoroughOptions" />
+          </div>
+          <datalist id="stopBoroughOptions"></datalist>
+          <div class="module-note">Use commas to add multiple boroughs.</div>
+        </div>
+        <div class="field">
+          <label for="stopRegionSelect">Region</label>
+          <select id="stopRegionSelect" class="select-field"></select>
+        </div>
+        <div class="field">
+          <label>Routes per place</label>
           <div class="field-row">
             <input id="stopMinRoutes" type="number" min="0" step="1" placeholder="Min" />
             <input id="stopMaxRoutes" type="number" min="0" step="1" placeholder="Max" />
@@ -749,6 +1258,35 @@
         <div id="stopAnalysisSummary"></div>
       </div>
       <div class="module-section">
+        <div class="section-title">Map visualisation</div>
+        <div class="field">
+          <label for="stopMapMode">Show on map</label>
+          <select id="stopMapMode" class="select-field">
+            <option value="filtered">Filtered places (all)</option>
+            <option value="top">Top N by metric</option>
+            <option value="off">Off</option>
+          </select>
+        </div>
+        <div class="field" id="stopMapTopWrap">
+          <label for="stopMapTopN">Top N</label>
+          <div class="field-row">
+            <input id="stopMapTopN" type="number" min="5" step="5" placeholder="50" />
+            <select id="stopMapTopMetric" class="select-field"></select>
+          </div>
+          <div class="module-note">Uses current filters and scope.</div>
+        </div>
+        <div class="field">
+          <label for="stopMapColourMetric">Colour by</label>
+          <select id="stopMapColourMetric" class="select-field"></select>
+        </div>
+        <div id="stopMapLegend" class="map-legend">
+          <span>Low</span>
+          <div class="map-legend__bar"></div>
+          <span>High</span>
+        </div>
+        <div id="stopMapNote" class="module-note"></div>
+      </div>
+      <div class="module-section">
         <div class="section-title">Analysis tools</div>
         <div class="analysis-toolbar">
           <select id="stopAnalysisSelect" class="select-field"></select>
@@ -765,12 +1303,23 @@
       districtEntry: target.querySelector("#stopDistrictEntry"),
       districtTags: target.querySelector("#stopDistrictTags"),
       districtOptions: target.querySelector("#stopDistrictOptions"),
+      boroughEntry: target.querySelector("#stopBoroughEntry"),
+      boroughTags: target.querySelector("#stopBoroughTags"),
+      boroughOptions: target.querySelector("#stopBoroughOptions"),
+      regionSelect: target.querySelector("#stopRegionSelect"),
       minRoutes: target.querySelector("#stopMinRoutes"),
       maxRoutes: target.querySelector("#stopMaxRoutes"),
       frequencyBand: target.querySelector("#stopFrequencyBand"),
       frequencyNote: target.querySelector("#stopFrequencyNote"),
       presets: target.querySelector("#stopAnalysisPresets"),
       summary: target.querySelector("#stopAnalysisSummary"),
+      mapMode: target.querySelector("#stopMapMode"),
+      mapTopWrap: target.querySelector("#stopMapTopWrap"),
+      mapTopN: target.querySelector("#stopMapTopN"),
+      mapTopMetric: target.querySelector("#stopMapTopMetric"),
+      mapColourMetric: target.querySelector("#stopMapColourMetric"),
+      mapLegend: target.querySelector("#stopMapLegend"),
+      mapNote: target.querySelector("#stopMapNote"),
       analysisSelect: target.querySelector("#stopAnalysisSelect"),
       runButton: target.querySelector("#runStopAnalysis"),
       output: target.querySelector("#stopAnalysisOutput")
@@ -781,7 +1330,7 @@
     if (moduleEl) {
       moduleEl.addEventListener("toggle", () => {
         state.moduleOpen = moduleEl.open;
-        syncMapStops();
+        syncMapStops(els);
       });
     }
 
@@ -868,6 +1417,100 @@
 
     syncDistrictTags();
 
+    const syncBoroughTags = () => {
+      if (!els.boroughTags) {
+        return;
+      }
+      els.boroughTags.innerHTML = state.boroughTokens
+        .map((token) => {
+          const safe = token.replace(/"/g, "&quot;");
+          return `<span class="tag-chip" data-token="${safe}">
+            <span>${safe}</span>
+            <button type="button" class="tag-remove" aria-label="Remove ${safe}">x</button>
+          </span>`;
+        })
+        .join("");
+    };
+
+    const addBoroughTokensFromValue = (value) => {
+      const newTokens = parseBoroughTokens(value);
+      if (newTokens.length === 0) {
+        return;
+      }
+      const tokenSet = new Set(state.boroughTokens);
+      newTokens.forEach((token) => {
+        if (!tokenSet.has(token)) {
+          state.boroughTokens.push(token);
+          tokenSet.add(token);
+        }
+      });
+      syncBoroughTags();
+      scheduleRefresh(els);
+    };
+
+    const commitBoroughInput = () => {
+      const value = els.boroughEntry?.value?.trim();
+      if (!value) {
+        return;
+      }
+      addBoroughTokensFromValue(value);
+      if (els.boroughEntry) {
+        els.boroughEntry.value = "";
+      }
+    };
+
+    if (els.boroughEntry) {
+      els.boroughEntry.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          commitBoroughInput();
+          return;
+        }
+        if (event.key === "Backspace" && els.boroughEntry.value.trim() === "" && state.boroughTokens.length > 0) {
+          event.preventDefault();
+          state.boroughTokens = state.boroughTokens.slice(0, -1);
+          syncBoroughTags();
+          scheduleRefresh(els);
+        }
+      });
+      els.boroughEntry.addEventListener("blur", () => {
+        commitBoroughInput();
+      });
+    }
+
+    if (els.boroughTags) {
+      els.boroughTags.addEventListener("click", (event) => {
+        const button = event.target.closest(".tag-remove");
+        if (!button) {
+          return;
+        }
+        const chip = button.closest(".tag-chip");
+        if (!chip) {
+          return;
+        }
+        const token = chip.getAttribute("data-token");
+        if (!token) {
+          return;
+        }
+        state.boroughTokens = state.boroughTokens.filter((entry) => entry !== token);
+        syncBoroughTags();
+        scheduleRefresh(els);
+      });
+    }
+
+    syncBoroughTags();
+
+    if (els.regionSelect) {
+      els.regionSelect.innerHTML = REGION_OPTIONS
+        .map((option) => `<option value="${escapeHtml(option.value)}">${escapeHtml(option.label)}</option>`)
+        .join("");
+      els.regionSelect.value = state.regionToken;
+      els.regionSelect.addEventListener("change", () => {
+        state.regionToken = parseRegionToken(els.regionSelect.value);
+        scheduleRefresh(els);
+      });
+    }
+
     FREQUENCY_BANDS.forEach((band) => {
       if (els.frequencyBand) {
         els.frequencyBand.innerHTML += `<option value="${escapeHtml(band.key)}">${escapeHtml(band.label)}</option>`;
@@ -875,13 +1518,19 @@
     });
 
     try {
-      const [geojson, frequencyData] = await Promise.all([
+      const [stopsResult, frequencyData] = await Promise.all([
         loadStopsGeojson(),
         loadFrequencyData().catch(() => null)
       ]);
 
+      const geojson = stopsResult?.geojson || null;
       state.frequencyAvailable = Boolean(frequencyData);
       state.stops = buildStopsFromGeojson(geojson, frequencyData);
+      state.centralityAvailable = state.stops.some((row) => (
+        Number.isFinite(row.betweenness) ||
+        Number.isFinite(row.closeness_topo) ||
+        Number.isFinite(row.eigenvector)
+      ));
 
       const districtSet = new Set(state.stops.map((row) => row.district).filter(Boolean));
       if (els.districtOptions) {
@@ -890,6 +1539,19 @@
           .map((district) => `<option value="${escapeHtml(district)}"></option>`)
           .join("");
         els.districtOptions.innerHTML = options;
+      }
+
+      const boroughSet = new Set(
+        state.stops
+          .map((row) => row.borough)
+          .filter((borough) => borough && borough !== "Unknown")
+      );
+      if (els.boroughOptions) {
+        const options = Array.from(boroughSet)
+          .sort((a, b) => String(a).localeCompare(String(b)))
+          .map((borough) => `<option value="${escapeHtml(borough)}"></option>`)
+          .join("");
+        els.boroughOptions.innerHTML = options;
       }
 
       if (els.frequencyBand) {
@@ -902,24 +1564,40 @@
           : "Frequency dataset not available.";
       }
       if (els.status) {
-        els.status.textContent = `Loaded ${state.stops.length} stops.`;
+        const centralityNote = state.centralityAvailable ? " Centrality ready." : "";
+        els.status.textContent = `Loaded ${state.stops.length} places.${centralityNote}`;
       }
     } catch (error) {
       state.stops = [];
+      state.frequencyAvailable = false;
+      state.centralityAvailable = false;
       if (els.status) {
-        els.status.textContent = "Failed to load stop datasets.";
+        els.status.textContent = "Failed to load place datasets.";
       }
     }
+
+    state.mapTopMetric = resolveMetricSelection(state.mapTopMetric, state, { allowNone: false });
+    state.mapColourMetric = resolveMetricSelection(
+      state.mapColourMetric || (state.centralityAvailable ? "closeness_topo" : ""),
+      state,
+      { allowNone: true }
+    );
+    buildMetricOptions(els.mapTopMetric, state, { includeNone: false });
+    buildMetricOptions(els.mapColourMetric, state, { includeNone: true });
+    syncMapControlState(els);
 
     state.filteredStops = state.stops.slice();
     buildAnalysisOptions(els.analysisSelect);
     renderPresetCards(els.presets);
     renderSummary(els.summary, state.filteredStops, {
       frequencyBand: state.frequencyBand,
-      frequencyAvailable: state.frequencyAvailable
+      frequencyAvailable: state.frequencyAvailable,
+      centralityAvailable: state.centralityAvailable
     });
     updateScopeNote(els.scopeNote, state.filteredStops.length);
-    syncMapStops();
+    updateMapStateFromEls(els);
+    syncMapControlState(els);
+    syncMapStops(els);
 
     const runSelectedAnalysis = () => {
       if (!els.analysisSelect) {
@@ -929,7 +1607,8 @@
       state.currentAnalysisIds = [analysisId];
       const results = runAnalyses(state.currentAnalysisIds, state.filteredStops, {
         frequencyBand: state.frequencyBand,
-        frequencyAvailable: state.frequencyAvailable
+        frequencyAvailable: state.frequencyAvailable,
+        centralityAvailable: state.centralityAvailable
       });
       renderResults(els.output, results);
     };
@@ -956,7 +1635,8 @@
         state.currentAnalysisIds = preset.analysisIds.slice();
         const results = runAnalyses(state.currentAnalysisIds, state.filteredStops, {
           frequencyBand: state.frequencyBand,
-          frequencyAvailable: state.frequencyAvailable
+          frequencyAvailable: state.frequencyAvailable,
+          centralityAvailable: state.centralityAvailable
         });
         renderResults(els.output, results);
       });
@@ -973,7 +1653,7 @@
         if (!entry || entry.result?.type !== "table") {
           return;
         }
-        downloadCsv("stop_analysis.csv", entry.result.columns, entry.result.rows);
+        downloadCsv("place_analysis.csv", entry.result.columns, entry.result.rows);
       });
     }
 
@@ -982,12 +1662,14 @@
         state.frequencyBand = event.target.value || "peak_am";
         renderSummary(els.summary, state.filteredStops, {
           frequencyBand: state.frequencyBand,
-          frequencyAvailable: state.frequencyAvailable
+          frequencyAvailable: state.frequencyAvailable,
+          centralityAvailable: state.centralityAvailable
         });
         if (state.currentAnalysisIds.length > 0) {
           const results = runAnalyses(state.currentAnalysisIds, state.filteredStops, {
             frequencyBand: state.frequencyBand,
-            frequencyAvailable: state.frequencyAvailable
+            frequencyAvailable: state.frequencyAvailable,
+            centralityAvailable: state.centralityAvailable
           });
           renderResults(els.output, results);
         }
@@ -996,7 +1678,13 @@
 
     const inputs = target.querySelectorAll("input, select");
     inputs.forEach((input) => {
-      if (input === els.frequencyBand || input === els.analysisSelect || input === els.districtEntry) {
+      if (
+        input === els.frequencyBand ||
+        input === els.analysisSelect ||
+        input === els.districtEntry ||
+        input === els.boroughEntry ||
+        input === els.regionSelect
+      ) {
         return;
       }
       input.addEventListener("input", () => scheduleRefresh(els));
