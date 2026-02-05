@@ -796,10 +796,21 @@
       gap: 12px;
     }
 
+    .info-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
     .info-title {
       font-size: 20px;
       font-weight: 700;
       margin: 0;
+    }
+
+    .info-close {
+      padding: 4px 10px;
     }
 
     .info-subtitle {
@@ -1569,14 +1580,14 @@
 
         <details class="module" data-module="stops">
           <summary>
-            <span class="module-title">Stop areas</span>
+            <span class="module-title">Bus stops</span>
             <span class="module-tag">Live</span>
           </summary>
           <div class="module-body">
             <div class="module-section">
               <div class="section-title">Visibility</div>
               <label class="toggle">
-                <span>Show stop areas</span>
+                <span>Show bus stops</span>
                 <input type="checkbox" id="showBusStops" />
               </label>
               <div class="module-note">Hover or click a place to see routes.</div>
@@ -1600,9 +1611,24 @@
                 <datalist id="busStopBoroughOptions"></datalist>
                 <div class="module-note">Use commas to add multiple boroughs.</div>
               </div>
+              <div class="field">
+                <label for="busStopRouteCount">Filter by route count</label>
+                <select id="busStopRouteCount" class="select-field">
+                  <option value="any">Any</option>
+                  <option value="1">1 route</option>
+                  <option value="2">2 routes</option>
+                  <option value="3">3 routes</option>
+                  <option value="4">4 routes</option>
+                  <option value="5">5 routes</option>
+                  <option value="6">6 routes</option>
+                  <option value="7">7 routes</option>
+                  <option value="8+">8+ routes</option>
+                </select>
+              </div>
               <div class="button-row">
                 <button id="applyBusStopFilter" class="ghost-button compact" type="button">Apply filter</button>
                 <button id="clearBusStopFilter" class="ghost-button compact" type="button">Clear filter</button>
+                <button id="exportBusStopFilterCsv" class="ghost-button compact" type="button">Export CSV</button>
               </div>
               <div id="busStopFilterStatus" class="module-note">Filter inactive.</div>
             </div>
@@ -1877,7 +1903,7 @@
 
         <details class="module" data-module="stop-analyses">
           <summary>
-            <span class="module-title">Stop area analyses</span>
+            <span class="module-title">Bus stop analyses</span>
             <span class="module-tag">New</span>
           </summary>
           <div class="module-body">
@@ -1921,8 +1947,11 @@
         </div>
       </div>
       <div class="info-panel">
-        <h2 id="infoTitle" class="info-title">Details</h2>
-        <p id="infoSubtitle" class="info-subtitle">Click a stop area, station, or garage to view details.</p>
+        <div class="info-header">
+          <h2 id="infoTitle" class="info-title">Details</h2>
+          <button id="closeInfoPanel" class="ghost-button tiny info-close" type="button" aria-label="Close details">x</button>
+        </div>
+        <p id="infoSubtitle" class="info-subtitle">Click a bus stop, station, or garage to view details.</p>
         <div id="infoBody" class="info-body">
           <div class="info-section">
             <div class="info-label">Status</div>

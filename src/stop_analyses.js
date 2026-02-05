@@ -1,6 +1,5 @@
 (() => {
   const STOP_GEOJSON_PATH = "/data/processed/stops.geojson";
-  const STOP_ENRICHED_GEOJSON_PATH = "/data/processed/stop_analysis/stops_enriched.geojson";
   const FREQUENCY_DATA_PATH = "/data/processed/frequencies.json";
   const DEBOUNCE_MS = 160;
   const FREQUENCY_BANDS = [
@@ -11,11 +10,11 @@
   ];
   const REGION_OPTIONS = [
     { value: "", label: "All regions" },
-    { value: "C", label: "Central (C)" },
-    { value: "NW", label: "North West (NW)" },
-    { value: "NE", label: "North East (NE)" },
-    { value: "SW", label: "South West (SW)" },
-    { value: "SE", label: "South East (SE)" }
+    { value: "C", label: "Central London (C)" },
+    { value: "NE", label: "North East London (NE)" },
+    { value: "NW", label: "North West London (NW)" },
+    { value: "SW", label: "South West London (SW)" },
+    { value: "SE", label: "South East London (SE)" }
   ];
   const DEFAULT_MAP_TOP_N = 50;
   const MAP_METRICS = [
@@ -92,6 +91,41 @@
     return Number.isFinite(num) ? num : null;
   };
 
+  const STOP_REGION_BY_BOROUGH = new Map([
+    ["city of london", "C"],
+    ["westminster", "C"],
+    ["camden", "C"],
+    ["islington", "C"],
+    ["kensington and chelsea", "C"],
+    ["lambeth", "C"],
+    ["southwark", "C"],
+    ["hackney", "NE"],
+    ["tower hamlets", "NE"],
+    ["newham", "NE"],
+    ["waltham forest", "NE"],
+    ["redbridge", "NE"],
+    ["havering", "NE"],
+    ["barking and dagenham", "NE"],
+    ["haringey", "NE"],
+    ["enfield", "NE"],
+    ["barnet", "NW"],
+    ["harrow", "NW"],
+    ["brent", "NW"],
+    ["ealing", "NW"],
+    ["hammersmith and fulham", "NW"],
+    ["hillingdon", "NW"],
+    ["wandsworth", "SW"],
+    ["richmond upon thames", "SW"],
+    ["kingston upon thames", "SW"],
+    ["merton", "SW"],
+    ["sutton", "SW"],
+    ["croydon", "SW"],
+    ["lewisham", "SE"],
+    ["greenwich", "SE"],
+    ["bexley", "SE"],
+    ["bromley", "SE"]
+  ]);
+
   const formatMetricValue = (metric, value) => {
     if (!Number.isFinite(value)) {
       return "";
@@ -162,6 +196,13 @@
 
   const normaliseBoroughToken = (value) => String(value || "").trim().toLowerCase();
 
+  const getRegionFromBorough = (borough) => {
+    if (!borough) {
+      return "";
+    }
+    return STOP_REGION_BY_BOROUGH.get(normaliseBoroughToken(borough)) || "";
+  };
+
   const parseBoroughTokens = (value) => {
     if (!value) {
       return [];
@@ -199,7 +240,7 @@
   const getStopId = (props) => props?.PLACE_ID || props?.NAPTAN_ID || props?.STOP_CODE || props?.NAPTAN_ATCO || "";
 
   const formatStopLabel = (row) => {
-    const name = row.name || "Stop area";
+    const name = row.name || "Bus stop";
     const id = row.id || "";
     return id ? `${name} (${id})` : name;
   };
@@ -364,7 +405,7 @@
     const district = normalisePostcodeDistrict(postcode) || "Unknown";
     const boroughRaw = props?.borough || props?.BOROUGH || props?.Borough || "";
     const borough = String(boroughRaw || "").trim() || "Unknown";
-    const region = normaliseRegionToken(props?.region || "") || "Unknown";
+    const region = getRegionFromBorough(borough) || normaliseRegionToken(props?.region || "") || "Unknown";
     const routes = extractRouteTokens(props?.ROUTES);
     const frequency = buildFrequencyTotals(routes, frequencyData);
     const betweenness = parseCentralityValue(props?.betweenness_global ?? props?.betweenness);
@@ -378,7 +419,7 @@
     const in_lcc = Boolean(props?.in_lcc);
     return {
       id,
-      name: name || "Stop area",
+      name: name || "Bus stop",
       postcode,
       district,
       borough,
@@ -406,24 +447,13 @@
     };
   };
 
-  const tryLoadGeojson = async (path) => {
-    const res = await fetch(path, { cache: "no-store" });
+  const loadStopsGeojson = async () => {
+    const res = await fetch(STOP_GEOJSON_PATH, { cache: "no-store" });
     if (!res.ok) {
       return null;
     }
-    return res.json();
-  };
-
-  const loadStopsGeojson = async () => {
-    const enriched = await tryLoadGeojson(STOP_ENRICHED_GEOJSON_PATH);
-    if (enriched) {
-      return { geojson: enriched, source: "enriched" };
-    }
-    const base = await tryLoadGeojson(STOP_GEOJSON_PATH);
-    if (base) {
-      return { geojson: base, source: "base" };
-    }
-    return null;
+    const base = await res.json();
+    return { geojson: base, source: "base" };
   };
 
   const loadFrequencyData = async () => {
@@ -1196,7 +1226,7 @@
     }
     const target = container.querySelector ? (container.querySelector("#stopAnalysesContainer") || container) : container;
     target.innerHTML = `
-      <div class="module-note">Topological connectivity model using stop areas (places), not demand or frequency.</div>
+      <div class="module-note">Topological connectivity model using bus stops (places), not demand or frequency.</div>
       <div class="module-note" id="stopAnalysisStatus">Loading place datasets...</div>
       <div class="module-section">
         <div class="section-title">Scope</div>

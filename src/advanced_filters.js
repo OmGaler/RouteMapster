@@ -5,7 +5,6 @@
   const MAP_HIGHLIGHT_OPACITY = 0.9;
   const SHOW_ALL_CAP = Number.POSITIVE_INFINITY;
   const LIST_CAP = Number.POSITIVE_INFINITY;
-  const BUS_STOPS_ENRICHED_GEOJSON_PATH = "/data/processed/stop_analysis/stops_enriched.geojson";
   const BUS_STOPS_GEOJSON_PATH = "/data/processed/stops.geojson";
 
   const escapeHtml = (value) => String(value || "")
@@ -214,18 +213,13 @@
     if (api?.appState?.busStopsGeojson) {
       return api.appState.busStopsGeojson;
     }
-    const tryFetch = async (path) => {
-      const res = await fetch(path, { cache: "no-store" });
-      if (!res.ok) {
-        return null;
-      }
-      return res.json();
-    };
-    const enriched = await tryFetch(BUS_STOPS_ENRICHED_GEOJSON_PATH);
-    const data = enriched || await tryFetch(BUS_STOPS_GEOJSON_PATH);
+    const res = await fetch(BUS_STOPS_GEOJSON_PATH, { cache: "no-store" });
+    if (!res.ok) {
+      return null;
+    }
+    const data = await res.json();
     if (api?.appState && data) {
       api.appState.busStopsGeojson = data;
-      api.appState.busStopsEnriched = Boolean(enriched);
     }
     return data;
   };
