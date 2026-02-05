@@ -5206,6 +5206,39 @@ function setupUI() {
 		window.RouteMapsterStopAnalyses.initStopAnalyses(stopContainer || stopAnalysesModule, appState);
 	}
 
+	const runAdvancedAnalysisById = (analysisId) => {
+		const moduleEl = document.querySelector('[data-module="advanced-analyses"]');
+		if (moduleEl) {
+			moduleEl.open = true;
+		}
+		const select = document.getElementById("analysisSelect");
+		if (select) {
+			select.value = analysisId;
+		}
+		const runButton = document.getElementById("runAnalysis");
+		if (runButton) {
+			runButton.click();
+			return;
+		}
+		const output = document.getElementById("analysisOutput");
+		if (output) {
+			output.innerHTML = '<div class="info-empty">Advanced analyses module unavailable.</div>';
+		}
+	};
+
+	const clearAdvancedAnalysisOutput = () => {
+		const output = document.getElementById("analysisOutput");
+		if (output) {
+			output.innerHTML = '<div class="info-empty">No analysis results yet.</div>';
+		}
+		if (window.RouteMapsterAPI?.clearAnalysisRoutes) {
+			window.RouteMapsterAPI.clearAnalysisRoutes();
+		}
+		if (window.RouteMapsterAPI?.clearEndpointHighlight) {
+			window.RouteMapsterAPI.clearEndpointHighlight();
+		}
+	};
+
 	if (appState.map) {
 		appState.map.on("mousemove", (event) => {
 			if (!event?.latlng) {
@@ -5420,6 +5453,38 @@ function setupUI() {
 		});
 	});
 
+	const showRouteFamilies = document.getElementById("showRouteFamilies");
+	const showFamilySeries = document.getElementById("showFamilySeries");
+	if (showRouteFamilies) {
+		showRouteFamilies.addEventListener("change", () => {
+			if (showRouteFamilies.checked) {
+				if (showFamilySeries) {
+					showFamilySeries.checked = false;
+				}
+				runAdvancedAnalysisById("route-families");
+				return;
+			}
+			if (!showFamilySeries || !showFamilySeries.checked) {
+				clearAdvancedAnalysisOutput();
+			}
+		});
+	}
+
+	if (showFamilySeries) {
+		showFamilySeries.addEventListener("change", () => {
+			if (showFamilySeries.checked) {
+				if (showRouteFamilies) {
+					showRouteFamilies.checked = false;
+				}
+				runAdvancedAnalysisById("route-family-series");
+				return;
+			}
+			if (!showRouteFamilies || !showRouteFamilies.checked) {
+				clearAdvancedAnalysisOutput();
+			}
+		});
+	}
+
 	const deckFilterIds = ["showAllDeckers", "showSingleDecker", "showDoubleDecker"];
 	const handleDeckFilterChange = () => {
 		loadVehicleLookup()
@@ -5461,7 +5526,9 @@ function setupUI() {
 			"showDoubleDecker",
 			"showRegularRoutes",
 			"showNightRoutes",
-			"showSchoolRoutes"
+			"showSchoolRoutes",
+			"showRouteFamilies",
+			"showFamilySeries"
 		];
 		ids.forEach((id) => {
 			const checkbox = document.getElementById(id);
@@ -5476,6 +5543,7 @@ function setupUI() {
 				label.classList.remove("is-disabled");
 			}
 		});
+		clearAdvancedAnalysisOutput();
 	};
 
 	const clearAllLayers = document.getElementById("clearAllLayers");

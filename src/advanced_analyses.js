@@ -122,6 +122,11 @@
     };
     const rows = groups.map((group) => {
       const routes = Array.isArray(group?.routes) ? group.routes : Array.isArray(group) ? group : [];
+      const routeIds = routes
+        .map((route) => route?.id || route?.routeId || route?.route || route)
+        .filter(Boolean)
+        .map((routeId) => String(routeId).trim().toUpperCase())
+        .filter(Boolean);
       const sortedRoutes = routes.slice().sort(compareRoutes);
       const pills = sortedRoutes
         .map((route) => renderRoutePill(route?.id || route?.routeId || route?.route || route))
@@ -130,7 +135,7 @@
       const endpointB = formatEndpointAttr(group?.endpoints?.b);
       const endpointKey = group?.key ? String(group.key) : "";
       return `
-        <div class="analysis-pill-row" data-endpoint-a="${escapeHtml(endpointA)}" data-endpoint-b="${escapeHtml(endpointB)}" data-endpoint-key="${escapeHtml(endpointKey)}">
+        <div class="analysis-pill-row" data-endpoint-a="${escapeHtml(endpointA)}" data-endpoint-b="${escapeHtml(endpointB)}" data-endpoint-key="${escapeHtml(endpointKey)}" data-route-ids="${escapeHtml(routeIds.join("|"))}">
           <div class="route-pill-group">${pills}</div>
         </div>
       `;
@@ -266,10 +271,12 @@
     }).join("");
     container.innerHTML = blocks;
     if (api && typeof api.showAnalysisRoutes === "function") {
-      const shared = results.find((entry) => entry.id === "shared-endpoints" && entry.result?.type === "route-pills");
-      if (shared) {
-        const routeIds = new Set();
-        const groups = Array.isArray(shared.result.groups) ? shared.result.groups : [];
+      const routeIds = new Set();
+      results.forEach((entry) => {
+        if (entry?.result?.type !== "route-pills") {
+          return;
+        }
+        const groups = Array.isArray(entry.result.groups) ? entry.result.groups : [];
         groups.forEach((group) => {
           const routes = Array.isArray(group?.routes) ? group.routes : Array.isArray(group) ? group : [];
           routes.forEach((route) => {
@@ -279,6 +286,8 @@
             }
           });
         });
+      });
+      if (routeIds.size > 0) {
         api.showAnalysisRoutes(Array.from(routeIds));
       } else if (typeof api.clearAnalysisRoutes === "function") {
         api.clearAnalysisRoutes();
@@ -380,6 +389,7 @@
           }
           const endpointA = row.dataset.endpointA || "";
           const endpointB = row.dataset.endpointB || "";
+          const routeIdsRaw = row.dataset.routeIds || "";
           const parseEndpoint = (value) => {
             if (!value) {
               return null;
@@ -392,11 +402,8 @@
           };
           const a = parseEndpoint(endpointA);
           const b = parseEndpoint(endpointB);
-          if (!a && !b) {
-            return;
-          }
           const api = window.RouteMapsterAPI;
-          if (!api || typeof api.showEndpointPairOnMap !== "function") {
+          if (!api) {
             return;
           }
           const active = row.classList.contains("is-active");
@@ -407,10 +414,22 @@
             if (typeof api.clearEndpointHighlight === "function") {
               api.clearEndpointHighlight();
             }
+            if (typeof api.clearAnalysisRoutes === "function") {
+              api.clearAnalysisRoutes();
+            }
             return;
           }
           row.classList.add("is-active");
-          api.showEndpointPairOnMap({ a, b });
+          if (a || b) {
+            if (typeof api.showEndpointPairOnMap === "function") {
+              api.showEndpointPairOnMap({ a, b });
+            }
+          } else if (routeIdsRaw) {
+            const routeIds = routeIdsRaw.split("|").map((token) => token.trim()).filter(Boolean);
+            if (routeIds.length > 0 && typeof api.showAnalysisRoutes === "function") {
+              api.showAnalysisRoutes(routeIds);
+            }
+          }
           return;
         }
         const key = button.dataset.analysisKey;

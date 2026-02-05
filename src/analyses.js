@@ -456,6 +456,420 @@
           }))
         };
       }
+    },
+    "route-families": {
+      id: "route-families",
+      label: "Route families (heuristic)",
+      requiresSpatial: true,
+      run: (rows) => {
+        const list = Array.isArray(rows) ? rows : [];
+        if (list.length === 0) {
+          return {
+            type: "route-pills",
+            groups: [],
+            emptyMessage: "No routes available for family analysis."
+          };
+        }
+
+        const toRad = (value) => (Number(value) * Math.PI) / 180;
+        const distanceKm = (a, b) => {
+          if (!Array.isArray(a) || !Array.isArray(b) || a.length < 2 || b.length < 2) {
+            return Infinity;
+          }
+          const lat1 = Number(a[0]);
+          const lon1 = Number(a[1]);
+          const lat2 = Number(b[0]);
+          const lon2 = Number(b[1]);
+          if (![lat1, lon1, lat2, lon2].every(Number.isFinite)) {
+            return Infinity;
+          }
+          const dLat = toRad(lat2 - lat1);
+          const dLon = toRad(lon2 - lon1);
+          const rLat1 = toRad(lat1);
+          const rLat2 = toRad(lat2);
+          const sinLat = Math.sin(dLat / 2);
+          const sinLon = Math.sin(dLon / 2);
+          const h = sinLat * sinLat + Math.cos(rLat1) * Math.cos(rLat2) * sinLon * sinLon;
+          return 2 * 6371 * Math.asin(Math.min(1, Math.sqrt(h)));
+        };
+
+        const parseRouteId = (value) => {
+          const raw = String(value || "").trim().toUpperCase();
+          if (!raw) {
+            return { raw: "", prefix: "", number: null, suffix2: null, prefixType: "other" };
+          }
+          const match = raw.match(/^([A-Z]+)?(\d+)(.*)?$/);
+          if (!match) {
+            return { raw, prefix: "", number: null, suffix2: null, prefixType: "other" };
+          }
+          const prefix = match[1] || "";
+          const number = Number(match[2]);
+          const numberStr = match[2] || "";
+          const suffix2 = numberStr.length >= 2 ? Number(numberStr.slice(-2)) : null;
+          const prefixType = prefix === "" ? "base" : prefix === "N" ? "night" : "other";
+          return {
+            raw,
+            prefix,
+            number: Number.isFinite(number) ? number : null,
+            suffix2: Number.isFinite(suffix2) ? suffix2 : null,
+            prefixType
+          };
+        };
+
+        const endpointSimilarity = (a, b) => {
+          const startA = [a.endpoint_start_lat, a.endpoint_start_lon];
+          const endA = [a.endpoint_end_lat, a.endpoint_end_lon];
+          const startB = [b.endpoint_start_lat, b.endpoint_start_lon];
+          const endB = [b.endpoint_end_lat, b.endpoint_end_lon];
+          const THRESH = 0.55;
+
+          const startStart = distanceKm(startA, startB);
+          const endEnd = distanceKm(endA, endB);
+          const startEnd = distanceKm(startA, endB);
+          const endStart = distanceKm(endA, startB);
+
+          const aligned = (startStart <= THRESH && endEnd <= THRESH) || (startEnd <= THRESH && endStart <= THRESH);
+          if (aligned) {
+            return 0.4;
+          }
+          const shared = Math.min(startStart, endEnd, startEnd, endStart) <= THRESH;
+          return shared ? 0.2 : 0;
+        };
+
+        const bboxOverlapScore = (a, b) => {
+          const aNorth = a.northmost_lat;
+          const aSouth = a.southmost_lat;
+          const aEast = a.eastmost_lon;
+          const aWest = a.westmost_lon;
+          const bNorth = b.northmost_lat;
+          const bSouth = b.southmost_lat;
+          const bEast = b.eastmost_lon;
+          const bWest = b.westmost_lon;
+          if (![aNorth, aSouth, aEast, aWest, bNorth, bSouth, bEast, bWest].every(Number.isFinite)) {
+            return 0;
+          }
+          const north = Math.min(aNorth, bNorth);
+          const south = Math.max(aSouth, bSouth);
+          const east = Math.min(aEast, bEast);
+          const west = Math.max(aWest, bWest);
+          if (north <= south || east <= west) {
+            return 0;
+          }
+          const interArea = (north - south) * (east - west);
+          const areaA = (aNorth - aSouth) * (aEast - aWest);
+          const areaB = (bNorth - bSouth) * (bEast - bWest);
+          if (!Number.isFinite(interArea) || !Number.isFinite(areaA) || !Number.isFinite(areaB) || areaA <= 0 || areaB <= 0) {
+            return 0;
+          }
+          const overlapRatio = interArea / Math.min(areaA, areaB);
+          if (overlapRatio >= 0.65) {
+            return 0.4;
+          }
+          if (overlapRatio >= 0.45) {
+            return 0.25;
+          }
+          return 0;
+        };
+
+        const numericSimilarity = (a, b) => {
+          if (!Number.isFinite(a.number) || !Number.isFinite(b.number)) {
+            return 0;
+          }
+          if (a.number === b.number) {
+            const basePair = (a.prefixType === "base" && b.prefixType === "base")
+              || (a.prefixType === "night" && b.prefixType === "base")
+              || (a.prefixType === "base" && b.prefixType === "night")
+              || (a.prefixType === "night" && b.prefixType === "night");
+            return basePair ? 0.4 : 0.2;
+          }
+          if (Number.isFinite(a.suffix2) && Number.isFinite(b.suffix2) && a.suffix2 === b.suffix2) {
+            const bothBig = a.number >= 100 && b.number >= 100;
+            let score = bothBig ? 0.25 : 0.2;
+            if (a.prefixType === "other" || b.prefixType === "other") {
+              score -= 0.05;
+            }
+            return Math.max(0.1, score);
+          }
+          return 0;
+        };
+
+        const enriched = list
+          .map((row) => {
+            const routeId = String(row.route_id || row.route_id_norm || "").trim().toUpperCase();
+            if (!routeId) {
+              return null;
+            }
+            const parsed = parseRouteId(routeId);
+            return { row, routeId, parsed };
+          })
+          .filter(Boolean);
+
+        const suffixSeriesCounts = new Map();
+        enriched.forEach((entry) => {
+          const suffix = entry.parsed.suffix2;
+          if (!Number.isFinite(suffix)) {
+            return;
+          }
+          if (entry.parsed.prefixType === "other") {
+            return;
+          }
+          const key = String(suffix).padStart(2, "0");
+          suffixSeriesCounts.set(key, (suffixSeriesCounts.get(key) || 0) + 1);
+        });
+
+        const parent = new Map();
+        const find = (id) => {
+          if (!parent.has(id)) {
+            parent.set(id, id);
+          }
+          const root = parent.get(id);
+          if (root === id) {
+            return id;
+          }
+          const resolved = find(root);
+          parent.set(id, resolved);
+          return resolved;
+        };
+        const union = (a, b) => {
+          const rootA = find(a);
+          const rootB = find(b);
+          if (rootA !== rootB) {
+            parent.set(rootB, rootA);
+          }
+        };
+
+        for (let i = 0; i < enriched.length; i += 1) {
+          for (let j = i + 1; j < enriched.length; j += 1) {
+            const a = enriched[i];
+            const b = enriched[j];
+            const numericScore = numericSimilarity(a.parsed, b.parsed);
+            const endpointScore = endpointSimilarity(a.row, b.row);
+            const overlapScore = bboxOverlapScore(a.row, b.row);
+            const score = numericScore + endpointScore + overlapScore;
+            const hasSpatial = endpointScore >= 0.2 || overlapScore >= 0.25;
+            const strongSpatial = endpointScore >= 0.4 || overlapScore >= 0.4;
+            const suffixKey = Number.isFinite(a.parsed.suffix2) ? String(a.parsed.suffix2).padStart(2, "0") : "";
+            const seriesCount = suffixKey ? suffixSeriesCounts.get(suffixKey) || 0 : 0;
+            const sameSuffixSeries = seriesCount >= 3
+              && a.parsed.prefixType !== "other"
+              && b.parsed.prefixType !== "other"
+              && Number.isFinite(a.parsed.suffix2)
+              && Number.isFinite(b.parsed.suffix2)
+              && a.parsed.suffix2 === b.parsed.suffix2;
+
+            if (
+              (numericScore >= 0.4 && hasSpatial) ||
+              (strongSpatial && numericScore >= 0.2) ||
+              score >= 0.85 ||
+              (sameSuffixSeries && numericScore >= 0.2 && hasSpatial)
+            ) {
+              union(a.routeId, b.routeId);
+            }
+          }
+        }
+
+        const grouped = new Map();
+        enriched.forEach((entry) => {
+          const root = find(entry.routeId);
+          if (!grouped.has(root)) {
+            grouped.set(root, new Map());
+          }
+          grouped.get(root).set(entry.routeId, entry.row.route_type || "");
+        });
+
+        const groups = Array.from(grouped.values())
+          .map((routesMap) => {
+            const routes = Array.from(routesMap.entries()).map(([id, type]) => ({ id, type }));
+            return { routes, count: routes.length };
+          })
+          .filter((group) => group.count >= 2)
+          .sort((a, b) => b.count - a.count);
+
+        if (groups.length === 0) {
+          return {
+            type: "route-pills",
+            groups: [],
+            emptyMessage: "No route families found with the current heuristic."
+          };
+        }
+
+        return {
+          type: "route-pills",
+          groups
+        };
+      }
+    },
+    "route-family-series": {
+      id: "route-family-series",
+      label: "Route number series ranking (00-99)",
+      requiresSpatial: true,
+      run: (rows) => {
+        const list = Array.isArray(rows) ? rows : [];
+        if (list.length === 0) {
+          return {
+            type: "table",
+            columns: ["Series", "Routes", "Avg cohesion", "Best pair", "Example routes"],
+            rows: [["No routes available", "", "", "", ""]]
+          };
+        }
+
+        const toRad = (value) => (Number(value) * Math.PI) / 180;
+        const distanceKm = (a, b) => {
+          if (!Array.isArray(a) || !Array.isArray(b) || a.length < 2 || b.length < 2) {
+            return Infinity;
+          }
+          const lat1 = Number(a[0]);
+          const lon1 = Number(a[1]);
+          const lat2 = Number(b[0]);
+          const lon2 = Number(b[1]);
+          if (![lat1, lon1, lat2, lon2].every(Number.isFinite)) {
+            return Infinity;
+          }
+          const dLat = toRad(lat2 - lat1);
+          const dLon = toRad(lon2 - lon1);
+          const rLat1 = toRad(lat1);
+          const rLat2 = toRad(lat2);
+          const sinLat = Math.sin(dLat / 2);
+          const sinLon = Math.sin(dLon / 2);
+          const h = sinLat * sinLat + Math.cos(rLat1) * Math.cos(rLat2) * sinLon * sinLon;
+          return 2 * 6371 * Math.asin(Math.min(1, Math.sqrt(h)));
+        };
+
+        const parseRouteId = (value) => {
+          const raw = String(value || "").trim().toUpperCase();
+          if (!raw) {
+            return { raw: "", prefix: "", number: null, suffix2: null };
+          }
+          const match = raw.match(/^([A-Z]+)?(\d+)(.*)?$/);
+          if (!match) {
+            return { raw, prefix: "", number: null, suffix2: null };
+          }
+          const prefix = match[1] || "";
+          const number = Number(match[2]);
+          const numberStr = match[2] || "";
+          const suffix2 = numberStr.length >= 2 ? Number(numberStr.slice(-2)) : number;
+          return {
+            raw,
+            prefix,
+            number: Number.isFinite(number) ? number : null,
+            suffix2: Number.isFinite(suffix2) ? suffix2 : null
+          };
+        };
+
+        const endpointSimilarity = (a, b) => {
+          const startA = [a.endpoint_start_lat, a.endpoint_start_lon];
+          const endA = [a.endpoint_end_lat, a.endpoint_end_lon];
+          const startB = [b.endpoint_start_lat, b.endpoint_start_lon];
+          const endB = [b.endpoint_end_lat, b.endpoint_end_lon];
+          const THRESH = 0.6;
+
+          const startStart = distanceKm(startA, startB);
+          const endEnd = distanceKm(endA, endB);
+          const startEnd = distanceKm(startA, endB);
+          const endStart = distanceKm(endA, startB);
+
+          const aligned = (startStart <= THRESH && endEnd <= THRESH) || (startEnd <= THRESH && endStart <= THRESH);
+          if (aligned) {
+            return 0.55;
+          }
+          const shared = Math.min(startStart, endEnd, startEnd, endStart) <= THRESH;
+          return shared ? 0.25 : 0;
+        };
+
+        const bboxOverlapScore = (a, b) => {
+          const aNorth = a.northmost_lat;
+          const aSouth = a.southmost_lat;
+          const aEast = a.eastmost_lon;
+          const aWest = a.westmost_lon;
+          const bNorth = b.northmost_lat;
+          const bSouth = b.southmost_lat;
+          const bEast = b.eastmost_lon;
+          const bWest = b.westmost_lon;
+          if (![aNorth, aSouth, aEast, aWest, bNorth, bSouth, bEast, bWest].every(Number.isFinite)) {
+            return 0;
+          }
+          const north = Math.min(aNorth, bNorth);
+          const south = Math.max(aSouth, bSouth);
+          const east = Math.min(aEast, bEast);
+          const west = Math.max(aWest, bWest);
+          if (north <= south || east <= west) {
+            return 0;
+          }
+          const interArea = (north - south) * (east - west);
+          const areaA = (aNorth - aSouth) * (aEast - aWest);
+          const areaB = (bNorth - bSouth) * (bEast - bWest);
+          if (!Number.isFinite(interArea) || !Number.isFinite(areaA) || !Number.isFinite(areaB) || areaA <= 0 || areaB <= 0) {
+            return 0;
+          }
+          const overlapRatio = interArea / Math.min(areaA, areaB);
+          if (overlapRatio >= 0.6) {
+            return 0.45;
+          }
+          if (overlapRatio >= 0.35) {
+            return 0.25;
+          }
+          return 0;
+        };
+
+        const enriched = list
+          .map((row) => {
+            const routeId = String(row.route_id || row.route_id_norm || "").trim().toUpperCase();
+            if (!routeId) {
+              return null;
+            }
+            const parsed = parseRouteId(routeId);
+            if (!Number.isFinite(parsed.suffix2)) {
+              return null;
+            }
+            return { row, routeId, parsed };
+          })
+          .filter(Boolean);
+
+        const seriesMap = new Map();
+        enriched.forEach((entry) => {
+          const key = String(entry.parsed.suffix2).padStart(2, "0");
+          if (!seriesMap.has(key)) {
+            seriesMap.set(key, []);
+          }
+          seriesMap.get(key).push(entry);
+        });
+
+        const rowsOut = Array.from(seriesMap.entries()).map(([series, entries]) => {
+          let pairCount = 0;
+          let scoreSum = 0;
+          let bestScore = 0;
+          for (let i = 0; i < entries.length; i += 1) {
+            for (let j = i + 1; j < entries.length; j += 1) {
+              const a = entries[i];
+              const b = entries[j];
+              const score = endpointSimilarity(a.row, b.row) + bboxOverlapScore(a.row, b.row);
+              scoreSum += score;
+              pairCount += 1;
+              if (score > bestScore) {
+                bestScore = score;
+              }
+            }
+          }
+          const avgScore = pairCount > 0 ? scoreSum / pairCount : 0;
+          const routes = entries.map((entry) => entry.routeId).sort();
+          const exampleRoutes = routes.length > 8 ? `${routes.slice(0, 8).join(", ")} +${routes.length - 8}` : routes.join(", ");
+          return [
+            series,
+            routes.length,
+            formatNumber(avgScore, 2),
+            formatNumber(bestScore, 2),
+            exampleRoutes
+          ];
+        });
+
+        rowsOut.sort((a, b) => (parseFloat(b[2]) || 0) - (parseFloat(a[2]) || 0));
+
+        return {
+          type: "table",
+          columns: ["Series", "Routes", "Avg cohesion", "Best pair", "Example routes"],
+          rows: rowsOut
+        };
+      }
     }
   };
 
