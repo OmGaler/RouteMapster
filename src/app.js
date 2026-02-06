@@ -177,6 +177,7 @@ const appState = {
 	useRouteTypeColours: false,
 	selectedFeature: null,
 	busStationHighlightLayer: null,
+	garageSelectMap: null,
 	endpointHighlightLayer: null,
 	routeGeometryCache: new Map(),
 	routeSpatialCache: new Map(),
@@ -689,14 +690,15 @@ function buildGarageGroupDetails(group) {
 	if (!group || !Array.isArray(group.features)) {
 		return { label: "Garage", subtitle: "Garage", searchTokens: [] };
 	}
+	const displayFeatures = getUniqueGarageDisplayFeatures(group.features);
 	const names = new Set();
 	const codes = new Set();
 	const operators = new Set();
-	group.features.forEach((feature) => {
+	displayFeatures.forEach((feature) => {
 		const props = feature?.properties || {};
 		const name = String(props?.["Garage name"] || "").trim();
 		const code = getGarageCode(props);
-		const operator = String(props?.["Company name"] || props?.["Group name"] || "").trim();
+		const operator = getGarageGroupName(props);
 		if (name) {
 			names.add(name);
 		}
@@ -1446,6 +1448,7 @@ function applyOmniGarageSelection(item) {
 	}
 	clearOmniSearchLayers({ restoreNetwork: false });
 	ensureGaragesVisible();
+	setGarageSelectValue(buildGarageSelectKey(group.features));
 	setSelectedFeature("garage", group.features);
 	refreshSelectedInfoPanel().catch(() => {});
 	selectGarageRoutes(group.features);
@@ -1841,6 +1844,7 @@ async function addGaragesLayer(map) {
     const hoverHtml = buildGarageHoverHtml(group.features);
     bindHoverPopup(marker, hoverHtml);
     marker.on('click', () => {
+      setGarageSelectValue(buildGarageSelectKey(group.features));
       setSelectedFeature("garage", group.features);
       refreshSelectedInfoPanel().catch(() => {});
       selectGarageRoutes(group.features);
@@ -3013,6 +3017,50 @@ function garageHasRoutes(feature) {
 	return tokens.length > 0;
 }
 
+function getGarageGroupName(props) {
+	return String(props?.["Group name"] || props?.["Company name"] || "").trim();
+}
+
+function getUniqueGarageDisplayFeatures(features) {
+	if (!Array.isArray(features)) {
+		return [];
+	}
+	const seen = new Set();
+	const unique = [];
+	features.forEach((feature) => {
+		const props = feature?.properties || {};
+		const code = getGarageCode(props);
+		const name = String(props?.["Garage name"] || "").trim().toLowerCase();
+		const group = getGarageGroupName(props).toLowerCase();
+		const key = code ? `code:${code}` : `name:${name}|${group}`;
+		if (seen.has(key)) {
+			return;
+		}
+		seen.add(key);
+		unique.push(feature);
+	});
+	return unique;
+}
+
+function buildGarageSelectKey(features) {
+	const unique = getUniqueGarageDisplayFeatures(features);
+	const codes = unique
+		.map((feature) => getGarageCode(feature?.properties || {}))
+		.filter(Boolean)
+		.sort();
+	if (codes.length > 0) {
+		return `codes:${codes.join("|")}`;
+	}
+	const names = unique
+		.map((feature) => String(feature?.properties?.["Garage name"] || "").trim())
+		.filter(Boolean)
+		.sort();
+	if (names.length > 0) {
+		return `names:${names.join("|")}`;
+	}
+	return "";
+}
+
 function groupGaragesByLocation(geojson) {
 	const groups = [];
 	if (!geojson || !Array.isArray(geojson.features)) {
@@ -3088,20 +3136,22 @@ function buildGarageGroupInfoHtml(features) {
 	if (!features || features.length === 0) {
 		return '';
 	}
-	return features.map((feature) => buildGarageSingleInfoHtml(feature)).join('<hr/>');
+	const displayFeatures = getUniqueGarageDisplayFeatures(features);
+	return displayFeatures.map((feature) => buildGarageSingleInfoHtml(feature)).join('<hr/>');
 }
 
 function buildGarageHoverHtml(features) {
 	if (!features || features.length === 0) {
 		return "";
 	}
+	const displayFeatures = getUniqueGarageDisplayFeatures(features);
 	const routeSets = appState.useRouteTypeColours ? appState.networkRouteSets : null;
-	return features
+	return displayFeatures
 		.map((feature) => {
 			const p = feature.properties || {};
 			const name = p["Garage name"] || p["TfL garage code"] || "Garage";
 			const code = getGarageCode(p) || "N/A";
-			const operator = p["Company name"] || p["Group name"] || "Operator";
+			const operator = getGarageGroupName(p) || "Operator";
 			const routes = [
 				...extractRouteTokens(p["TfL main network routes"]),
 				...extractRouteTokens(p["TfL night routes"]),
@@ -3140,12 +3190,15 @@ function buildGarageInfoHtml(features, routeSets) {
 		};
 	}
 
-	const intro = features.length > 1 ? `${features.length} garages at this location` : "Garage location";
-	const sections = features.map((feature) => {
+	const displayFeatures = getUniqueGarageDisplayFeatures(features);
+	const intro = displayFeatures.length > 1
+		? `${displayFeatures.length} garages at this location`
+		: "Garage location";
+	const sections = displayFeatures.map((feature) => {
 		const p = feature.properties || {};
 		const name = p["Garage name"] || p["TfL garage code"] || "Garage";
 		const code = getGarageCode(p) || "N/A";
-		const operator = p["Company name"] || p["Group name"] || "Operator";
+		const operator = getGarageGroupName(p) || "Operator";
 		const pvr = formatGaragePvr(p);
 
 		const mainRoutes = extractRouteTokens(p["TfL main network routes"]);
@@ -3168,7 +3221,7 @@ function buildGarageInfoHtml(features, routeSets) {
 			<div class="info-section">
 				<div class="info-label">Garage</div>
 				<div>${escapeHtml(name)} <strong>${escapeHtml(code)}</strong></div>
-				<div>Operator: ${escapeHtml(operator)}</div>
+				<div>Group: ${escapeHtml(operator)}</div>
 				<div>${escapeHtml(pvr)}</div>
 			</div>
 			${routeSection}
@@ -3186,14 +3239,15 @@ function buildGarageSingleInfoHtml(feature) {
 	const p = feature.properties || {};
 	const name = p["Garage name"] || p["TfL garage code"] || "Garage";
 	const code = getGarageCode(p) || "N/A";
-	const operator = p["Company name"] || p["Group name"] || "Operator";
+	const operator = getGarageGroupName(p) || "Operator";
 	const pvr = formatGaragePvr(p);
 	const routes = formatGarageRoutes(p);
-	return `<div><div>${name} <b>${code}</b></div><div>Operator: ${operator}</div><div>${pvr}</div><div>${routes}</div></div>`;
+	return `<div><div>${name} <b>${code}</b></div><div>Group: ${operator}</div><div>${pvr}</div><div>${routes}</div></div>`;
 }
 
 function buildGarageLabelHtml(features) {
-	const codes = getGarageCodes(features);
+	const displayFeatures = getUniqueGarageDisplayFeatures(features);
+	const codes = getGarageCodes(displayFeatures);
 	if (codes.length === 0) {
 		return '';
 	}
@@ -4787,7 +4841,7 @@ function buildBusStationsFromAnchors(stationGeojson, busStopsGeojson) {
 				postcode: String(props?.postcode || "").trim()
 			};
 		})
-		.filter(Boolean);
+		.filter((station) => station && station.stopCount > 0 && station.routeCount > 0);
 }
 
 function getStationBaseName(name) {
@@ -5364,7 +5418,7 @@ async function addBusStationsLayer(map) {
 	const maxRoutes = scaleEnabled ? getBusStationScaleMax(stations) : 0;
 	const layerGroup = L.layerGroup();
 	stations.forEach((station) => {
-		if (!station.latlng) {
+		if (!station.latlng || !Number.isFinite(station.stopCount) || station.stopCount <= 0 || !station.routeCount) {
 			return;
 		}
 		const routeCount = Number(station?.routes?.size || station?.routeCount || 0);
@@ -5423,6 +5477,14 @@ function ensureBusStationsVisible() {
 
 function setBusStationSelectValue(key) {
 	const select = document.getElementById("busStationSelect");
+	if (!select) {
+		return;
+	}
+	select.value = key || "";
+}
+
+function setGarageSelectValue(key) {
+	const select = document.getElementById("garageSelect");
 	if (!select) {
 		return;
 	}
@@ -5640,6 +5702,7 @@ function setupUI() {
 	setupRouteFilterInput();
 	setupBusStopFilterInput();
 	setupBusStationSelect();
+	setupGarageSelect();
 	setupNetworkFilterDrag();
 	setupKeyboardShortcuts();
 	setupAboutModal();
@@ -6804,6 +6867,7 @@ function setupBusStationSelect() {
 
 	const populate = (stations) => {
 		const options = stations
+			.filter((station) => Number.isFinite(station.stopCount) && station.stopCount > 0 && station.routeCount > 0)
 			.slice()
 			.sort((a, b) => a.name.localeCompare(b.name))
 			.map((station) => `<option value="${escapeHtml(station.key)}">${escapeHtml(station.name)}</option>`)
@@ -6839,6 +6903,68 @@ function setupBusStationSelect() {
 		selectBusStationRoutes(station);
 		if (appState.map && station.latlng) {
 			appState.map.flyTo(station.latlng, Math.max(appState.map.getZoom(), 13));
+		}
+	});
+}
+
+function setupGarageSelect() {
+	const select = document.getElementById("garageSelect");
+	if (!select) {
+		return;
+	}
+
+	const populate = (entries) => {
+		const options = entries
+			.slice()
+			.sort((a, b) => a.details.label.localeCompare(b.details.label))
+			.map((entry) => `<option value="${escapeHtml(entry.selectKey)}">${escapeHtml(entry.details.label)}</option>`)
+			.join("");
+		select.innerHTML = `<option value="">Choose a garage</option>${options}`;
+	};
+
+	loadGaragesGeojson()
+		.then((gj) => {
+			if (!gj) {
+				return;
+			}
+			const filteredGeojson = {
+				...gj,
+				features: Array.isArray(gj?.features)
+					? gj.features.filter((feature) => garageHasRoutes(feature))
+					: []
+			};
+			const groups = groupGaragesByLocation(filteredGeojson);
+			const entries = groups
+				.map((group) => {
+					const details = buildGarageGroupDetails(group);
+					const selectKey = buildGarageSelectKey(group.features);
+					return { group, details, selectKey };
+				})
+				.filter((entry) => entry.selectKey);
+			appState.garageSelectMap = new Map(entries.map((entry) => [entry.selectKey, entry.group]));
+			if (entries.length > 0) {
+				populate(entries);
+			}
+		})
+		.catch(() => {});
+
+	select.addEventListener("change", () => {
+		const key = select.value;
+		if (!key) {
+			clearSelectedFeature();
+			resetInfoPanel();
+			return;
+		}
+		const group = appState.garageSelectMap?.get(key);
+		if (!group) {
+			return;
+		}
+		ensureGaragesVisible();
+		setSelectedFeature("garage", group.features);
+		refreshSelectedInfoPanel().catch(() => {});
+		selectGarageRoutes(group.features);
+		if (appState.map && group.latlng) {
+			appState.map.flyTo(group.latlng, Math.max(appState.map.getZoom(), 12));
 		}
 	});
 }
