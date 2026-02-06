@@ -95,9 +95,27 @@ function configureMapPanes(map) {
 			if (name === HIGHLIGHT_PANE) {
 				// Prevent highlight overlay from blocking interactions with markers/routes.
 				pane.style.pointerEvents = "none";
+			} else {
+				pane.style.pointerEvents = "auto";
 			}
 		}
 	});
+}
+
+function setStopsPanePriority(enabled) {
+	if (!appState.map) {
+		return;
+	}
+	const stopPane = appState.map.getPane(STOP_PANE);
+	if (!stopPane) {
+		return;
+	}
+	if (enabled) {
+		stopPane.style.zIndex = "445";
+	} else {
+		const base = MAP_PANE_ORDER.find((entry) => entry.name === STOP_PANE);
+		stopPane.style.zIndex = String(base?.zIndex ?? 420);
+	}
 }
 
 async function initialiseRouteGeometryIndex() {
@@ -140,6 +158,7 @@ const appState = {
 	busStopFilterRouteCount: "any",
 	busStopBoroughLookup: new Map(),
 	advancedStopsLayer: null,
+	busStopRenderer: null,
 	stopRoutesIndex: null,
 	stopRoutesFromLines: new Map(),
 	stopPointFetches: new Map(),
@@ -1841,6 +1860,10 @@ function clearBusStopsLayer() {
 		appState.map.removeLayer(appState.busStopLayer);
 		appState.busStopLayer = null;
 	}
+	if (appState.busStopRenderer && appState.map) {
+		appState.map.removeLayer(appState.busStopRenderer);
+		appState.busStopRenderer = null;
+	}
 }
 
 function clearAdvancedStopsLayer() {
@@ -2039,6 +2062,11 @@ async function addBusStopsLayer(map) {
 		appState.busStopFilterBoroughs,
 		appState.busStopFilterRouteCount
 	);
+	const renderer = L.svg({ pane: STOP_PANE });
+	if (renderer._container) {
+		renderer._container.style.pointerEvents = "auto";
+	}
+	appState.busStopRenderer = renderer;
 	const layerGroup = L.layerGroup();
 
 	result.features.forEach((feature) => {
@@ -2057,7 +2085,9 @@ async function addBusStopsLayer(map) {
 			color: "#1d4ed8",
 			fillColor: "#2563eb",
 			fillOpacity: 0.8,
-			pane: STOP_PANE
+			pane: STOP_PANE,
+			renderer,
+			interactive: true
 		});
 		bindHoverPopup(marker, () => buildBusStopPopup(feature.properties || {}));
 		marker.on("click", () => {
@@ -2069,6 +2099,9 @@ async function addBusStopsLayer(map) {
 				.catch(() => {});
 		});
 		marker.addTo(layerGroup);
+		if (typeof marker.bringToFront === "function") {
+			marker.bringToFront();
+		}
 	});
 
 	layerGroup.addTo(map);
@@ -5324,6 +5357,7 @@ function setupUI() {
 	setupBusStopFilterInput();
 	setupBusStationSelect();
 	setupNetworkFilterDrag();
+	setupKeyboardShortcuts();
 	setupAboutModal();
 	setupOmniSearch();
 	setupSidebarResize();
@@ -5430,10 +5464,12 @@ function setupUI() {
 		showBusStops.addEventListener("change", (event) => {
 			appState.busStopLoadToken += 1;
 			if (event.target.checked) {
+				setStopsPanePriority(true);
 				addBusStopsLayer(appState.map).catch(() => {});
 				return;
 			}
 			clearBusStopsLayer();
+			setStopsPanePriority(false);
 			updateSelectedInfo("Bus stops hidden.");
 			if (appState.selectedFeature?.type === "stop") {
 				resetInfoPanel();
@@ -6326,6 +6362,138 @@ function setupNetworkFilterDrag() {
 		if (label.dataset.dragJust) {
 			event.preventDefault();
 			event.stopPropagation();
+		}
+	});
+}
+
+function setupKeyboardShortcuts() {
+	const isEditableTarget = (target) => {
+		if (!target) {
+			return false;
+		}
+		const tag = target.tagName;
+		if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") {
+			return true;
+		}
+		if (target.isContentEditable) {
+			return true;
+		}
+		return false;
+	};
+
+	const isModalOpen = () => {
+		const omni = document.getElementById("omniSearchModal");
+		if (omni && omni.classList.contains("is-visible")) {
+			return true;
+		}
+		const about = document.getElementById("aboutModal");
+		if (about && about.classList.contains("is-visible")) {
+			return true;
+		}
+		const loading = document.getElementById("loadingModal");
+		if (loading && loading.classList.contains("is-visible")) {
+			return true;
+		}
+		return false;
+	};
+
+	const openModule = (moduleId) => {
+		const details = document.querySelector(`[data-module="${moduleId}"]`);
+		if (details) {
+			details.open = true;
+		}
+	};
+
+	const toggleCheckbox = (id, moduleId) => {
+		const checkbox = document.getElementById(id);
+		if (!checkbox) {
+			return;
+		}
+		const next = !checkbox.checked;
+		checkbox.checked = next;
+		checkbox.dispatchEvent(new Event("change"));
+		if (next && moduleId) {
+			openModule(moduleId);
+		}
+	};
+
+	const showRoutes = () => {
+		openModule("routes");
+		const showAll = document.getElementById("showAllRoutes");
+		if (showAll && !showAll.checked) {
+			showAll.checked = true;
+			showAll.dispatchEvent(new Event("change"));
+			return;
+		}
+		appState.networkRouteLoadToken += 1;
+		renderNetworkRoutes(appState.networkRouteLoadToken);
+	};
+
+	const clearAll = () => {
+		const clearLayers = document.getElementById("clearAllLayers");
+		if (clearLayers) {
+			clearLayers.click();
+		}
+		const clearRoutes = document.getElementById("clearAllRoutes");
+		if (clearRoutes) {
+			clearRoutes.click();
+		}
+	};
+
+	document.addEventListener("keydown", (event) => {
+		if (event.defaultPrevented) {
+			return;
+		}
+		if (event.ctrlKey || event.metaKey || event.altKey) {
+			return;
+		}
+		if (isEditableTarget(event.target) || isModalOpen()) {
+			return;
+		}
+		const key = String(event.key || "").toLowerCase();
+		if (!key) {
+			return;
+		}
+
+		switch (key) {
+			case "g":
+				event.preventDefault();
+				toggleCheckbox("showGarages", "garages");
+				break;
+			case "b":
+				event.preventDefault();
+				toggleCheckbox("showBusStops", "stops");
+				break;
+			case "s":
+				event.preventDefault();
+				toggleCheckbox("showBusStations", "stations");
+				break;
+			case "f":
+				event.preventDefault();
+				toggleCheckbox("showFrequencyOverlay", "frequencies");
+				break;
+			case "r":
+				event.preventDefault();
+				showRoutes();
+				break;
+			case "a":
+				event.preventDefault();
+				openModule("advanced-filters");
+				break;
+			case "n":
+				event.preventDefault();
+				openModule("advanced-analyses");
+				break;
+			case "p":
+				event.preventDefault();
+				openModule("stop-analyses");
+				break;
+			case "c":
+				event.preventDefault();
+				clearAll();
+				break;
+			default:
+				break;
 		}
 	});
 }
