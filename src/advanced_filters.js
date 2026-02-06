@@ -524,36 +524,16 @@
     }
 
     const freq = {};
-    const peakAmMin = parseNumberInput(els.peakAmMin);
-    const peakAmMax = parseNumberInput(els.peakAmMax);
-    if (peakAmMin !== null || peakAmMax !== null) {
-      freq.peak_am = { min: peakAmMin ?? undefined, max: peakAmMax ?? undefined };
-    }
-    const peakPmMin = parseNumberInput(els.peakPmMin);
-    const peakPmMax = parseNumberInput(els.peakPmMax);
-    if (peakPmMin !== null || peakPmMax !== null) {
-      freq.peak_pm = { min: peakPmMin ?? undefined, max: peakPmMax ?? undefined };
-    }
-    const offpeakMin = parseNumberInput(els.offpeakMin);
-    const offpeakMax = parseNumberInput(els.offpeakMax);
-    if (offpeakMin !== null || offpeakMax !== null) {
-      freq.offpeak = { min: offpeakMin ?? undefined, max: offpeakMax ?? undefined };
-    }
-    const overnightMin = parseNumberInput(els.overnightMin);
-    const overnightMax = parseNumberInput(els.overnightMax);
-    if (overnightMin !== null || overnightMax !== null) {
-      freq.overnight = { min: overnightMin ?? undefined, max: overnightMax ?? undefined };
+    const band = String(els.frequencyBand?.value || "peak_am");
+    const bandMin = parseNumberInput(els.frequencyMin);
+    const bandMax = parseNumberInput(els.frequencyMax);
+    if (bandMin !== null || bandMax !== null) {
+      freq[band] = { min: bandMin ?? undefined, max: bandMax ?? undefined };
     }
 
     const flags = {};
     if (els.hasOvernight?.checked) {
       flags.has_overnight = true;
-    }
-    if (els.highFrequencyToggle?.checked) {
-      const value = parseNumberInput(els.highFrequencyValue);
-      if (value !== null) {
-        flags.high_frequency_any = value;
-      }
     }
     const lengthMin = parseNumberInput(els.lengthMin);
     const lengthMax = parseNumberInput(els.lengthMax);
@@ -621,21 +601,25 @@
       }
     };
 
-    setRange(normalized.freq?.peak_am, els.peakAmMin, els.peakAmMax);
-    setRange(normalized.freq?.peak_pm, els.peakPmMin, els.peakPmMax);
-    setRange(normalized.freq?.offpeak, els.offpeakMin, els.offpeakMax);
-    setRange(normalized.freq?.overnight, els.overnightMin, els.overnightMax);
+    const freqBands = ["peak_am", "peak_pm", "offpeak", "weekend", "overnight"];
+    let activeBand = "peak_am";
+    let activeRange = null;
+    for (const band of freqBands) {
+      const range = normalized.freq?.[band];
+      if (range && (Number.isFinite(range.min) || Number.isFinite(range.max))) {
+        activeBand = band;
+        activeRange = range;
+        break;
+      }
+    }
+
+    if (els.frequencyBand) {
+      els.frequencyBand.value = activeBand;
+    }
+    setRange(activeRange, els.frequencyMin, els.frequencyMax);
 
     if (els.hasOvernight) {
       els.hasOvernight.checked = normalized.flags?.has_overnight === true;
-    }
-    if (els.highFrequencyToggle) {
-      els.highFrequencyToggle.checked = Number.isFinite(normalized.flags?.high_frequency_any);
-    }
-    if (els.highFrequencyValue) {
-      els.highFrequencyValue.value = Number.isFinite(normalized.flags?.high_frequency_any)
-        ? normalized.flags.high_frequency_any
-        : "";
     }
     if (els.lengthMin) {
       els.lengthMin.value = Number.isFinite(normalized.length_miles?.min) ? normalized.length_miles.min : "";
@@ -661,7 +645,14 @@
     if (!value) {
       return {};
     }
-    return window.RouteMapsterQueryEngine.parseFilterSpec(value);
+    const parsed = window.RouteMapsterQueryEngine.parseFilterSpec(value);
+    if (parsed?.flags && Object.prototype.hasOwnProperty.call(parsed.flags, "high_frequency_any")) {
+      delete parsed.flags.high_frequency_any;
+      if (Object.keys(parsed.flags).length === 0) {
+        delete parsed.flags;
+      }
+    }
+    return parsed;
   };
 
   const hasActiveFilters = (spec) => {
@@ -677,7 +668,7 @@
       return true;
     }
     if (normalized.freq) {
-      const bands = ["peak_am", "peak_pm", "offpeak", "overnight"];
+      const bands = ["peak_am", "peak_pm", "offpeak", "weekend", "overnight"];
       for (const band of bands) {
         const range = normalized.freq[band];
         if (range && (Number.isFinite(range.min) || Number.isFinite(range.max))) {
@@ -687,9 +678,6 @@
     }
     if (normalized.flags) {
       if (typeof normalized.flags.has_overnight === "boolean") {
-        return true;
-      }
-      if (Number.isFinite(normalized.flags.high_frequency_any)) {
         return true;
       }
       if (Number.isFinite(normalized.flags.peaky?.min_delta)) {
@@ -757,7 +745,9 @@
       const routeType = cleanMetaValue(row.route_type || "");
       const vehicle = row.vehicle_type || "";
       const peakAm = formatNumber(row.frequency_peak_am);
+      const peakPm = formatNumber(row.frequency_peak_pm);
       const offpeak = formatNumber(row.frequency_offpeak);
+      const weekend = formatNumber(row.frequency_weekend);
       const overnight = formatNumber(row.frequency_overnight);
       const intensity = formatNumber(row.service_intensity_score, 2);
       const hasOvernight = row.has_overnight ? "Yes" : "No";
@@ -774,7 +764,7 @@
             </button>
           </div>
           <div class="route-card__meta">${escapeHtml(metaParts)}</div>
-          <div class="route-card__freq">Peak AM: ${peakAm || "–"} · Offpeak: ${offpeak || "–"} · Overnight: ${overnight || "–"}</div>
+          <div class="route-card__freq">Peak AM: ${peakAm || "–"} · Peak PM: ${peakPm || "–"} · Offpeak: ${offpeak || "–"} · Weekend: ${weekend || "–"} · Overnight: ${overnight || "–"}</div>
           <div class="route-card__kpi">Intensity: ${intensity || "–"} · Overnight: ${hasOvernight}</div>
         </div>
       `;
@@ -938,17 +928,10 @@
       boroughNote: container.querySelector("#advancedBoroughsNote"),
       vehicles: container.querySelector("#advancedVehicles"),
       vehiclesSelectAll: container.querySelector("#advancedVehiclesSelectAll"),
-      peakAmMin: container.querySelector("#advancedPeakAmMin"),
-      peakAmMax: container.querySelector("#advancedPeakAmMax"),
-      peakPmMin: container.querySelector("#advancedPeakPmMin"),
-      peakPmMax: container.querySelector("#advancedPeakPmMax"),
-      offpeakMin: container.querySelector("#advancedOffpeakMin"),
-      offpeakMax: container.querySelector("#advancedOffpeakMax"),
-      overnightMin: container.querySelector("#advancedOvernightMin"),
-      overnightMax: container.querySelector("#advancedOvernightMax"),
+      frequencyBand: container.querySelector("#advancedFrequencyBand"),
+      frequencyMin: container.querySelector("#advancedFrequencyMin"),
+      frequencyMax: container.querySelector("#advancedFrequencyMax"),
       hasOvernight: container.querySelector("#advancedHasOvernight"),
-      highFrequencyToggle: container.querySelector("#advancedHighFrequencyToggle"),
-      highFrequencyValue: container.querySelector("#advancedHighFrequencyValue"),
       lengthMin: container.querySelector("#advancedLengthMin"),
       lengthMax: container.querySelector("#advancedLengthMax"),
       extremeSelect: container.querySelector("#advancedExtremeSelect"),
@@ -1070,6 +1053,7 @@
           "frequency_peak_am",
           "frequency_peak_pm",
           "frequency_offpeak",
+          "frequency_weekend",
           "frequency_overnight",
           "service_intensity_score",
         ];
@@ -1082,6 +1066,7 @@
           row.frequency_peak_am,
           row.frequency_peak_pm,
           row.frequency_offpeak,
+          row.frequency_weekend,
           row.frequency_overnight,
           formatNumber(row.service_intensity_score, 2),
         ]);

@@ -169,7 +169,7 @@
         rows.forEach((row) => {
           getOperators(row).forEach((operator) => {
             if (!summary.has(operator)) {
-              summary.set(operator, { peakAm: [], peakPm: [], offpeak: [], overnight: [] });
+              summary.set(operator, { peakAm: [], peakPm: [], offpeak: [], weekend: [], overnight: [] });
             }
             const entry = summary.get(operator);
             if (Number.isFinite(row.frequency_peak_am)) {
@@ -180,6 +180,9 @@
             }
             if (Number.isFinite(row.frequency_offpeak)) {
               entry.offpeak.push(row.frequency_offpeak);
+            }
+            if (Number.isFinite(row.frequency_weekend)) {
+              entry.weekend.push(row.frequency_weekend);
             }
             if (Number.isFinite(row.frequency_overnight)) {
               entry.overnight.push(row.frequency_overnight);
@@ -192,6 +195,7 @@
             formatNumber(average(values.peakAm)),
             formatNumber(average(values.peakPm)),
             formatNumber(average(values.offpeak)),
+            formatNumber(average(values.weekend)),
             formatNumber(average(values.overnight))
           ])
           .sort((a, b) => {
@@ -201,7 +205,7 @@
           });
         return {
           type: "table",
-          columns: ["Operator", "Avg Peak AM", "Avg Peak PM", "Avg Offpeak", "Avg Overnight"],
+          columns: ["Operator", "Avg Peak AM", "Avg Peak PM", "Avg Offpeak", "Avg Weekend", "Avg Overnight"],
           rows: rowsOut
         };
       }
@@ -217,13 +221,14 @@
           .slice(0, 25);
         return {
           type: "table",
-          columns: ["Rank", "Route", "Operator", "Peak AM", "Offpeak", "Overnight"],
+          columns: ["Rank", "Route", "Operator", "Peak AM", "Offpeak", "Weekend", "Overnight"],
           rows: sorted.map((row, index) => [
             index + 1,
             row.route_id || row.route_id_norm,
             getOperators(row)[0],
             formatNumber(row.frequency_peak_am),
             formatNumber(row.frequency_offpeak),
+            formatNumber(row.frequency_weekend),
             formatNumber(row.frequency_overnight)
           ])
         };

@@ -7,6 +7,7 @@
     { key: "peak_am", label: "Peak AM" },
     { key: "peak_pm", label: "Peak PM" },
     { key: "offpeak", label: "Off-peak" },
+    { key: "weekend", label: "Weekend" },
     { key: "overnight", label: "Overnight" }
   ];
   const REGION_OPTIONS = [

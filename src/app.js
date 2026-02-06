@@ -544,6 +544,7 @@ function buildRouteFrequencySummary(freqs) {
 	const peakAm = formatBphValue(freqs.peak_am);
 	const peakPm = formatBphValue(freqs.peak_pm);
 	const offpeak = formatBphValue(freqs.offpeak);
+	const weekend = formatBphValue(freqs.weekend);
 	const overnight = formatBphValue(freqs.overnight);
 	if (peakAm) {
 		parts.push(`AM ${peakAm}`);
@@ -553,6 +554,9 @@ function buildRouteFrequencySummary(freqs) {
 	}
 	if (offpeak) {
 		parts.push(`Off ${offpeak}`);
+	}
+	if (weekend) {
+		parts.push(`Weekend ${weekend}`);
 	}
 	if (overnight) {
 		parts.push(`Night ${overnight}`);
@@ -613,6 +617,7 @@ function getRouteMetaFromRow(row) {
 		peak_am: Number.isFinite(row.frequency_peak_am) ? row.frequency_peak_am : null,
 		peak_pm: Number.isFinite(row.frequency_peak_pm) ? row.frequency_peak_pm : null,
 		offpeak: Number.isFinite(row.frequency_offpeak) ? row.frequency_offpeak : null,
+		weekend: Number.isFinite(row.frequency_weekend) ? row.frequency_weekend : null,
 		overnight: Number.isFinite(row.frequency_overnight) ? row.frequency_overnight : null
 	};
 	return { operator, garage, routeType, lengthMiles, freqs };

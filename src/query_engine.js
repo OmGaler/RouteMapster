@@ -174,6 +174,7 @@
       frequency_peak_am: parseNumber(resolveField(row, ["frequency_peak_am", "peak_am", "peakAm"])),
       frequency_peak_pm: parseNumber(resolveField(row, ["frequency_peak_pm", "peak_pm", "peakPm"])),
       frequency_offpeak: parseNumber(resolveField(row, ["frequency_offpeak", "offpeak", "offPeak"])),
+      frequency_weekend: parseNumber(resolveField(row, ["frequency_weekend", "weekend"])),
       frequency_overnight: parseNumber(resolveField(row, ["frequency_overnight", "overnight"])),
       length_km: lengthKm,
       length_miles: lengthMiles,
@@ -350,6 +351,7 @@
           { key: "peak_am", value: row.frequency_peak_am },
           { key: "peak_pm", value: row.frequency_peak_pm },
           { key: "offpeak", value: row.frequency_offpeak },
+          { key: "weekend", value: row.frequency_weekend },
           { key: "overnight", value: row.frequency_overnight }
         ];
         for (const band of bands) {
@@ -378,7 +380,13 @@
         }
         if (Number.isFinite(spec.flags.high_frequency_any)) {
           const threshold = spec.flags.high_frequency_any;
-          const values = [row.frequency_peak_am, row.frequency_peak_pm, row.frequency_offpeak, row.frequency_overnight];
+          const values = [
+            row.frequency_peak_am,
+            row.frequency_peak_pm,
+            row.frequency_offpeak,
+            row.frequency_weekend,
+            row.frequency_overnight
+          ];
           const meets = values.some((value) => Number.isFinite(value) && value >= threshold);
           if (!meets) {
             return false;
@@ -449,7 +457,7 @@
     }
     if (spec.freq && typeof spec.freq === "object") {
       const freq = {};
-      ["peak_am", "peak_pm", "offpeak", "overnight"].forEach((key) => {
+      ["peak_am", "peak_pm", "offpeak", "weekend", "overnight"].forEach((key) => {
         const range = spec.freq[key];
         if (range && (Number.isFinite(range.min) || Number.isFinite(range.max))) {
           freq[key] = {
