@@ -1,6 +1,7 @@
 ﻿(() => {
   const asNumber = (value) => (Number.isFinite(value) ? value : null);
-  const formatNumber = (value, digits = 1) => {
+  const utils = window.RouteMapsterUtils || {};
+  const formatNumber = utils.formatNumber || ((value, digits = 1) => {
     if (!Number.isFinite(value)) {
       return "";
     }
@@ -8,7 +9,7 @@
       return String(Math.round(value));
     }
     return value.toFixed(digits);
-  };
+  });
 
   const average = (values) => {
     const nums = values.filter((value) => Number.isFinite(value));

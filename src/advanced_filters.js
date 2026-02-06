@@ -6,20 +6,19 @@
   const SHOW_ALL_CAP = Number.POSITIVE_INFINITY;
   const LIST_CAP = Number.POSITIVE_INFINITY;
   const BUS_STOPS_GEOJSON_PATH = "/data/processed/stops.geojson";
+  const BOROUGHS_GEOJSON_PATH = "/data/boroughs.geojson";
 
-  const escapeHtml = (value) => String(value || "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-
-  const formatNumber = (value, digits = 1) => {
+  const utils = window.RouteMapsterUtils || {};
+  const escapeHtml = utils.escapeHtml || ((value) => String(value || ""));
+  const formatNumber = utils.formatNumber || ((value, digits = 1) => {
     if (!Number.isFinite(value)) {
       return "";
     }
     return digits === 0 ? String(Math.round(value)) : value.toFixed(digits);
-  };
+  });
+  const downloadCsv = utils.downloadCsv || (() => {});
+  const normaliseBoroughToken = utils.normaliseBoroughToken || ((value) => String(value || "").trim().toLowerCase());
+  const geo = window.RouteMapsterGeo || {};
 
   const isUnknown = (value) => {
     if (!value) {
@@ -44,8 +43,6 @@
       .map((entry) => entry.trim())
       .filter(Boolean);
   };
-
-  const normaliseBoroughToken = (value) => String(value || "").trim().toLowerCase();
 
   const getStopBoroughToken = (props) => {
     return normaliseBoroughToken(props?.borough || props?.BOROUGH || props?.Borough || props?.["Borough"]);
@@ -110,23 +107,6 @@
   const renderRoutePill = (routeId, appState) => {
     const className = getRoutePillClass(routeId, appState);
     return `<span class="route-pill route-pill--${escapeHtml(className)}">${escapeHtml(routeId)}</span>`;
-  };
-
-  const downloadCsv = (filename, columns, rows) => {
-    const header = columns.map((col) => `"${String(col).replace(/"/g, '""')}"`).join(",");
-    const body = rows
-      .map((row) => row.map((value) => `"${String(value ?? "").replace(/"/g, '""')}"`).join(","))
-      .join("\n");
-    const csv = [header, body].filter(Boolean).join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
   };
 
   const buildPrefixOptions = (rows) => {
@@ -208,6 +188,56 @@
     return options.sort((a, b) => a.label.localeCompare(b.label));
   };
 
+  const loadBoroughsGeojson = async () => {
+    const res = await fetch(BOROUGHS_GEOJSON_PATH, { cache: "no-store" });
+    if (!res.ok) {
+      return null;
+    }
+    return res.json();
+  };
+
+  const hydrateStopBoroughs = async (geojson) => {
+    if (!geojson || !Array.isArray(geojson.features)) {
+      return;
+    }
+    const needsBorough = geojson.features.some((feature) => {
+      const props = feature?.properties || {};
+      return !(props?.borough || props?.BOROUGH || props?.Borough || props?.["Borough"]);
+    });
+    if (!needsBorough) {
+      return;
+    }
+    const boroughs = await loadBoroughsGeojson();
+    if (!boroughs || !geo.buildBoroughIndex || !geo.findBoroughForPoint) {
+      return;
+    }
+    const index = geo.buildBoroughIndex(boroughs);
+    if (!index || index.length === 0) {
+      return;
+    }
+    geojson.features.forEach((feature) => {
+      const props = feature?.properties || {};
+      const existing = props?.borough || props?.BOROUGH || props?.Borough || props?.["Borough"];
+      if (existing) {
+        return;
+      }
+      const coords = feature?.geometry?.coordinates;
+      if (!Array.isArray(coords) || coords.length < 2) {
+        return;
+      }
+      const lon = Number(coords[0]);
+      const lat = Number(coords[1]);
+      if (!Number.isFinite(lon) || !Number.isFinite(lat)) {
+        return;
+      }
+      const borough = geo.findBoroughForPoint(lon, lat, index);
+      if (borough) {
+        props.BOROUGH = borough;
+        feature.properties = props;
+      }
+    });
+  };
+
   const loadStopsGeojson = async () => {
     const api = window.RouteMapsterAPI;
     if (api?.appState?.busStopsGeojson) {
@@ -218,6 +248,7 @@
       return null;
     }
     const data = await res.json();
+    await hydrateStopBoroughs(data).catch(() => {});
     if (api?.appState && data) {
       api.appState.busStopsGeojson = data;
     }
@@ -488,14 +519,8 @@
   const buildFilterSpecFromUI = (els) => {
     const routeIds = parseTokens(els.routeSearch?.value || "");
     let prefixValue = "";
-    if (els.routePrefix?.value && els.routePrefix.value !== "any" && els.routePrefix.value !== "custom") {
+    if (els.routePrefix?.value && els.routePrefix.value !== "any") {
       prefixValue = els.routePrefix.value;
-    }
-    if (els.routePrefix?.value === "custom") {
-      prefixValue = els.routePrefixCustom?.value || "";
-    }
-    if (!prefixValue && els.routePrefixCustom?.value && els.routePrefix?.value === "custom") {
-      prefixValue = els.routePrefixCustom.value;
     }
 
     const freq = {};
@@ -530,11 +555,6 @@
         flags.high_frequency_any = value;
       }
     }
-    const peakiness = parseNumberInput(els.peakinessMin);
-    if (peakiness !== null) {
-      flags.peaky = { min_delta: peakiness };
-    }
-
     const lengthMin = parseNumberInput(els.lengthMin);
     const lengthMax = parseNumberInput(els.lengthMax);
     const length = lengthMin !== null || lengthMax !== null
@@ -567,19 +587,8 @@
       const prefix = normalized.route_prefix || "";
       if (prefix && Array.from(els.routePrefix.options).some((option) => option.value === prefix)) {
         els.routePrefix.value = prefix;
-        if (els.routePrefixCustom) {
-          els.routePrefixCustom.value = "";
-        }
-      } else if (prefix) {
-        els.routePrefix.value = "custom";
-        if (els.routePrefixCustom) {
-          els.routePrefixCustom.value = prefix;
-        }
       } else {
         els.routePrefix.value = "any";
-        if (els.routePrefixCustom) {
-          els.routePrefixCustom.value = "";
-        }
       }
     }
 
@@ -626,11 +635,6 @@
     if (els.highFrequencyValue) {
       els.highFrequencyValue.value = Number.isFinite(normalized.flags?.high_frequency_any)
         ? normalized.flags.high_frequency_any
-        : "";
-    }
-    if (els.peakinessMin) {
-      els.peakinessMin.value = Number.isFinite(normalized.flags?.peaky?.min_delta)
-        ? normalized.flags.peaky.min_delta
         : "";
     }
     if (els.lengthMin) {
@@ -756,7 +760,6 @@
       const offpeak = formatNumber(row.frequency_offpeak);
       const overnight = formatNumber(row.frequency_overnight);
       const intensity = formatNumber(row.service_intensity_score, 2);
-      const peakiness = formatNumber(row.peakiness_index, 2);
       const hasOvernight = row.has_overnight ? "Yes" : "No";
       const isVisible = state.visibleRoutes.has(routeId);
       const metaParts = [routeType, operator, garage, cleanMetaValue(vehicle)]
@@ -772,7 +775,7 @@
           </div>
           <div class="route-card__meta">${escapeHtml(metaParts)}</div>
           <div class="route-card__freq">Peak AM: ${peakAm || "–"} · Offpeak: ${offpeak || "–"} · Overnight: ${overnight || "–"}</div>
-          <div class="route-card__kpi">Intensity: ${intensity || "–"} · Peakiness: ${peakiness || "–"} · Overnight: ${hasOvernight}</div>
+          <div class="route-card__kpi">Intensity: ${intensity || "–"} · Overnight: ${hasOvernight}</div>
         </div>
       `;
     }).join("");
@@ -907,43 +910,12 @@
       const prefixes = buildPrefixOptions(rows);
       const options = [
         { value: "any", label: "Any" },
-        ...prefixes.map((prefix) => ({ value: prefix, label: prefix })),
-        { value: "custom", label: "Custom..." }
+        ...prefixes.map((prefix) => ({ value: prefix, label: prefix }))
       ];
       els.routePrefix.innerHTML = options
         .map((option) => `<option value="${escapeHtml(option.value)}">${escapeHtml(option.label)}</option>`)
         .join("");
     }
-  };
-
-  const renderPresets = (container, els, appState) => {
-    if (!container || !window.RouteMapsterPresets) {
-      return;
-    }
-    const presets = window.RouteMapsterPresets.getPresets();
-    container.innerHTML = presets.map((preset) => {
-      return `
-        <button type="button" class="preset-card" data-preset="${escapeHtml(preset.id)}">
-          <div class="preset-card__icon">${escapeHtml(preset.icon)}</div>
-          <div class="preset-card__title">${escapeHtml(preset.name)}</div>
-          <div class="preset-card__desc">${escapeHtml(preset.description)}</div>
-        </button>
-      `;
-    }).join("");
-
-    container.addEventListener("click", (event) => {
-      const card = event.target.closest(".preset-card");
-      if (!card) {
-        return;
-      }
-      const presetId = card.dataset.preset;
-      const preset = presets.find((item) => item.id === presetId);
-      if (!preset) {
-        return;
-      }
-      applyFilterSpecToUI(preset.filterSpec || {}, els);
-      applyFromUI(appState, els).catch(() => {});
-    });
   };
 
   const initAdvancedFilters = async (container, appState) => {
@@ -955,7 +927,6 @@
     const els = {
       routeSearch: container.querySelector("#advancedRouteSearch"),
       routePrefix: container.querySelector("#advancedRoutePrefix"),
-      routePrefixCustom: container.querySelector("#advancedRoutePrefixCustom"),
       routeTypes: container.querySelector("#advancedRouteTypes"),
       routeTypesSelectAll: container.querySelector("#advancedRouteTypesSelectAll"),
       operators: container.querySelector("#advancedOperators"),
@@ -978,7 +949,6 @@
       hasOvernight: container.querySelector("#advancedHasOvernight"),
       highFrequencyToggle: container.querySelector("#advancedHighFrequencyToggle"),
       highFrequencyValue: container.querySelector("#advancedHighFrequencyValue"),
-      peakinessMin: container.querySelector("#advancedPeakinessMin"),
       lengthMin: container.querySelector("#advancedLengthMin"),
       lengthMax: container.querySelector("#advancedLengthMax"),
       extremeSelect: container.querySelector("#advancedExtremeSelect"),
@@ -990,7 +960,7 @@
       exportCsv: document.getElementById("advancedExportCsv"),
       mapWarning: document.getElementById("advancedMapWarning"),
       resultsPanel: document.getElementById("advancedResultsPanel"),
-      presets: container.querySelector("#advancedFilterPresets"),
+      clearButton: container.querySelector("#advancedClearFilters"),
       lengthWrap: container.querySelector("#advancedLengthWrap")
     };
     els.appState = appState;
@@ -1008,8 +978,6 @@
     if (els.lengthWrap) {
       els.lengthWrap.style.display = hasLength ? "" : "none";
     }
-
-    renderPresets(els.presets, els, appState);
 
     const hashSpec = getHashSpec();
     const hasHashSpec = Object.keys(hashSpec).length > 0;
@@ -1048,17 +1016,15 @@
       els.vehiclesSelectAll.addEventListener("click", () => selectAll(els.vehicles));
     }
 
-    if (els.routePrefix) {
-      els.routePrefix.addEventListener("change", () => {
-        if (els.routePrefix.value !== "custom" && els.routePrefixCustom) {
-          els.routePrefixCustom.value = "";
-        }
-      });
-    }
-
     if (els.applyButton) {
       els.applyButton.addEventListener("click", () => {
         applyFromUI(appState, els).catch(() => {});
+      });
+    }
+    if (els.clearButton) {
+      els.clearButton.addEventListener("click", () => {
+        applyFilterSpecToUI({}, els);
+        applyFilters(appState, els);
       });
     }
 
@@ -1106,7 +1072,6 @@
           "frequency_offpeak",
           "frequency_overnight",
           "service_intensity_score",
-          "peakiness_index"
         ];
         const csvRows = rows.map((row) => [
           row.route_id_norm || row.route_id,
@@ -1119,7 +1084,6 @@
           row.frequency_offpeak,
           row.frequency_overnight,
           formatNumber(row.service_intensity_score, 2),
-          formatNumber(row.peakiness_index, 2)
         ]);
         downloadCsv("filtered_routes.csv", columns, csvRows);
       });

@@ -1,27 +1,7 @@
 ﻿(() => {
-  const escapeHtml = (value) => String(value || "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-
-  const downloadCsv = (filename, columns, rows) => {
-    const header = columns.map((col) => `"${String(col).replace(/"/g, '""')}"`).join(",");
-    const body = rows
-      .map((row) => row.map((value) => `"${String(value ?? "").replace(/"/g, '""')}"`).join(","))
-      .join("\n");
-    const csv = [header, body].filter(Boolean).join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-  };
+  const utils = window.RouteMapsterUtils || {};
+  const escapeHtml = utils.escapeHtml || ((value) => String(value || ""));
+  const downloadCsv = utils.downloadCsv || (() => {});
 
   const renderTable = (result) => {
     const columns = result.columns || [];
@@ -304,7 +284,6 @@
 
     const els = {
       scopeSelect: container.querySelector("#analysisScope"),
-      presetWrap: container.querySelector("#analysisPresets"),
       analysisSelect: container.querySelector("#analysisSelect"),
       runButton: container.querySelector("#runAnalysis"),
       output: container.querySelector("#analysisOutput"),
@@ -319,36 +298,6 @@
       els.analysisSelect.innerHTML = analysisOptions
         .map((analysis) => `<option value="${escapeHtml(analysis.id)}">${escapeHtml(analysis.label)}</option>`)
         .join("");
-    }
-
-    if (els.presetWrap && window.RouteMapsterPresets) {
-      const presets = window.RouteMapsterPresets.getPresets();
-      els.presetWrap.innerHTML = presets.map((preset) => {
-        return `
-          <button type="button" class="preset-card" data-preset="${escapeHtml(preset.id)}">
-            <div class="preset-card__icon">${escapeHtml(preset.icon)}</div>
-            <div class="preset-card__title">${escapeHtml(preset.name)}</div>
-            <div class="preset-card__desc">${escapeHtml(preset.description)}</div>
-          </button>
-        `;
-      }).join("");
-
-      els.presetWrap.addEventListener("click", async (event) => {
-        const card = event.target.closest(".preset-card");
-        if (!card) {
-          return;
-        }
-        const presetId = card.dataset.preset;
-        const preset = presets.find((item) => item.id === presetId);
-        if (!preset) {
-          return;
-        }
-        const scope = els.scopeSelect?.value || "filtered";
-        const base = resolveBaseRows(scope);
-        await ensureSpatialForAnalyses(preset.analysisId, base);
-        const results = runAnalyses(preset.analysisId, base, preset.filterSpec);
-        renderResults(els.output, results);
-      });
     }
 
     const runSelectedAnalysis = async () => {

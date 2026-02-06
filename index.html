@@ -283,6 +283,10 @@
       cursor: pointer;
       transition: border-color 0.2s ease, color 0.2s ease;
       width: 100%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      text-decoration: none;
     }
 
     .ghost-button:hover {
@@ -383,6 +387,18 @@
       transform: translateY(-1px);
     }
 
+    #sidebar .brand-mark,
+    #sidebar .status-card,
+    #sidebar .global-controls,
+    #sidebar .module {
+      box-shadow: none;
+    }
+
+    #sidebar .module[open] {
+      box-shadow: none;
+      transform: none;
+    }
+
     .module summary {
       list-style: none;
       cursor: pointer;
@@ -409,6 +425,7 @@
       display: grid;
       place-items: center;
       font-weight: 700;
+      margin-left: auto;
     }
 
     .module[open] summary::after {
@@ -1468,6 +1485,7 @@
             <div class="brand-subtitle">London Bus Explorer</div>
             <div class="brand-actions">
               <button id="openAbout" class="ghost-button tiny" type="button">About</button>
+              <a class="ghost-button tiny" href="https://github.com/OmGaler/RouteMapster" target="_blank" rel="noopener">GitHub</a>
             </div>
           </div>
         </div>
@@ -1489,7 +1507,6 @@
           <details class="module" data-module="routes" open>
           <summary>
             <span class="module-title">Bus routes</span>
-            <span class="module-tag">Core</span>
           </summary>
           <div class="module-body">
             <div class="module-section" id="networkFilters">
@@ -1500,6 +1517,7 @@
                   <div class="tag-list" id="routeFilterTags"></div>
                   <input id="routeFilterEntry" type="search" placeholder="Type a route and hit space or enter" autocomplete="off" />
                 </div>
+                <div id="routeFilterStatus" class="module-note"></div>
                 <label class="toggle">
                   <span>Exact match only</span>
                   <input type="checkbox" id="showExactRouteMatch" />
@@ -1537,30 +1555,6 @@
             </div>
 
             <div class="module-section">
-              <div class="section-title">Route families</div>
-              <label class="toggle">
-                <span>Group by family</span>
-                <input type="checkbox" id="showRouteFamilies" />
-              </label>
-              <label class="toggle">
-                <span>Rank 00-99 series</span>
-                <input type="checkbox" id="showFamilySeries" />
-              </label>
-            </div>
-
-            <div class="module-section module-disabled">
-              <div class="section-title">Similar routes</div>
-              <label class="toggle">
-                <span>Cluster overlapping routes</span>
-                <input type="checkbox" id="showSimilarRoutes" disabled />
-              </label>
-              <div class="field">
-                <label for="similarityThreshold">Overlap threshold</label>
-                <input id="similarityThreshold" type="range" min="10" max="90" value="50" disabled />
-              </div>
-            </div>
-
-            <div class="module-section">
               <div class="section-title">Deck type</div>
               <label class="toggle">
                 <span>Display all</span>
@@ -1581,7 +1575,6 @@
         <details class="module" data-module="stops">
           <summary>
             <span class="module-title">Bus stops</span>
-            <span class="module-tag">Live</span>
           </summary>
           <div class="module-body">
             <div class="module-section">
@@ -1590,7 +1583,7 @@
                 <span>Show bus stops</span>
                 <input type="checkbox" id="showBusStops" />
               </label>
-              <div class="module-note">Hover or click a place to see routes.</div>
+              <div class="module-note">Hover or click a bus stop to see routes.</div>
             </div>
 
             <div class="module-section">
@@ -1613,17 +1606,7 @@
               </div>
               <div class="field">
                 <label for="busStopRouteCount">Filter by route count</label>
-                <select id="busStopRouteCount" class="select-field">
-                  <option value="any">Any</option>
-                  <option value="1">1 route</option>
-                  <option value="2">2 routes</option>
-                  <option value="3">3 routes</option>
-                  <option value="4">4 routes</option>
-                  <option value="5">5 routes</option>
-                  <option value="6">6 routes</option>
-                  <option value="7">7 routes</option>
-                  <option value="8+">8+ routes</option>
-                </select>
+                <input id="busStopRouteCount" class="select-field" type="number" min="1" step="1" placeholder="Any" />
               </div>
               <div class="button-row">
                 <button id="applyBusStopFilter" class="ghost-button compact" type="button">Apply filter</button>
@@ -1631,6 +1614,7 @@
                 <button id="exportBusStopFilterCsv" class="ghost-button compact" type="button">Export CSV</button>
               </div>
               <div id="busStopFilterStatus" class="module-note">Filter inactive.</div>
+              <div id="busStopVisibilityNote" class="module-note"></div>
             </div>
           </div>
         </details>
@@ -1638,7 +1622,6 @@
         <details class="module" data-module="stations">
           <summary>
             <span class="module-title">Bus stations</span>
-            <span class="module-tag">Live</span>
           </summary>
           <div class="module-body">
             <div class="module-section">
@@ -1669,7 +1652,6 @@
         <details class="module" data-module="garages">
           <summary>
             <span class="module-title">Garages</span>
-            <span class="module-tag">Live</span>
           </summary>
           <div class="module-body">
             <div class="module-section">
@@ -1709,7 +1691,6 @@
         <details class="module" data-module="frequencies">
           <summary>
             <span class="module-title">Frequencies</span>
-            <span class="module-tag">Live</span>
           </summary>
           <div class="module-body">
             <div class="module-note">Thickness reflects combined buses per hour on shared trunks.</div>
@@ -1740,15 +1721,9 @@
         <details class="module" data-module="advanced-filters">
           <summary>
             <span class="module-title">Advanced route filters</span>
-            <span class="module-tag">New</span>
           </summary>
           <div class="module-body">
             <div class="module-note">Fine-grained filters for routes, allocations, and service patterns.</div>
-            <div class="module-section">
-              <div class="section-title">Presets</div>
-              <div id="advancedFilterPresets" class="preset-grid"></div>
-            </div>
-
             <div class="module-section">
               <div class="section-title">Core filters</div>
               <div class="field">
@@ -1760,7 +1735,6 @@
                 <label for="advancedRoutePrefix">Route prefix</label>
                 <div class="field-row">
                   <select id="advancedRoutePrefix" class="select-field"></select>
-                  <input id="advancedRoutePrefixCustom" type="search" placeholder="Custom prefix" />
                 </div>
               </div>
               <div class="field">
@@ -1844,10 +1818,6 @@
                 <input type="checkbox" id="advancedHighFrequencyToggle" />
               </label>
               <input id="advancedHighFrequencyValue" type="number" min="0" step="0.1" placeholder="Frequency threshold" />
-              <div class="field">
-                <label for="advancedPeakinessMin">Peakiness delta (peak - offpeak)</label>
-                <input id="advancedPeakinessMin" type="number" min="0" step="0.1" placeholder="Min delta" />
-              </div>
             </div>
 
             <div class="module-section" id="advancedLengthWrap">
@@ -1860,6 +1830,7 @@
 
             <div class="module-section">
               <button id="advancedApplyFilters" class="ghost-button" type="button">Apply filters</button>
+              <button id="advancedClearFilters" class="ghost-button" type="button">Clear filters</button>
               <div class="module-note">Filters only update when you apply.</div>
             </div>
 
@@ -1869,10 +1840,16 @@
         <details class="module" data-module="advanced-analyses">
           <summary>
             <span class="module-title">Advanced route analyses</span>
-            <span class="module-tag">New</span>
           </summary>
           <div class="module-body">
             <div class="module-note">Diagnostics and summaries for route performance.</div>
+            <div class="module-section">
+              <div class="section-title">Route families</div>
+              <label class="toggle">
+                <span>Rank 00-99 series</span>
+                <input type="checkbox" id="showFamilySeries" />
+              </label>
+            </div>
             <div class="module-section">
               <div class="section-title">Analyze</div>
               <div class="field">
@@ -1883,11 +1860,6 @@
                 </select>
               </div>
               <div id="analysisScopeNote" class="module-note">Analyzing filtered subset.</div>
-            </div>
-
-            <div class="module-section">
-              <div class="section-title">Presets</div>
-              <div id="analysisPresets" class="preset-grid"></div>
             </div>
 
             <div class="module-section">
@@ -1904,7 +1876,6 @@
         <details class="module" data-module="stop-analyses">
           <summary>
             <span class="module-title">Bus stop analyses</span>
-            <span class="module-tag">New</span>
           </summary>
           <div class="module-body">
             <div id="stopAnalysesContainer"></div>
@@ -1921,8 +1892,8 @@
         <div id="map"></div>
         <button id="openOmniSearch" class="omni-launch" type="button" aria-label="Open omnisearch">
           <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-            <!-- TODO: replace with an actual mag glass -->
-            <!-- <path d="M10.5 2.5a8 8 0 1 1 5.154 14.118l4.124 4.124a1 1 0 0 1-1.414 1.414l-4.124-4.124A8 8 0 0 1 10.5 2.5zm0 2a6 6 0 1 0 0 12a6 6 0 0 0 0-12z" fill="currentColor"></path> -->
+            <circle cx="11" cy="11" r="6" fill="none" stroke="currentColor" stroke-width="2"></circle>
+            <line x1="16.65" y1="16.65" x2="21" y2="21" stroke="currentColor" stroke-width="2" stroke-linecap="round"></line>
           </svg>
           <span>Search</span>
         </button>
@@ -2040,8 +2011,9 @@
     src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js">
   </script>
 
+  <script src="src/shared_utils.js"></script>
+  <script src="src/geo_utils.js"></script>
   <script src="src/query_engine.js"></script>
-  <script src="src/presets.js"></script>
   <script src="src/analyses.js"></script>
   <script src="src/advanced_filters.js"></script>
   <script src="src/advanced_analyses.js"></script>

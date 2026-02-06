@@ -384,16 +384,6 @@
             return false;
           }
         }
-        if (spec.flags.peaky && Number.isFinite(spec.flags.peaky.min_delta)) {
-          const peakAvg = average([row.frequency_peak_am, row.frequency_peak_pm]);
-          const offpeak = row.frequency_offpeak;
-          if (!Number.isFinite(peakAvg) || !Number.isFinite(offpeak)) {
-            return false;
-          }
-          if (peakAvg - offpeak < spec.flags.peaky.min_delta) {
-            return false;
-          }
-        }
       }
       if (spec.length_miles) {
         const value = row.length_miles;
@@ -479,9 +469,6 @@
       }
       if (Number.isFinite(spec.flags.high_frequency_any)) {
         flags.high_frequency_any = spec.flags.high_frequency_any;
-      }
-      if (spec.flags.peaky && Number.isFinite(spec.flags.peaky.min_delta)) {
-        flags.peaky = { min_delta: spec.flags.peaky.min_delta };
       }
       if (Object.keys(flags).length > 0) {
         cleaned.flags = flags;

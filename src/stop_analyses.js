@@ -1,5 +1,6 @@
 (() => {
   const STOP_GEOJSON_PATH = "/data/processed/stops.geojson";
+  const BOROUGHS_GEOJSON_PATH = "/data/boroughs.geojson";
   const FREQUENCY_DATA_PATH = "/data/processed/frequencies.json";
   const DEBOUNCE_MS = 160;
   const FREQUENCY_BANDS = [
@@ -18,7 +19,7 @@
   ];
   const DEFAULT_MAP_TOP_N = 50;
   const MAP_METRICS = [
-    { value: "route_count", label: "Routes per place" },
+    { value: "route_count", label: "Routes per stop" },
     { value: "betweenness", label: "Betweenness (LCC)", requiresCentrality: true },
     { value: "closeness_topo", label: "Closeness (topo, LCC)", requiresCentrality: true },
     { value: "eigenvector", label: "Eigenvector (LCC)", requiresCentrality: true },
@@ -27,19 +28,31 @@
     { value: "route_degree", label: "Route degree", requiresCentrality: true }
   ];
 
-  const escapeHtml = (value) => String(value || "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-
-  const formatNumber = (value, digits = 1) => {
+  const utils = window.RouteMapsterUtils || {};
+  const geo = window.RouteMapsterGeo || {};
+  const escapeHtml = utils.escapeHtml || ((value) => String(value || ""));
+  const formatNumber = utils.formatNumber || ((value, digits = 1) => {
     if (!Number.isFinite(value)) {
       return "";
     }
     return digits === 0 ? String(Math.round(value)) : value.toFixed(digits);
-  };
+  });
+  const downloadCsv = utils.downloadCsv || (() => {});
+  const normalisePostcodeDistrict = utils.normalisePostcodeDistrict || ((value) => {
+    if (!value) {
+      return "";
+    }
+    const cleaned = String(value).toUpperCase().trim();
+    if (!cleaned) {
+      return "";
+    }
+    const token = cleaned.split(/\s+/)[0];
+    const normalised = token.replace(/[^A-Z0-9]/g, "");
+    const match = normalised.match(/^([A-Z]{1,2}\d{1,2})/);
+    return match ? match[1] : normalised;
+  });
+  const normaliseBoroughToken = utils.normaliseBoroughToken || ((value) => String(value || "").trim().toLowerCase());
+  const normaliseRegionToken = utils.normaliseRegionToken || ((value) => String(value || "").trim().toUpperCase());
 
   const formatFrequencyValue = (perHour) => {
     if (!Number.isFinite(perHour)) {
@@ -91,40 +104,6 @@
     return Number.isFinite(num) ? num : null;
   };
 
-  const STOP_REGION_BY_BOROUGH = new Map([
-    ["city of london", "C"],
-    ["westminster", "C"],
-    ["camden", "C"],
-    ["islington", "C"],
-    ["kensington and chelsea", "C"],
-    ["lambeth", "C"],
-    ["southwark", "C"],
-    ["hackney", "NE"],
-    ["tower hamlets", "NE"],
-    ["newham", "NE"],
-    ["waltham forest", "NE"],
-    ["redbridge", "NE"],
-    ["havering", "NE"],
-    ["barking and dagenham", "NE"],
-    ["haringey", "NE"],
-    ["enfield", "NE"],
-    ["barnet", "NW"],
-    ["harrow", "NW"],
-    ["brent", "NW"],
-    ["ealing", "NW"],
-    ["hammersmith and fulham", "NW"],
-    ["hillingdon", "NW"],
-    ["wandsworth", "SW"],
-    ["richmond upon thames", "SW"],
-    ["kingston upon thames", "SW"],
-    ["merton", "SW"],
-    ["sutton", "SW"],
-    ["croydon", "SW"],
-    ["lewisham", "SE"],
-    ["greenwich", "SE"],
-    ["bexley", "SE"],
-    ["bromley", "SE"]
-  ]);
 
   const formatMetricValue = (metric, value) => {
     if (!Number.isFinite(value)) {
@@ -161,20 +140,6 @@
       .filter((token) => !isExcludedRoute(token));
   };
 
-  const normalisePostcodeDistrict = (value) => {
-    if (!value) {
-      return "";
-    }
-    const cleaned = String(value).toUpperCase().trim();
-    if (!cleaned) {
-      return "";
-    }
-    const token = cleaned.split(/\s+/)[0];
-    const normalised = token.replace(/[^A-Z0-9]/g, "");
-    const match = normalised.match(/^([A-Z]{1,2}\d{1,2})/);
-    return match ? match[1] : normalised;
-  };
-
   const parseNumberInput = (input) => {
     if (!input || input.value === "") {
       return null;
@@ -194,13 +159,14 @@
     return Array.from(new Set(tokens));
   };
 
-  const normaliseBoroughToken = (value) => String(value || "").trim().toLowerCase();
-
   const getRegionFromBorough = (borough) => {
     if (!borough) {
       return "";
     }
-    return STOP_REGION_BY_BOROUGH.get(normaliseBoroughToken(borough)) || "";
+    if (geo.getRegionTokenFromBorough) {
+      return geo.getRegionTokenFromBorough(borough);
+    }
+    return "";
   };
 
   const parseBoroughTokens = (value) => {
@@ -214,7 +180,6 @@
     return Array.from(new Set(tokens));
   };
 
-  const normaliseRegionToken = (value) => String(value || "").trim().toUpperCase();
   const parseRegionToken = (value) => normaliseRegionToken(value || "");
 
   const sortRouteIds = (routes) => {
@@ -394,7 +359,31 @@
     };
   };
 
-  const buildStopRow = (feature, frequencyData) => {
+  const resolveStopBorough = (props, lon, lat, boroughIndex, cache) => {
+    const raw = props?.borough || props?.BOROUGH || props?.Borough || "";
+    const cleaned = String(raw || "").trim();
+    if (cleaned) {
+      return cleaned;
+    }
+    if (!boroughIndex || boroughIndex.length === 0) {
+      return "Unknown";
+    }
+    if (!Number.isFinite(lon) || !Number.isFinite(lat)) {
+      return "Unknown";
+    }
+    const cacheKey = props?.NAPTAN_ID || props?.PLACE_ID || `${lon.toFixed(6)},${lat.toFixed(6)}`;
+    if (cache && cache.has(cacheKey)) {
+      return cache.get(cacheKey);
+    }
+    const borough = geo.findBoroughForPoint ? geo.findBoroughForPoint(lon, lat, boroughIndex) : "";
+    const resolved = borough || "Unknown";
+    if (cache) {
+      cache.set(cacheKey, resolved);
+    }
+    return resolved;
+  };
+
+  const buildStopRow = (feature, frequencyData, boroughIndex, boroughCache) => {
     const props = feature?.properties || {};
     const coords = feature?.geometry?.coordinates;
     const lon = Array.isArray(coords) ? Number(coords[0]) : null;
@@ -403,8 +392,7 @@
     const id = String(props?.PLACE_ID || getStopId(props) || "").trim();
     const postcode = String(props?.POSTCODE || "").trim();
     const district = normalisePostcodeDistrict(postcode) || "Unknown";
-    const boroughRaw = props?.borough || props?.BOROUGH || props?.Borough || "";
-    const borough = String(boroughRaw || "").trim() || "Unknown";
+    const borough = resolveStopBorough(props, lon, lat, boroughIndex, boroughCache);
     const region = getRegionFromBorough(borough) || normaliseRegionToken(props?.region || "") || "Unknown";
     const routes = extractRouteTokens(props?.ROUTES);
     const frequency = buildFrequencyTotals(routes, frequencyData);
@@ -456,6 +444,14 @@
     return { geojson: base, source: "base" };
   };
 
+  const loadBoroughsGeojson = async () => {
+    const res = await fetch(BOROUGHS_GEOJSON_PATH, { cache: "no-store" });
+    if (!res.ok) {
+      return null;
+    }
+    return res.json();
+  };
+
   const loadFrequencyData = async () => {
     const res = await fetch(FREQUENCY_DATA_PATH, { cache: "no-store" });
     if (!res.ok) {
@@ -476,12 +472,13 @@
     return normalised;
   };
 
-  const buildStopsFromGeojson = (geojson, frequencyData) => {
+  const buildStopsFromGeojson = (geojson, frequencyData, boroughIndex) => {
     if (!geojson || !Array.isArray(geojson.features)) {
       return [];
     }
+    const cache = new Map();
     return geojson.features
-      .map((feature) => buildStopRow(feature, frequencyData))
+      .map((feature) => buildStopRow(feature, frequencyData, boroughIndex, cache))
       .filter((row) => row && (row.name || row.id) && row.route_count > 0);
   };
 
@@ -511,23 +508,6 @@
     `;
   };
 
-  const downloadCsv = (filename, columns, rows) => {
-    const header = columns.map((col) => `"${String(col).replace(/"/g, '""')}"`).join(",");
-    const body = rows
-      .map((row) => row.map((value) => `"${String(value ?? "").replace(/"/g, '""')}"`).join(","))
-      .join("\n");
-    const csv = [header, body].filter(Boolean).join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-  };
-
   const buildDistribution = (rows) => {
     const buckets = [
       { label: "0 routes", min: 0, max: 0 },
@@ -551,7 +531,7 @@
   const analysisRegistry = {
     "top-stops-routes": {
       id: "top-stops-routes",
-      label: "Top places by route count",
+      label: "Top bus stops by route count",
       run: (rows) => {
         const sorted = rows
           .filter((row) => row.route_count > 0)
@@ -560,7 +540,7 @@
           .slice(0, 25);
         return {
           type: "table",
-          columns: ["Rank", "Place", "District", "Routes", "Route list"],
+          columns: ["Rank", "Bus stop", "District", "Routes", "Route list"],
           rows: sorted.map((row, index) => {
             const fullList = sortRouteIds(row.routes || []).join(", ");
             return [
@@ -577,14 +557,14 @@
     },
     "top-stops-frequency": {
       id: "top-stops-frequency",
-      label: "Top places by combined frequency",
+      label: "Top bus stops by combined frequency",
       requiresFrequency: true,
       run: (rows, context) => {
         const band = context?.frequencyBand || "peak_am";
         const label = FREQUENCY_BANDS.find((entry) => entry.key === band)?.label || band;
         const candidates = rows.filter((row) => row.frequency && Number.isFinite(row.frequency[band]));
         if (candidates.length === 0) {
-          return { type: "note", message: "Frequency totals are unavailable for the selected places." };
+          return { type: "note", message: "Frequency totals are unavailable for the selected bus stops." };
         }
         const sorted = candidates
           .slice()
@@ -592,7 +572,7 @@
           .slice(0, 25);
         return {
           type: "table",
-          columns: ["Rank", "Place", "District", `${label} (buses/hr)`, "Routes"],
+          columns: ["Rank", "Bus stop", "District", `${label} (buses/hr)`, "Routes"],
           rows: sorted.map((row, index) => [
             index + 1,
             formatStopLabel(row),
@@ -605,7 +585,7 @@
     },
     "district-stop-counts": {
       id: "district-stop-counts",
-      label: "Places by postcode district",
+      label: "Bus stops by postcode district",
       run: (rows, context) => {
         const band = context?.frequencyBand || "peak_am";
         const label = FREQUENCY_BANDS.find((entry) => entry.key === band)?.label || band;
@@ -641,7 +621,7 @@
           .sort((a, b) => (b[1] || 0) - (a[1] || 0));
         return {
           type: "table",
-          columns: ["District", "Places", "Places w/ routes", "Avg routes", `Avg ${label}`],
+          columns: ["District", "Bus stops", "Bus stops w/ routes", "Avg routes", `Avg ${label}`],
           rows: rowsOut
         };
       }
@@ -671,25 +651,25 @@
           .slice(0, 30);
         return {
           type: "table",
-          columns: ["District", "Places", "Avg routes"],
+          columns: ["District", "Bus stops", "Avg routes"],
           rows: rowsOut
         };
       }
     },
     "routes-per-stop-distribution": {
       id: "routes-per-stop-distribution",
-      label: "Routes per place distribution",
+      label: "Routes per stop distribution",
       run: (rows) => {
         return {
           type: "table",
-          columns: ["Routes per place", "Places"],
+          columns: ["Routes per stop", "Bus stops"],
           rows: buildDistribution(rows)
         };
       }
     },
     "top-stops-betweenness": {
       id: "top-stops-betweenness",
-      label: "Top places by betweenness",
+      label: "Top bus stops by betweenness",
       requiresCentrality: true,
       run: (rows) => {
         const candidates = rows.filter((row) => Number.isFinite(row.betweenness));
@@ -702,7 +682,7 @@
           .slice(0, 25);
         return {
           type: "table",
-          columns: ["Rank", "Place", "Borough", "Region", "Betweenness"],
+          columns: ["Rank", "Bus stop", "Borough", "Region", "Betweenness"],
           rows: sorted.map((row, index) => [
             index + 1,
             formatStopLabel(row),
@@ -715,7 +695,7 @@
     },
     "top-stops-closeness": {
       id: "top-stops-closeness",
-      label: "Top places by closeness",
+      label: "Top bus stops by closeness",
       requiresCentrality: true,
       run: (rows) => {
         const candidates = rows.filter((row) => Number.isFinite(row.closeness_topo));
@@ -728,7 +708,7 @@
           .slice(0, 25);
         return {
           type: "table",
-          columns: ["Rank", "Place", "Borough", "Region", "Closeness (topo)"],
+          columns: ["Rank", "Bus stop", "Borough", "Region", "Closeness (topo)"],
           rows: sorted.map((row, index) => [
             index + 1,
             formatStopLabel(row),
@@ -741,7 +721,7 @@
     },
     "top-stops-eigenvector": {
       id: "top-stops-eigenvector",
-      label: "Top places by eigenvector",
+      label: "Top bus stops by eigenvector",
       requiresCentrality: true,
       run: (rows) => {
         const candidates = rows.filter((row) => Number.isFinite(row.eigenvector));
@@ -754,7 +734,7 @@
           .slice(0, 25);
         return {
           type: "table",
-          columns: ["Rank", "Place", "Borough", "Region", "Eigenvector"],
+          columns: ["Rank", "Bus stop", "Borough", "Region", "Eigenvector"],
           rows: sorted.map((row, index) => [
             index + 1,
             formatStopLabel(row),
@@ -766,37 +746,6 @@
       }
     }
   };
-
-  const PRESETS = [
-    {
-      id: "connectivity-hotspots",
-      name: "Connectivity hotspots",
-      description: "Top connected places and frequency leaders.",
-      icon: "++",
-      analysisIds: ["top-stops-routes", "top-stops-frequency"]
-    },
-    {
-      id: "coverage-gaps",
-      name: "Coverage gaps",
-      description: "Areas with low route density.",
-      icon: "--",
-      analysisIds: ["district-coverage-gaps"]
-    },
-    {
-      id: "district-overview",
-      name: "District overview",
-      description: "Places, routes, and distribution snapshot.",
-      icon: "##",
-      analysisIds: ["district-stop-counts", "routes-per-stop-distribution"]
-    },
-    {
-      id: "centrality-hotspots",
-      name: "Centrality hotspots",
-      description: "Top places by betweenness, closeness, and eigenvector (LCC).",
-      icon: "**",
-      analysisIds: ["top-stops-betweenness", "top-stops-closeness", "top-stops-eigenvector"]
-    }
-  ];
 
   const state = {
     stops: [],
@@ -820,19 +769,13 @@
   };
 
   const buildFilterSpec = (els) => {
-    const scope = els.scopeSelect?.value || "all";
     const districts = state.districtTokens.slice();
     const boroughs = state.boroughTokens.slice();
     const region = parseRegionToken(els.regionSelect?.value || "");
-    const minRoutes = parseNumberInput(els.minRoutes);
-    const maxRoutes = parseNumberInput(els.maxRoutes);
     return {
-      scope,
       districts,
       boroughs,
-      region,
-      minRoutes,
-      maxRoutes
+      region
     };
   };
 
@@ -846,9 +789,6 @@
       : null;
     const regionToken = spec.region || "";
     return list.filter((row) => {
-      if (spec.scope === "with_routes" && row.route_count <= 0) {
-        return false;
-      }
       if (districtSet && !districtSet.has(row.district)) {
         return false;
       }
@@ -856,12 +796,6 @@
         return false;
       }
       if (regionToken && regionToken !== "ALL" && row.region !== regionToken) {
-        return false;
-      }
-      if (Number.isFinite(spec.minRoutes) && row.route_count < spec.minRoutes) {
-        return false;
-      }
-      if (Number.isFinite(spec.maxRoutes) && row.route_count > spec.maxRoutes) {
         return false;
       }
       return true;
@@ -873,7 +807,6 @@
       return;
     }
     const total = rows.length;
-    const withRoutes = rows.filter((row) => row.route_count > 0).length;
     const routeTotal = rows.reduce((sum, row) => sum + row.route_count, 0);
     const avgRoutes = total > 0 ? routeTotal / total : 0;
     const routeCounts = rows.map((row) => row.route_count).sort((a, b) => a - b);
@@ -893,10 +826,9 @@
     }
 
     const summaryLines = [
-      { label: "Total places", value: total },
-      { label: "Places with routes", value: withRoutes },
-      { label: "Avg routes per place", value: formatNumber(avgRoutes, 2) },
-      { label: "Median routes per place", value: medianRoutes }
+      { label: "Total bus stops", value: total },
+      { label: "Avg routes per stop", value: formatNumber(avgRoutes, 2) },
+      { label: "Median routes per stop", value: medianRoutes }
     ];
     if (context?.frequencyAvailable) {
       summaryLines.push({
@@ -1027,7 +959,7 @@
     if (!noteEl) {
       return;
     }
-    noteEl.textContent = `Analyzing ${count} places.`;
+    noteEl.textContent = `Analyzing ${count} bus stops.`;
   };
 
   const syncMapControlState = (els) => {
@@ -1085,7 +1017,7 @@
     }
     const baseStops = Array.isArray(rows) ? rows : [];
     let displayStops = baseStops;
-    let notePrefix = `Showing ${baseStops.length} filtered places.`;
+    let notePrefix = `Showing ${baseStops.length} filtered bus stops.`;
     if (state.mapMode === "top") {
       const topMetric = resolveMetricSelection(state.mapTopMetric, state, { allowNone: false });
       const topStops = getTopStopsByMetric(baseStops, topMetric, state.mapTopN);
@@ -1094,7 +1026,7 @@
       notePrefix = `Showing top ${displayStops.length} by ${metricLabel}.`;
     }
     if (displayStops.length === 0) {
-      return { stops: [], note: "No places matched the current map view.", showLegend: false, options: { colorBy: "" } };
+      return { stops: [], note: "No bus stops matched the current map view.", showLegend: false, options: { colorBy: "" } };
     }
     const colorMetric = resolveMetricSelection(state.mapColourMetric, state, { allowNone: true });
     if (!colorMetric) {
@@ -1226,18 +1158,11 @@
     }
     const target = container.querySelector ? (container.querySelector("#stopAnalysesContainer") || container) : container;
     target.innerHTML = `
-      <div class="module-note">Topological connectivity model using bus stops (places), not demand or frequency.</div>
-      <div class="module-note" id="stopAnalysisStatus">Loading place datasets...</div>
+      <div class="module-note">Topological connectivity model using bus stops, not demand or frequency.</div>
+      <div class="module-note" id="stopAnalysisStatus">Loading bus stop datasets...</div>
       <div class="module-section">
         <div class="section-title">Scope</div>
-        <div class="field">
-          <label for="stopScope">Place scope</label>
-          <select id="stopScope" class="select-field">
-            <option value="all">All places</option>
-            <option value="with_routes">Places with routes</option>
-          </select>
-        </div>
-        <div id="stopScopeNote" class="module-note">Analyzing 0 places.</div>
+        <div id="stopScopeNote" class="module-note">Analyzing 0 bus stops.</div>
       </div>
       <div class="module-section">
         <div class="section-title">Filters</div>
@@ -1263,13 +1188,6 @@
           <label for="stopRegionSelect">Region</label>
           <select id="stopRegionSelect" class="select-field"></select>
         </div>
-        <div class="field">
-          <label>Routes per place</label>
-          <div class="field-row">
-            <input id="stopMinRoutes" type="number" min="0" step="1" placeholder="Min" />
-            <input id="stopMaxRoutes" type="number" min="0" step="1" placeholder="Max" />
-          </div>
-        </div>
       </div>
       <div class="module-section">
         <div class="section-title">Frequency band</div>
@@ -1280,10 +1198,6 @@
         <div id="stopFrequencyNote" class="module-note"></div>
       </div>
       <div class="module-section">
-        <div class="section-title">Presets</div>
-        <div id="stopAnalysisPresets" class="preset-grid"></div>
-      </div>
-      <div class="module-section">
         <div class="section-title">Summary</div>
         <div id="stopAnalysisSummary"></div>
       </div>
@@ -1292,7 +1206,7 @@
         <div class="field">
           <label for="stopMapMode">Show on map</label>
           <select id="stopMapMode" class="select-field">
-            <option value="filtered">Filtered places (all)</option>
+            <option value="filtered">Filtered bus stops (all)</option>
             <option value="top">Top N by metric</option>
             <option value="off">Off</option>
           </select>
@@ -1328,7 +1242,6 @@
 
     const els = {
       status: target.querySelector("#stopAnalysisStatus"),
-      scopeSelect: target.querySelector("#stopScope"),
       scopeNote: target.querySelector("#stopScopeNote"),
       districtEntry: target.querySelector("#stopDistrictEntry"),
       districtTags: target.querySelector("#stopDistrictTags"),
@@ -1337,11 +1250,8 @@
       boroughTags: target.querySelector("#stopBoroughTags"),
       boroughOptions: target.querySelector("#stopBoroughOptions"),
       regionSelect: target.querySelector("#stopRegionSelect"),
-      minRoutes: target.querySelector("#stopMinRoutes"),
-      maxRoutes: target.querySelector("#stopMaxRoutes"),
       frequencyBand: target.querySelector("#stopFrequencyBand"),
       frequencyNote: target.querySelector("#stopFrequencyNote"),
-      presets: target.querySelector("#stopAnalysisPresets"),
       summary: target.querySelector("#stopAnalysisSummary"),
       mapMode: target.querySelector("#stopMapMode"),
       mapTopWrap: target.querySelector("#stopMapTopWrap"),
@@ -1548,14 +1458,16 @@
     });
 
     try {
-      const [stopsResult, frequencyData] = await Promise.all([
+      const [stopsResult, frequencyData, boroughs] = await Promise.all([
         loadStopsGeojson(),
-        loadFrequencyData().catch(() => null)
+        loadFrequencyData().catch(() => null),
+        loadBoroughsGeojson().catch(() => null)
       ]);
 
       const geojson = stopsResult?.geojson || null;
+      const boroughIndex = geo.buildBoroughIndex && boroughs ? geo.buildBoroughIndex(boroughs) : [];
       state.frequencyAvailable = Boolean(frequencyData);
-      state.stops = buildStopsFromGeojson(geojson, frequencyData);
+      state.stops = buildStopsFromGeojson(geojson, frequencyData, boroughIndex);
       state.centralityAvailable = state.stops.some((row) => (
         Number.isFinite(row.betweenness) ||
         Number.isFinite(row.closeness_topo) ||
@@ -1595,14 +1507,14 @@
       }
       if (els.status) {
         const centralityNote = state.centralityAvailable ? " Centrality ready." : "";
-        els.status.textContent = `Loaded ${state.stops.length} places.${centralityNote}`;
+        els.status.textContent = `Loaded ${state.stops.length} bus stops.${centralityNote}`;
       }
     } catch (error) {
       state.stops = [];
       state.frequencyAvailable = false;
       state.centralityAvailable = false;
       if (els.status) {
-        els.status.textContent = "Failed to load place datasets.";
+        els.status.textContent = "Failed to load bus stop datasets.";
       }
     }
 
@@ -1618,7 +1530,6 @@
 
     state.filteredStops = state.stops.slice();
     buildAnalysisOptions(els.analysisSelect);
-    renderPresetCards(els.presets);
     renderSummary(els.summary, state.filteredStops, {
       frequencyBand: state.frequencyBand,
       frequencyAvailable: state.frequencyAvailable,
@@ -1651,27 +1562,6 @@
       els.analysisSelect.addEventListener("change", runSelectedAnalysis);
     }
 
-    if (els.presets) {
-      els.presets.addEventListener("click", (event) => {
-        const card = event.target.closest(".preset-card");
-        if (!card) {
-          return;
-        }
-        const presetId = card.dataset.preset;
-        const preset = PRESETS.find((entry) => entry.id === presetId);
-        if (!preset) {
-          return;
-        }
-        state.currentAnalysisIds = preset.analysisIds.slice();
-        const results = runAnalyses(state.currentAnalysisIds, state.filteredStops, {
-          frequencyBand: state.frequencyBand,
-          frequencyAvailable: state.frequencyAvailable,
-          centralityAvailable: state.centralityAvailable
-        });
-        renderResults(els.output, results);
-      });
-    }
-
     if (els.output) {
       els.output.addEventListener("click", (event) => {
         const button = event.target.closest(".analysis-export");
@@ -1683,7 +1573,7 @@
         if (!entry || entry.result?.type !== "table") {
           return;
         }
-        downloadCsv("place_analysis.csv", entry.result.columns, entry.result.rows);
+        downloadCsv("bus_stop_analysis.csv", entry.result.columns, entry.result.rows);
       });
     }
 

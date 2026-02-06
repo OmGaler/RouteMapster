@@ -13,6 +13,7 @@ const ROUTE_GEOMETRY_INDEX_PATH = "/data/processed/routes/index.json";
 const BUS_STOPS_GEOJSON_PATH = "/data/processed/stops.geojson";
 const BUS_STATIONS_GEOJSON_PATH = "/data/processed/bus_stations.geojson";
 const GARAGES_GEOJSON_PATH = "/data/processed/garages.geojson";
+const BOROUGHS_GEOJSON_PATH = "/data/boroughs.geojson";
 const VEHICLE_LOOKUP_PATH = "/data/vehicles.json";
 const FREQUENCY_DATA_PATH = "/data/processed/frequencies.json";
 const ABOUT_METADATA_PATH = "/data/processed/last_updated.json";
@@ -41,7 +42,7 @@ const MAP_PANE_ORDER = [
 	{ name: HIGHLIGHT_PANE, zIndex: 450 }
 ];
 
-const STOP_REGION_LABELS = {
+const STOP_REGION_LABELS = window.RouteMapsterGeo?.REGION_LABELS || {
 	C: "Central London",
 	NE: "North East London",
 	NW: "North West London",
@@ -49,7 +50,7 @@ const STOP_REGION_LABELS = {
 	SE: "South East London"
 };
 
-const STOP_REGION_BY_BOROUGH = new Map([
+const STOP_REGION_BY_BOROUGH = window.RouteMapsterGeo?.REGION_BY_BOROUGH || new Map([
 	["city of london", "C"],
 	["westminster", "C"],
 	["camden", "C"],
@@ -149,7 +150,9 @@ const appState = {
 	garageMarkers: [],
 	garageLoadToken: 0,
 	busStopsGeojson: null,
-	busStopsArePlaces: false,
+	boroughsGeojson: null,
+	boroughIndex: null,
+	stopBoroughCache: new Map(),
 	busStationsGeojson: null,
 	busStopLayer: null,
 	busStopLoadToken: 0,
@@ -261,6 +264,9 @@ function getStopCode(props) {
 }
 
 function normaliseBoroughName(value) {
+	if (window.RouteMapsterUtils?.normaliseBoroughToken) {
+		return window.RouteMapsterUtils.normaliseBoroughToken(value);
+	}
 	return String(value || "").trim().toLowerCase();
 }
 
@@ -268,10 +274,16 @@ function getStopRegionTokenFromBorough(borough) {
 	if (!borough) {
 		return "";
 	}
+	if (window.RouteMapsterGeo?.getRegionTokenFromBorough) {
+		return window.RouteMapsterGeo.getRegionTokenFromBorough(borough);
+	}
 	return STOP_REGION_BY_BOROUGH.get(normaliseBoroughName(borough)) || "";
 }
 
 function getStopRegionLabel(token) {
+	if (window.RouteMapsterGeo?.getRegionLabel) {
+		return window.RouteMapsterGeo.getRegionLabel(token);
+	}
 	return STOP_REGION_LABELS[token] || "";
 }
 
@@ -287,6 +299,9 @@ function getStopRegionDisplay(props) {
 }
 
 function escapeHtml(value) {
+	if (window.RouteMapsterUtils?.escapeHtml) {
+		return window.RouteMapsterUtils.escapeHtml(value);
+	}
 	return String(value || "")
 		.replace(/&/g, "&amp;")
 		.replace(/</g, "&lt;")
@@ -296,6 +311,10 @@ function escapeHtml(value) {
 }
 
 function downloadCsv(filename, columns, rows) {
+	if (window.RouteMapsterUtils?.downloadCsv) {
+		window.RouteMapsterUtils.downloadCsv(filename, columns, rows);
+		return;
+	}
 	const header = columns.map((col) => `"${String(col).replace(/"/g, '""')}"`).join(",");
 	const body = rows
 		.map((row) => row.map((value) => `"${String(value ?? "").replace(/"/g, '""')}"`).join(","))
@@ -1874,7 +1893,7 @@ function clearAdvancedStopsLayer() {
 }
 
 const ADVANCED_STOP_METRIC_LABELS = {
-	route_count: "Routes per place",
+	route_count: "Routes per stop",
 	betweenness: "Betweenness (LCC)",
 	closeness_topo: "Closeness (topo, LCC)",
 	eigenvector: "Eigenvector (LCC)",
@@ -2119,6 +2138,19 @@ async function loadGaragesGeojson() {
 	return appState.garagesGeojson;
 }
 
+async function loadBoroughsGeojson() {
+	if (appState.boroughsGeojson) {
+		return appState.boroughsGeojson;
+	}
+	const res = await fetch(BOROUGHS_GEOJSON_PATH, { cache: "no-store" });
+	if (!res.ok) {
+		appState.boroughsGeojson = null;
+		return null;
+	}
+	appState.boroughsGeojson = await res.json();
+	return appState.boroughsGeojson;
+}
+
 async function loadBusStopsGeojson() {
 	if (appState.busStopsGeojson) {
 		return appState.busStopsGeojson;
@@ -2132,12 +2164,11 @@ async function loadBusStopsGeojson() {
 	if (!appState.stopRoutesIndex) {
 		appState.stopRoutesIndex = buildStopRouteIndex(appState.busStopsGeojson);
 	}
+	const boroughs = await loadBoroughsGeojson();
+	if (boroughs && !appState.boroughIndex) {
+		appState.boroughIndex = buildBoroughIndex(boroughs);
+	}
 	appState.busStopBoroughLookup = buildStopBoroughLookup(appState.busStopsGeojson);
-	appState.busStopsArePlaces = Boolean(
-		appState.busStopsGeojson?.features?.[0]?.properties?.PLACE_ID
-		|| appState.busStopsGeojson?.features?.[0]?.properties?.child_stop_count
-		|| appState.busStopsGeojson?.features?.[0]?.properties?.CHILD_STOP_COUNT
-	);
 	return appState.busStopsGeojson;
 }
 
@@ -2151,6 +2182,9 @@ async function loadBusStationsGeojson() {
 }
 
 function normalisePostcodeDistrict(value) {
+	if (window.RouteMapsterUtils?.normalisePostcodeDistrict) {
+		return window.RouteMapsterUtils.normalisePostcodeDistrict(value);
+	}
 	if (!value) {
 		return "";
 	}
@@ -2169,10 +2203,173 @@ function getPostcodeDistrict(props) {
 }
 
 function normaliseBoroughToken(value) {
+	if (window.RouteMapsterUtils?.normaliseBoroughToken) {
+		return window.RouteMapsterUtils.normaliseBoroughToken(value);
+	}
 	if (!value) {
 		return "";
 	}
 	return String(value).trim().toLowerCase();
+}
+
+function buildRingBBox(ring) {
+	if (window.RouteMapsterGeo?.buildRingBBox) {
+		return window.RouteMapsterGeo.buildRingBBox(ring);
+	}
+	let minLon = Infinity;
+	let minLat = Infinity;
+	let maxLon = -Infinity;
+	let maxLat = -Infinity;
+	ring.forEach((point) => {
+		const lon = point[0];
+		const lat = point[1];
+		if (lon < minLon) {
+			minLon = lon;
+		}
+		if (lon > maxLon) {
+			maxLon = lon;
+		}
+		if (lat < minLat) {
+			minLat = lat;
+		}
+		if (lat > maxLat) {
+			maxLat = lat;
+		}
+	});
+	return [minLon, minLat, maxLon, maxLat];
+}
+
+function pointInRing(lon, lat, ring) {
+	if (window.RouteMapsterGeo?.pointInRing) {
+		return window.RouteMapsterGeo.pointInRing(lon, lat, ring);
+	}
+	let inside = false;
+	let j = ring.length - 1;
+	for (let i = 0; i < ring.length; i += 1) {
+		const xi = ring[i][0];
+		const yi = ring[i][1];
+		const xj = ring[j][0];
+		const yj = ring[j][1];
+		const intersects = (yi > lat) !== (yj > lat)
+			&& lon < ((xj - xi) * (lat - yi)) / ((yj - yi) || 1e-12) + xi;
+		if (intersects) {
+			inside = !inside;
+		}
+		j = i;
+	}
+	return inside;
+}
+
+function pointInPolygon(lon, lat, polygon) {
+	if (window.RouteMapsterGeo?.pointInPolygon) {
+		return window.RouteMapsterGeo.pointInPolygon(lon, lat, polygon);
+	}
+	if (!polygon || polygon.length === 0) {
+		return false;
+	}
+	if (!pointInRing(lon, lat, polygon[0])) {
+		return false;
+	}
+	for (let i = 1; i < polygon.length; i += 1) {
+		if (pointInRing(lon, lat, polygon[i])) {
+			return false;
+		}
+	}
+	return true;
+}
+
+function buildBoroughIndex(geojson) {
+	if (window.RouteMapsterGeo?.buildBoroughIndex) {
+		return window.RouteMapsterGeo.buildBoroughIndex(geojson);
+	}
+	const features = Array.isArray(geojson?.features) ? geojson.features : [];
+	const index = [];
+	features.forEach((feature) => {
+		const props = feature?.properties || {};
+		const name = props.BOROUGH || props.Borough || props.borough;
+		if (!name) {
+			return;
+		}
+		const geometry = feature?.geometry || {};
+		const geomType = geometry.type;
+		const coords = geometry.coordinates;
+		if (geomType === "Polygon" && Array.isArray(coords) && coords[0]) {
+			index.push({
+				name: String(name).trim(),
+				coords,
+				bbox: buildRingBBox(coords[0])
+			});
+			return;
+		}
+		if (geomType === "MultiPolygon" && Array.isArray(coords)) {
+			coords.forEach((polygon) => {
+				if (!Array.isArray(polygon) || !polygon[0]) {
+					return;
+				}
+				index.push({
+					name: String(name).trim(),
+					coords: polygon,
+					bbox: buildRingBBox(polygon[0])
+				});
+			});
+		}
+	});
+	return index.filter((entry) => entry.name);
+}
+
+function findBoroughForPoint(lon, lat, index) {
+	if (window.RouteMapsterGeo?.findBoroughForPoint) {
+		return window.RouteMapsterGeo.findBoroughForPoint(lon, lat, index);
+	}
+	for (let i = 0; i < index.length; i += 1) {
+		const entry = index[i];
+		const [minLon, minLat, maxLon, maxLat] = entry.bbox;
+		if (lon < minLon || lon > maxLon || lat < minLat || lat > maxLat) {
+			continue;
+		}
+		if (pointInPolygon(lon, lat, entry.coords)) {
+			return entry.name;
+		}
+	}
+	return "";
+}
+
+async function hydrateStopBoroughs(geojson) {
+	if (!geojson || !Array.isArray(geojson.features)) {
+		return;
+	}
+	const boroughs = await loadBoroughsGeojson();
+	if (!boroughs) {
+		return;
+	}
+	if (!appState.boroughIndex) {
+		appState.boroughIndex = buildBoroughIndex(boroughs);
+	}
+	const index = appState.boroughIndex || [];
+	if (!index.length) {
+		return;
+	}
+	geojson.features.forEach((feature) => {
+		const props = feature?.properties || {};
+		const existing = props?.borough || props?.BOROUGH || props?.Borough;
+		if (existing) {
+			return;
+		}
+		const coords = feature?.geometry?.coordinates;
+		if (!Array.isArray(coords) || coords.length < 2) {
+			return;
+		}
+		const lon = Number(coords[0]);
+		const lat = Number(coords[1]);
+		if (!Number.isFinite(lon) || !Number.isFinite(lat)) {
+			return;
+		}
+		const borough = findBoroughForPoint(lon, lat, index);
+		if (borough) {
+			props.BOROUGH = borough;
+			feature.properties = props;
+		}
+	});
 }
 
 function normaliseBoroughTokens(value) {
@@ -2205,6 +2402,39 @@ function formatBoroughToken(token) {
 
 function getStopBoroughToken(props) {
 	return normaliseBoroughToken(props?.borough || props?.BOROUGH || props?.Borough || props?.["Borough"]);
+}
+
+function getStopBoroughTokenFromFeature(feature) {
+	const props = feature?.properties || {};
+	const existing = getStopBoroughToken(props);
+	if (existing) {
+		return existing;
+	}
+	const coords = feature?.geometry?.coordinates;
+	if (!Array.isArray(coords) || coords.length < 2) {
+		return "";
+	}
+	const lon = Number(coords[0]);
+	const lat = Number(coords[1]);
+	if (!Number.isFinite(lon) || !Number.isFinite(lat)) {
+		return "";
+	}
+	const cacheKey = props?.NAPTAN_ID || `${lon},${lat}`;
+	if (appState.stopBoroughCache?.has(cacheKey)) {
+		return appState.stopBoroughCache.get(cacheKey);
+	}
+	const index = appState.boroughIndex || [];
+	if (!index.length) {
+		return "";
+	}
+	const name = findBoroughForPoint(lon, lat, index);
+	const token = normaliseBoroughToken(name);
+	if (token) {
+		props.BOROUGH = name;
+		feature.properties = props;
+		appState.stopBoroughCache.set(cacheKey, token);
+	}
+	return token;
 }
 
 function normalisePostcodeDistrictTokens(value) {
@@ -2405,7 +2635,7 @@ function buildBusStopInfoHtml(props, routeSets) {
 	const details = [
 		road ? `Road: ${escapeHtml(road)}` : "",
 		postcode ? `Postcode: ${escapeHtml(postcode)}` : "",
-		placeId ? `Place ID: ${escapeHtml(placeId)}` : (stopCode ? `Stop code: ${escapeHtml(stopCode)}` : ""),
+		placeId ? `Stop ID: ${escapeHtml(placeId)}` : (stopCode ? `Stop code: ${escapeHtml(stopCode)}` : ""),
 		Number.isFinite(Number(childStopCount)) ? `Child stops: ${escapeHtml(Number(childStopCount))}` : "",
 		borough ? `Borough: ${escapeHtml(borough)}` : "",
 		region ? `Region: ${escapeHtml(region)}` : ""
@@ -2430,7 +2660,7 @@ function buildBusStopInfoHtml(props, routeSets) {
 		subtitle: "Bus stop",
 		bodyHtml: `
 			<div class="info-section">
-				<div class="info-label">Place details</div>
+				<div class="info-label">Stop details</div>
 				${detailLines}
 			</div>
 			<div class="info-section">
@@ -2512,7 +2742,7 @@ function normaliseStopRouteCountValue(value) {
 		return "any";
 	}
 	if (token === "8+") {
-		return "8+";
+		return "8";
 	}
 	const num = Number(token);
 	if (Number.isFinite(num) && num > 0) {
@@ -2526,11 +2756,11 @@ function parseStopRouteCountFilter(value) {
 	if (token === "any") {
 		return null;
 	}
-	if (token === "8+") {
-		return { min: 8, max: null, label: "8+" };
-	}
 	const num = Number(token);
 	if (Number.isFinite(num) && num > 0) {
+		if (num >= 8) {
+			return { min: num, max: null, label: `${num}+` };
+		}
 		return { min: num, max: num, label: String(num) };
 	}
 	return null;
@@ -2653,7 +2883,7 @@ function filterBusStops(geojson, district, boroughs, routeCountFilter) {
 			return false;
 		}
 		if (boroughSet) {
-			const token = getStopBoroughToken(props);
+			const token = getStopBoroughTokenFromFeature(feature);
 			if (!token || !boroughSet.has(token)) {
 				return false;
 			}
@@ -2671,7 +2901,7 @@ function updateBusStopFilterStatus(count, district, boroughs, routeCountFilter) 
 	const districts = normalisePostcodeDistrictTokens(district);
 	const boroughTokens = normaliseBoroughTokens(boroughs);
 	const routeCountSpec = parseStopRouteCountFilter(routeCountFilter);
-	const unitLabel = appState.busStopsArePlaces ? "places" : "stops";
+	const unitLabel = "stops";
 	const parts = [];
 	if (districts.length > 0) {
 		parts.push(districts.length > 3 ? `${districts.length} districts` : districts.join(", "));
@@ -2693,6 +2923,50 @@ function updateBusStopFilterStatus(count, district, boroughs, routeCountFilter) 
 	} else {
 		status.textContent = `Showing all ${unitLabel}.`;
 	}
+}
+
+function updateBusStopVisibilityNote() {
+	const note = document.getElementById("busStopVisibilityNote");
+	if (!note) {
+		return;
+	}
+	const showStops = document.getElementById("showBusStops");
+	if (!showStops || !showStops.checked) {
+		note.textContent = "Bus stops are hidden. Enable \"Show bus stops\" to see filtered results.";
+		return;
+	}
+	note.textContent = "";
+}
+
+function updateRouteFilterVisibilityNote() {
+	const note = document.getElementById("routeFilterStatus");
+	if (!note) {
+		return;
+	}
+	if (appState.suppressNetworkRoutes || appState.focusRouteId) {
+		note.textContent = "Network routes are hidden while another layer is in focus.";
+		return;
+	}
+	const showAll = document.getElementById("showAllRoutes")?.checked;
+	const routeTypeIds = [
+		"showNetworkRegularRoutes",
+		"showNetworkPrefixRoutes",
+		"showNetwork24hrRoutes",
+		"showNetworkNightRoutes",
+		"showNetworkSchoolRoutes"
+	];
+	const anyRouteType = Boolean(showAll) || routeTypeIds.some((id) => document.getElementById(id)?.checked);
+	if (!anyRouteType) {
+		note.textContent = "All network route types are disabled. Enable one to see results.";
+		return;
+	}
+	if (!appState.showNetworkRoutes) {
+		note.textContent = appState.routeFilterTokens.length > 0
+			? "No routes match the current filter."
+			: "No network routes are currently visible with these filters.";
+		return;
+	}
+	note.textContent = "";
 }
 
 async function refreshBusStopFilterStatus() {
@@ -3812,6 +4086,8 @@ async function getSelectedNetworkCategories() {
 async function renderNetworkRoutes(loadToken) {
 	if (appState.focusRouteId || appState.suppressNetworkRoutes) {
 		clearNetworkRoutes();
+		appState.showNetworkRoutes = false;
+		updateRouteFilterVisibilityNote();
 		return;
 	}
 	clearNetworkRoutes();
@@ -3827,6 +4103,7 @@ async function renderNetworkRoutes(loadToken) {
 		updateSelectedRouteCount(0);
 		appState.frequencySegmentTotals = null;
 		appState.frequencyMaxTotal = 0;
+		updateRouteFilterVisibilityNote();
 		return;
 	}
 
@@ -3878,11 +4155,13 @@ async function renderNetworkRoutes(loadToken) {
 		updateSelectedRouteCount(0);
 		appState.frequencySegmentTotals = null;
 		appState.frequencyMaxTotal = 0;
+		updateRouteFilterVisibilityNote();
 		return;
 	}
 	updateSelectedRouteCount(displayRoutes.size);
 
 	appState.showNetworkRoutes = true;
+	updateRouteFilterVisibilityNote();
 	const layerGroup = L.layerGroup().addTo(appState.map);
 	appState.networkRouteLayer = layerGroup;
 	const hasFrequency = Boolean(frequencyContext?.segmentTotals && frequencyContext.maxTotal > 0);
@@ -5466,11 +5745,13 @@ function setupUI() {
 			if (event.target.checked) {
 				setStopsPanePriority(true);
 				addBusStopsLayer(appState.map).catch(() => {});
+				updateBusStopVisibilityNote();
 				return;
 			}
 			clearBusStopsLayer();
 			setStopsPanePriority(false);
 			updateSelectedInfo("Bus stops hidden.");
+			updateBusStopVisibilityNote();
 			if (appState.selectedFeature?.type === "stop") {
 				resetInfoPanel();
 			}
@@ -5890,6 +6171,7 @@ function setupRouteFilterInput() {
 
 	const applyTokens = () => {
 		appState.routeFilterTokens = tokens;
+		updateRouteFilterVisibilityNote();
 		if (tokens.length > 0) {
 			updateSelectedInfo(`Filter: ${tokens.join(", ")}`);
 		} else {
@@ -5978,6 +6260,7 @@ function setupRouteFilterInput() {
 	});
 
 	syncTags();
+	updateRouteFilterVisibilityNote();
 }
 
 function setupBusStopFilterInput() {
@@ -5986,7 +6269,7 @@ function setupBusStopFilterInput() {
 	const boroughInput = document.getElementById("busStopBoroughEntry");
 	const boroughList = document.getElementById("busStopBoroughTags");
 	const boroughOptions = document.getElementById("busStopBoroughOptions");
-	const routeCountSelect = document.getElementById("busStopRouteCount");
+	const routeCountInput = document.getElementById("busStopRouteCount");
 	const applyButton = document.getElementById("applyBusStopFilter");
 	const clearButton = document.getElementById("clearBusStopFilter");
 	const exportButton = document.getElementById("exportBusStopFilterCsv");
@@ -6018,8 +6301,8 @@ function setupBusStopFilterInput() {
 	const syncTags = () => {
 		renderTagList(districtTokens, districtList, (token) => token);
 		renderTagList(boroughTokens, boroughList, (token) => formatBoroughToken(token));
-		if (routeCountSelect) {
-			routeCountSelect.value = routeCount;
+		if (routeCountInput) {
+			routeCountInput.value = routeCount === "any" ? "" : routeCount;
 		}
 		clearButton.disabled = districtTokens.length === 0 && boroughTokens.length === 0 && routeCount === "any";
 	};
@@ -6096,8 +6379,8 @@ function setupBusStopFilterInput() {
 	applyButton.addEventListener("click", () => {
 		commitDistrictInput();
 		commitBoroughInput();
-		if (routeCountSelect) {
-			routeCount = normaliseStopRouteCountValue(routeCountSelect.value);
+		if (routeCountInput) {
+			routeCount = normaliseStopRouteCountValue(routeCountInput.value);
 		}
 		applyAndRefresh();
 	});
@@ -6110,8 +6393,8 @@ function setupBusStopFilterInput() {
 		if (boroughInput) {
 			boroughInput.value = "";
 		}
-		if (routeCountSelect) {
-			routeCountSelect.value = routeCount;
+		if (routeCountInput) {
+			routeCountInput.value = "";
 		}
 		syncTags();
 		applyAndRefresh();
@@ -6201,17 +6484,26 @@ function setupBusStopFilterInput() {
 				const options = Array.from(lookup.entries())
 					.map(([token, label]) => ({ token, label }))
 					.sort((a, b) => a.label.localeCompare(b.label));
-				boroughOptions.innerHTML = options
-					.map((option) => `<option value="${escapeHtml(option.label)}"></option>`)
-					.join("");
+				if (options.length === 0 && appState.boroughIndex && appState.boroughIndex.length > 0) {
+					const names = Array.from(new Set(appState.boroughIndex.map((entry) => entry.name)))
+						.filter(Boolean)
+						.sort((a, b) => a.localeCompare(b));
+					boroughOptions.innerHTML = names
+						.map((name) => `<option value="${escapeHtml(name)}"></option>`)
+						.join("");
+				} else {
+					boroughOptions.innerHTML = options
+						.map((option) => `<option value="${escapeHtml(option.label)}"></option>`)
+						.join("");
+				}
 				syncTags();
 			})
 			.catch(() => {});
 	}
 
-	if (routeCountSelect) {
-		routeCountSelect.addEventListener("change", () => {
-			routeCount = normaliseStopRouteCountValue(routeCountSelect.value);
+	if (routeCountInput) {
+		routeCountInput.addEventListener("change", () => {
+			routeCount = normaliseStopRouteCountValue(routeCountInput.value);
 			syncTags();
 			applyAndRefresh();
 		});
@@ -6263,6 +6555,7 @@ function setupBusStopFilterInput() {
 		});
 	}
 
+	updateBusStopVisibilityNote();
 	syncTags();
 }
 
