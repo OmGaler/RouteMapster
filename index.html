@@ -630,6 +630,115 @@
       white-space: normal;
     }
 
+    .analysis-pill-row__header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .analysis-pill-score {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--accent);
+      background: var(--accent-soft);
+      padding: 4px 8px;
+      border-radius: 999px;
+      white-space: nowrap;
+    }
+
+    .analysis-pill-details {
+      margin-top: 8px;
+      padding: 10px;
+      border: 1px dashed var(--panel-border);
+      border-radius: 12px;
+      background: #fffaf1;
+      width: 100%;
+      max-width: 100%;
+      box-sizing: border-box;
+      overflow: hidden;
+    }
+
+    .analysis-metric-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 8px 12px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .analysis-metric {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .analysis-metric strong {
+      color: var(--ink);
+      font-weight: 600;
+    }
+
+    .analysis-route-metrics {
+      margin-top: 10px;
+      display: grid;
+      gap: 8px;
+      width: 100%;
+      max-width: 100%;
+    }
+
+    .analysis-route-metric-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 12px;
+      align-items: center;
+      padding: 8px;
+      border-radius: 10px;
+      background: #fdfbf7;
+      border: 1px solid var(--panel-border);
+      width: 100%;
+      max-width: 100%;
+      box-sizing: border-box;
+    }
+
+    .analysis-route-metric-id {
+      min-width: 90px;
+      flex: 0 0 auto;
+    }
+
+    .analysis-route-metric .analysis-metric {
+      margin: 0;
+      justify-content: space-between;
+      gap: 6px;
+    }
+
+    .analysis-route-metric {
+      min-width: 0;
+      flex: 1 1 140px;
+    }
+
+    .analysis-route-metric .analysis-metric span {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    @media (max-width: 1024px) {
+      .analysis-route-metric-row {
+        align-items: stretch;
+      }
+      .analysis-route-metric-id {
+        flex-basis: 100%;
+      }
+    }
+
+    @media (max-width: 720px) {
+      .analysis-route-metric-row {
+        flex-direction: column;
+        align-items: stretch;
+      }
+    }
+
     .analysis-summary {
       display: grid;
       gap: 6px;

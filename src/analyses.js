@@ -468,6 +468,12 @@
       label: "Route families (heuristic)",
       requiresSpatial: true,
       run: (rows) => {
+        const METRIC_WEIGHTS = {
+          overlap: 0.7,
+          termini: 0.2,
+          number_series: 0.1
+        };
+
         const list = Array.isArray(rows) ? rows : [];
         if (list.length === 0) {
           return {
@@ -542,6 +548,54 @@
           return shared ? 0.2 : 0;
         };
 
+        const endpointMetric = (a, b) => {
+          const startA = [a.endpoint_start_lat, a.endpoint_start_lon];
+          const endA = [a.endpoint_end_lat, a.endpoint_end_lon];
+          const startB = [b.endpoint_start_lat, b.endpoint_start_lon];
+          const endB = [b.endpoint_end_lat, b.endpoint_end_lon];
+          const THRESH = 0.55;
+
+          const startStart = distanceKm(startA, startB);
+          const endEnd = distanceKm(endA, endB);
+          const startEnd = distanceKm(startA, endB);
+          const endStart = distanceKm(endA, startB);
+
+          const aligned = (startStart <= THRESH && endEnd <= THRESH) || (startEnd <= THRESH && endStart <= THRESH);
+          if (aligned) {
+            return 1;
+          }
+          const shared = Math.min(startStart, endEnd, startEnd, endStart) <= THRESH;
+          return shared ? 0.5 : 0;
+        };
+
+        const bboxOverlapRatio = (a, b) => {
+          const aNorth = a.northmost_lat;
+          const aSouth = a.southmost_lat;
+          const aEast = a.eastmost_lon;
+          const aWest = a.westmost_lon;
+          const bNorth = b.northmost_lat;
+          const bSouth = b.southmost_lat;
+          const bEast = b.eastmost_lon;
+          const bWest = b.westmost_lon;
+          if (![aNorth, aSouth, aEast, aWest, bNorth, bSouth, bEast, bWest].every(Number.isFinite)) {
+            return null;
+          }
+          const north = Math.min(aNorth, bNorth);
+          const south = Math.max(aSouth, bSouth);
+          const east = Math.min(aEast, bEast);
+          const west = Math.max(aWest, bWest);
+          if (north <= south || east <= west) {
+            return 0;
+          }
+          const interArea = (north - south) * (east - west);
+          const areaA = (aNorth - aSouth) * (aEast - aWest);
+          const areaB = (bNorth - bSouth) * (bEast - bWest);
+          if (!Number.isFinite(interArea) || !Number.isFinite(areaA) || !Number.isFinite(areaB) || areaA <= 0 || areaB <= 0) {
+            return null;
+          }
+          return Math.max(0, Math.min(1, interArea / Math.min(areaA, areaB)));
+        };
+
         const bboxOverlapScore = (a, b) => {
           const aNorth = a.northmost_lat;
           const aSouth = a.southmost_lat;
@@ -597,6 +651,46 @@
             return Math.max(0.1, score);
           }
           return 0;
+        };
+
+        const numericMetric = (a, b) => {
+          if (!Number.isFinite(a.number) || !Number.isFinite(b.number)) {
+            return 0;
+          }
+          if (a.number === b.number) {
+            const basePair = (a.prefixType === "base" && b.prefixType === "base")
+              || (a.prefixType === "night" && b.prefixType === "base")
+              || (a.prefixType === "base" && b.prefixType === "night")
+              || (a.prefixType === "night" && b.prefixType === "night");
+            return basePair ? 1 : 0.6;
+          }
+          if (Number.isFinite(a.suffix2) && Number.isFinite(b.suffix2) && a.suffix2 === b.suffix2) {
+            const bothBig = a.number >= 100 && b.number >= 100;
+            let score = bothBig ? 0.7 : 0.6;
+            if (a.prefixType === "other" || b.prefixType === "other" || a.prefixType === "superloop" || b.prefixType === "superloop") {
+              score -= 0.1;
+            }
+            return Math.max(0.4, score);
+          }
+          return 0;
+        };
+
+        const computeConfidence = (metrics) => {
+          const weightEntries = Object.entries(METRIC_WEIGHTS);
+          let sum = 0;
+          let weightSum = 0;
+          weightEntries.forEach(([key, weight]) => {
+            const value = metrics[key];
+            if (!Number.isFinite(value)) {
+              return;
+            }
+            sum += value * weight;
+            weightSum += weight;
+          });
+          if (weightSum <= 0) {
+            return 0;
+          }
+          return Math.max(0, Math.min(1, sum / weightSum));
         };
 
         const enriched = list
@@ -755,9 +849,92 @@
           };
         }
 
+        const rowById = new Map(enriched.map((entry) => [entry.routeId, entry]));
+
+        const groupsWithMetrics = filteredGroups.map((group) => {
+          const routeIds = group.routes
+            .map((route) => String(route?.id || route?.routeId || route?.route || "").trim().toUpperCase())
+            .filter(Boolean);
+          let pairCount = 0;
+          let overlapSum = 0;
+          let overlapCount = 0;
+          let terminiSum = 0;
+          let numberSum = 0;
+          const perRoute = new Map();
+          for (let i = 0; i < routeIds.length; i += 1) {
+            for (let j = i + 1; j < routeIds.length; j += 1) {
+              const a = rowById.get(routeIds[i]);
+              const b = rowById.get(routeIds[j]);
+              if (!a || !b) {
+                continue;
+              }
+              pairCount += 1;
+              const overlap = bboxOverlapRatio(a.row, b.row);
+              if (Number.isFinite(overlap)) {
+                overlapSum += overlap;
+                overlapCount += 1;
+              }
+              const termini = endpointMetric(a.row, b.row);
+              const numberSeries = numericMetric(a.parsed, b.parsed);
+              terminiSum += termini;
+              numberSum += numberSeries;
+
+              if (!perRoute.has(a.routeId)) {
+                perRoute.set(a.routeId, { overlapSum: 0, overlapCount: 0, terminiSum: 0, numberSum: 0, pairs: 0 });
+              }
+              if (!perRoute.has(b.routeId)) {
+                perRoute.set(b.routeId, { overlapSum: 0, overlapCount: 0, terminiSum: 0, numberSum: 0, pairs: 0 });
+              }
+              const aEntry = perRoute.get(a.routeId);
+              const bEntry = perRoute.get(b.routeId);
+              if (Number.isFinite(overlap)) {
+                aEntry.overlapSum += overlap;
+                aEntry.overlapCount += 1;
+                bEntry.overlapSum += overlap;
+                bEntry.overlapCount += 1;
+              }
+              aEntry.terminiSum += termini;
+              aEntry.numberSum += numberSeries;
+              aEntry.pairs += 1;
+              bEntry.terminiSum += termini;
+              bEntry.numberSum += numberSeries;
+              bEntry.pairs += 1;
+            }
+          }
+          const metrics = {
+            overlap: overlapCount > 0 ? overlapSum / overlapCount : null,
+            termini: pairCount > 0 ? terminiSum / pairCount : null,
+            number_series: pairCount > 0 ? numberSum / pairCount : null
+          };
+          const confidence = computeConfidence(metrics);
+          const perRouteMetrics = routeIds.map((routeId) => {
+            const entry = perRoute.get(routeId);
+            const overlap = entry && entry.overlapCount > 0 ? entry.overlapSum / entry.overlapCount : null;
+            const termini = entry && entry.pairs > 0 ? entry.terminiSum / entry.pairs : null;
+            const numberSeries = entry && entry.pairs > 0 ? entry.numberSum / entry.pairs : null;
+            const routeMetrics = {
+              overlap,
+              termini,
+              number_series: numberSeries
+            };
+            return {
+              route_id: routeId,
+              metrics: routeMetrics,
+              confidence: computeConfidence(routeMetrics)
+            };
+          });
+          return {
+            ...group,
+            metrics,
+            confidence,
+            weights: METRIC_WEIGHTS,
+            per_route: perRouteMetrics
+          };
+        });
+
         return {
           type: "route-pills",
-          groups: filteredGroups
+          groups: groupsWithMetrics
         };
       }
     },

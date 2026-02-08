@@ -271,6 +271,8 @@
     const extreme = spec.extreme && ["north", "south", "east", "west"].includes(String(spec.extreme).toLowerCase())
       ? String(spec.extreme).toLowerCase()
       : undefined;
+    const boroughModeRaw = spec.borough_mode || spec.boroughMode || "";
+    const boroughMode = String(boroughModeRaw || "").trim().toLowerCase() === "within" ? "within" : undefined;
 
     const normalised = {
       route_ids: Array.isArray(spec.route_ids) ? spec.route_ids.map(normaliseToken).filter(Boolean) : undefined,
@@ -279,6 +281,7 @@
       operators: Array.isArray(spec.operators) ? spec.operators.map(normaliseLower).filter(Boolean) : undefined,
       garages: Array.isArray(spec.garages) ? spec.garages.map(normaliseLower).filter(Boolean) : undefined,
       boroughs: Array.isArray(spec.boroughs) ? spec.boroughs.map(normaliseLower).filter(Boolean) : undefined,
+      borough_mode: boroughMode,
       vehicle_types: Array.isArray(spec.vehicle_types) ? spec.vehicle_types.map((value) => normaliseToken(value).toUpperCase()).filter(Boolean) : undefined,
       freq: spec.freq && typeof spec.freq === "object" ? spec.freq : undefined,
       flags: spec.flags && typeof spec.flags === "object" ? spec.flags : undefined,
@@ -307,6 +310,7 @@
     const boroughSet = spec.boroughs && spec.boroughs.length > 0
       ? new Set(spec.boroughs)
       : null;
+    const boroughMode = spec.borough_mode === "within" ? "within" : "enter";
     const vehicleSet = spec.vehicle_types && spec.vehicle_types.length > 0
       ? new Set(spec.vehicle_types)
       : null;
@@ -338,9 +342,19 @@
       }
       if (boroughSet) {
         const boroughs = Array.isArray(row.boroughs_norm) ? row.boroughs_norm : [];
-        const matchesBorough = boroughs.some((token) => boroughSet.has(String(token).toLowerCase()));
-        if (!matchesBorough) {
-          return false;
+        if (boroughMode === "within") {
+          if (boroughs.length === 0) {
+            return false;
+          }
+          const allInside = boroughs.every((token) => boroughSet.has(String(token).toLowerCase()));
+          if (!allInside) {
+            return false;
+          }
+        } else {
+          const matchesBorough = boroughs.some((token) => boroughSet.has(String(token).toLowerCase()));
+          if (!matchesBorough) {
+            return false;
+          }
         }
       }
       if (vehicleSet && !vehicleSet.has(row.vehicle_type)) {
@@ -451,6 +465,9 @@
     }
     if (Array.isArray(spec.boroughs) && spec.boroughs.length > 0) {
       cleaned.boroughs = spec.boroughs;
+    }
+    if (spec.borough_mode === "within") {
+      cleaned.borough_mode = "within";
     }
     if (Array.isArray(spec.vehicle_types) && spec.vehicle_types.length > 0) {
       cleaned.vehicle_types = spec.vehicle_types;
