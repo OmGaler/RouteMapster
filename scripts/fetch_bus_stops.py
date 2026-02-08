@@ -50,6 +50,7 @@ POSTCODE_CACHE_PATH = RAW_STOPS_DIR / "postcode_cache.json"
 
 PROCESSED_DIR = REPO_ROOT / "data" / "processed"
 PROCESSED_PATH = PROCESSED_DIR / "stops.geojson"
+BOROUGHS_PATH = REPO_ROOT / "data" / "boroughs.geojson"
 
 
 def load_dotenv(path: str = ".env") -> None:
@@ -81,6 +82,7 @@ class Config:
     postcode_delay: float = 0.02  # be polite
     postcode_radius_m: int = 200  # reverse lookup radius
     postcode_cache_path: Path = POSTCODE_CACHE_PATH
+    boroughs_path: Path = BOROUGHS_PATH
 
 
 def require_env(name: str) -> str:
@@ -176,6 +178,132 @@ def additional_prop(sp: Dict[str, Any], key: str) -> Optional[str]:
     return None
 
 
+def extract_borough(sp: Dict[str, Any]) -> Optional[str]:
+    borough = additional_prop(sp, "Borough") or additional_prop(sp, "borough")
+    if not borough:
+        return None
+    text = str(borough).strip()
+    return text if text else None
+
+
+def _ring_bbox(ring: List[List[float]]) -> Tuple[float, float, float, float]:
+    min_lon = min(pt[0] for pt in ring)
+    min_lat = min(pt[1] for pt in ring)
+    max_lon = max(pt[0] for pt in ring)
+    max_lat = max(pt[1] for pt in ring)
+    return min_lon, min_lat, max_lon, max_lat
+
+
+def _point_in_ring(lon: float, lat: float, ring: List[List[float]]) -> bool:
+    inside = False
+    if len(ring) < 3:
+        return False
+    j = len(ring) - 1
+    for i in range(len(ring)):
+        xi, yi = ring[i][0], ring[i][1]
+        xj, yj = ring[j][0], ring[j][1]
+        intersects = ((yi > lat) != (yj > lat)) and (
+            lon < (xj - xi) * (lat - yi) / ((yj - yi) or 1e-12) + xi
+        )
+        if intersects:
+            inside = not inside
+        j = i
+    return inside
+
+
+def _point_in_polygon(lon: float, lat: float, polygon: List[List[List[float]]]) -> bool:
+    if not polygon:
+        return False
+    outer = polygon[0]
+    if not _point_in_ring(lon, lat, outer):
+        return False
+    for hole in polygon[1:]:
+        if _point_in_ring(lon, lat, hole):
+            return False
+    return True
+
+
+def _point_in_multipolygon(lon: float, lat: float, multipolygon: List[List[List[List[float]]]]) -> bool:
+    return any(_point_in_polygon(lon, lat, polygon) for polygon in multipolygon)
+
+
+def load_borough_polygons(path: Path) -> List[Dict[str, Any]]:
+    if not path.exists():
+        return []
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    features = payload.get("features") if isinstance(payload, dict) else None
+    if not isinstance(features, list):
+        return []
+    out: List[Dict[str, Any]] = []
+    for feature in features:
+        if not isinstance(feature, dict):
+            continue
+        props = feature.get("properties") or {}
+        borough = props.get("BOROUGH") or props.get("Borough") or props.get("borough")
+        if not borough:
+            continue
+        name = str(borough).strip()
+        if not name:
+            continue
+        geometry = feature.get("geometry") or {}
+        geom_type = geometry.get("type")
+        coords = geometry.get("coordinates")
+        if geom_type == "Polygon" and isinstance(coords, list):
+            bbox = _ring_bbox(coords[0]) if coords and isinstance(coords[0], list) else None
+            if bbox:
+                out.append({"name": name, "type": "Polygon", "coords": coords, "bbox": bbox})
+        elif geom_type == "MultiPolygon" and isinstance(coords, list):
+            rings = []
+            for polygon in coords:
+                if not polygon or not isinstance(polygon, list):
+                    continue
+                if not polygon[0]:
+                    continue
+                rings.append(_ring_bbox(polygon[0]))
+            if rings:
+                min_lon = min(b[0] for b in rings)
+                min_lat = min(b[1] for b in rings)
+                max_lon = max(b[2] for b in rings)
+                max_lat = max(b[3] for b in rings)
+                out.append({"name": name, "type": "MultiPolygon", "coords": coords, "bbox": (min_lon, min_lat, max_lon, max_lat)})
+    return out
+
+
+def find_borough(lon: float, lat: float, boroughs: List[Dict[str, Any]]) -> Optional[str]:
+    for entry in boroughs:
+        min_lon, min_lat, max_lon, max_lat = entry["bbox"]
+        if lon < min_lon or lon > max_lon or lat < min_lat or lat > max_lat:
+            continue
+        if entry["type"] == "Polygon":
+            if _point_in_polygon(lon, lat, entry["coords"]):
+                return entry["name"]
+        elif entry["type"] == "MultiPolygon":
+            if _point_in_multipolygon(lon, lat, entry["coords"]):
+                return entry["name"]
+    return None
+
+
+def extract_parent_fields(sp: Dict[str, Any]) -> Dict[str, str]:
+    """Extract parent/area identifiers from a StopPoint payload."""
+    fields: Dict[str, str] = {}
+    topmost = sp.get("topMostParentId") or sp.get("topmostParentId")
+    parent = sp.get("parentId") or sp.get("parentID")
+    stop_area_id = sp.get("stopAreaId") or sp.get("stopAreaID")
+    stop_area_code = sp.get("stopAreaCode")
+    station_id = sp.get("stationId") or sp.get("stationID")
+    if topmost:
+        fields["TOPMOST_PARENT_ID"] = str(topmost)
+    if parent:
+        fields["PARENT_ID"] = str(parent)
+    if stop_area_id:
+        fields["STOP_AREA_ID"] = str(stop_area_id)
+    if stop_area_code:
+        fields["STOP_AREA_CODE"] = str(stop_area_code)
+    if station_id:
+        fields["STATION_ID"] = str(station_id)
+    return fields
+
+
 def sort_routes(routes: Set[str]) -> List[str]:
     return sorted(routes, key=lambda x: (len(x), x))
 
@@ -205,6 +333,7 @@ def stoppoints_payload_to_features(
     if active_routes is None:
         active_routes = active_routes_from_geometry()
     features: List[Dict[str, Any]] = []
+    boroughs = load_borough_polygons(BOROUGHS_PATH)
     for sp in extract_stop_points(payload):
         if not is_actual_bus_stop(sp):
             continue
@@ -218,6 +347,8 @@ def stoppoints_payload_to_features(
 
         routes = extract_routes(sp, active_routes=active_routes)
         postcode = additional_prop(sp, "Postcode") or additional_prop(sp, "postcode")
+        parent_fields = extract_parent_fields(sp)
+        borough = find_borough(float(lon), float(lat), boroughs) if boroughs else extract_borough(sp)
 
         props = {
             "NAPTAN_ID": str(sid),
@@ -225,6 +356,9 @@ def stoppoints_payload_to_features(
             "POSTCODE": postcode.strip() if postcode else "",
             "ROUTES": ", ".join(sort_routes(routes)) if routes else "",
         }
+        if borough:
+            props["BOROUGH"] = borough
+        props.update(parent_fields)
         props = {k: v for k, v in props.items() if v}
 
         features.append(
@@ -378,6 +512,7 @@ def to_geojson(
     features: List[Dict[str, Any]] = []
 
     cache = load_postcode_cache(cfg.postcode_cache_path)
+    boroughs = load_borough_polygons(cfg.boroughs_path)
     if active_routes is None:
         active_routes = active_routes_from_geometry()
 
@@ -405,6 +540,8 @@ def to_geojson(
             continue
 
         routes = extract_routes(sp, active_routes=active_routes)
+        parent_fields = extract_parent_fields(sp)
+        borough = find_borough(float(lon), float(lat), boroughs) if boroughs else extract_borough(sp)
 
         props = {
             "NAPTAN_ID": str(sid),
@@ -413,6 +550,9 @@ def to_geojson(
             "ROUTES": ", ".join(sort_routes(routes)) if routes else "",
             "URL": f"https://tfl.gov.uk/bus/stop/{sid}/",
         }
+        if borough:
+            props["BOROUGH"] = borough
+        props.update(parent_fields)
         props = {k: v for k, v in props.items() if v}
 
         features.append(

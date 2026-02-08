@@ -1775,6 +1775,14 @@
                 <div id="advancedBoroughsNote" class="module-note"></div>
               </div>
               <div class="field">
+                <label for="advancedBoroughMode">Borough match</label>
+                <select id="advancedBoroughMode" class="select-field">
+                  <option value="enter">Routes that enter</option>
+                  <option value="within">Routes wholly within</option>
+                </select>
+                <div class="module-note">"Enter" matches any route with at least one stop in the selected boroughs.</div>
+              </div>
+              <div class="field">
                 <label for="advancedVehicles">Vehicles</label>
                 <select id="advancedVehicles" class="select-field" multiple size="4"></select>
                 <button id="advancedVehiclesSelectAll" class="ghost-button compact" type="button">Select all</button>

@@ -211,6 +211,8 @@ const appState = {
 	analysisRouteLoadToken: 0,
 	analysisActive: false,
 	analysisPrevSuppress: null,
+	advancedFiltersActive: false,
+	advancedFiltersPrevSuppress: null,
 	omniRouteLayer: null,
 	omniStopsLayer: null,
 	omniRouteLoadToken: 0,
@@ -5720,6 +5722,36 @@ function setupUI() {
 	if (advancedFiltersModule && window.RouteMapsterAdvancedFilters?.initAdvancedFilters) {
 		window.RouteMapsterAdvancedFilters.initAdvancedFilters(advancedFiltersModule, appState).catch(() => {});
 	}
+
+	document.addEventListener("routeFiltersUpdated", (event) => {
+		const detail = event?.detail || {};
+		const spec = detail.filterSpec && typeof detail.filterSpec === "object" ? detail.filterSpec : {};
+		const isActive = Object.keys(spec).length > 0;
+		if (isActive) {
+			if (!appState.advancedFiltersActive) {
+				appState.advancedFiltersPrevSuppress = appState.suppressNetworkRoutes;
+			}
+			appState.advancedFiltersActive = true;
+			if (!appState.suppressNetworkRoutes) {
+				appState.suppressNetworkRoutes = true;
+			}
+			appState.networkRouteLoadToken += 1;
+			clearNetworkRoutes();
+			updateRouteFilterVisibilityNote();
+			return;
+		}
+
+		if (appState.advancedFiltersActive) {
+			appState.advancedFiltersActive = false;
+			appState.suppressNetworkRoutes = Boolean(appState.advancedFiltersPrevSuppress);
+			appState.advancedFiltersPrevSuppress = null;
+			if (!appState.suppressNetworkRoutes) {
+				appState.networkRouteLoadToken += 1;
+				renderNetworkRoutes(appState.networkRouteLoadToken);
+			}
+			updateRouteFilterVisibilityNote();
+		}
+	});
 
 	const advancedAnalysesModule = document.querySelector('[data-module="advanced-analyses"]');
 	if (advancedAnalysesModule && window.RouteMapsterAdvancedAnalyses?.initAdvancedAnalyses) {

@@ -314,7 +314,22 @@
     spatialReady: false,
     spatialPromise: null,
     boroughOptions: [],
-    boroughsReady: false
+    boroughsReady: false,
+    boroughIndex: null,
+    geometryBoroughCache: new Map()
+  };
+
+  const loadBoroughIndex = async () => {
+    if (state.boroughIndex) {
+      return state.boroughIndex;
+    }
+    const boroughs = await loadBoroughsGeojson();
+    if (!boroughs || !geo.buildBoroughIndex) {
+      return null;
+    }
+    const index = geo.buildBoroughIndex(boroughs);
+    state.boroughIndex = index && index.length > 0 ? index : null;
+    return state.boroughIndex;
   };
 
   const ensureLayerGroup = (appState) => {
@@ -415,6 +430,29 @@
     }
   };
 
+  const showAllFilteredRoutes = async (els, appState) => {
+    if (!els || !appState) {
+      return;
+    }
+    if (els.mapWarning) {
+      els.mapWarning.textContent = "";
+    }
+    const list = state.filteredRows
+      .map((row) => row.route_id_norm)
+      .filter((routeId) => routeId);
+    const sorted = sortRouteIds(list);
+    if (Number.isFinite(SHOW_ALL_CAP) && sorted.length > SHOW_ALL_CAP) {
+      if (els.mapWarning) {
+        els.mapWarning.textContent = `Showing first ${SHOW_ALL_CAP} of ${sorted.length} routes. Refine filters for more.`;
+      }
+    }
+    const toShow = Number.isFinite(SHOW_ALL_CAP) ? sorted.slice(0, SHOW_ALL_CAP) : sorted.slice();
+    for (const routeId of toShow) {
+      await showRouteOnMap(appState, routeId);
+    }
+    renderRouteList(state.filteredRows, els);
+  };
+
   const loadSpatialStatsForRows = async (rows) => {
     const api = window.RouteMapsterAPI;
     if (!api || typeof api.loadRouteSpatialStats !== "function") {
@@ -467,6 +505,105 @@
         api.setLoadingModalVisible(false);
       }
     }
+  };
+
+  const computeRouteGeometryCoverage = async (routeId, boroughIndex) => {
+    if (!routeId) {
+      return null;
+    }
+    if (state.geometryBoroughCache.has(routeId)) {
+      return state.geometryBoroughCache.get(routeId);
+    }
+    const api = window.RouteMapsterAPI;
+    if (!api || typeof api.loadRouteGeometry !== "function" || !geo.findBoroughForPoint) {
+      state.geometryBoroughCache.set(routeId, null);
+      return null;
+    }
+    const segments = await api.loadRouteGeometry(routeId);
+    if (!Array.isArray(segments) || segments.length === 0) {
+      state.geometryBoroughCache.set(routeId, null);
+      return null;
+    }
+    const tokens = new Set();
+    let hasOutside = false;
+    segments.forEach((segment) => {
+      if (!Array.isArray(segment)) {
+        return;
+      }
+      segment.forEach((point) => {
+        if (!Array.isArray(point) || point.length < 2) {
+          return;
+        }
+        const lat = Number(point[0]);
+        const lon = Number(point[1]);
+        if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+          return;
+        }
+        const borough = geo.findBoroughForPoint(lon, lat, boroughIndex || []);
+        if (borough) {
+          const token = normaliseBoroughToken(borough);
+          if (token) {
+            tokens.add(token);
+          }
+        } else {
+          hasOutside = true;
+        }
+      });
+    });
+    const coverage = {
+      tokens: Array.from(tokens),
+      hasOutside
+    };
+    state.geometryBoroughCache.set(routeId, coverage);
+    return coverage;
+  };
+
+  const computeRoutesWhollyWithin = async (rows, boroughSet) => {
+    if (!boroughSet || boroughSet.size === 0) {
+      return null;
+    }
+    const boroughIndex = await loadBoroughIndex();
+    if (!boroughIndex || boroughIndex.length === 0) {
+      return null;
+    }
+    const api = window.RouteMapsterAPI;
+    if (!api || typeof api.loadRouteGeometry !== "function") {
+      return null;
+    }
+    if (typeof api.setLoadingModalVisible === "function") {
+      api.setLoadingModalVisible(true);
+    }
+    const routeIds = rows
+      .map((row) => row?.route_id_norm)
+      .filter((routeId) => routeId);
+    const allowed = new Set();
+    const concurrency = 6;
+    let index = 0;
+    const worker = async () => {
+      while (index < routeIds.length) {
+        const routeId = routeIds[index];
+        index += 1;
+        const coverage = await computeRouteGeometryCoverage(routeId, boroughIndex);
+        if (!coverage || coverage.hasOutside) {
+          continue;
+        }
+        if (!Array.isArray(coverage.tokens) || coverage.tokens.length === 0) {
+          continue;
+        }
+        const allInside = coverage.tokens.every((token) => boroughSet.has(String(token).toLowerCase()));
+        if (allInside) {
+          allowed.add(routeId);
+        }
+      }
+    };
+    try {
+      await Promise.all(Array.from({ length: concurrency }, () => worker()));
+    } finally {
+      if (typeof api.setLoadingModalVisible === "function") {
+        api.setLoadingModalVisible(false);
+      }
+    }
+    return allowed;
   };
 
   const ensureSpatialMetrics = async (els, appState) => {
@@ -542,6 +679,9 @@
       : undefined;
 
     const extreme = String(els.extremeSelect?.value || "").trim().toLowerCase();
+    const boroughs = state.boroughsReady ? getSelectedValues(els.boroughs) : [];
+    const boroughModeRaw = String(els.boroughMode?.value || "enter").trim().toLowerCase();
+    const boroughMode = boroughModeRaw === "within" ? "within" : "enter";
 
     return {
       route_ids: routeIds.length > 0 ? routeIds : undefined,
@@ -549,7 +689,8 @@
       route_types: getSelectedValues(els.routeTypes),
       operators: getSelectedValues(els.operators),
       garages: getSelectedValues(els.garages),
-      boroughs: state.boroughsReady ? getSelectedValues(els.boroughs) : undefined,
+      boroughs: boroughs.length > 0 ? boroughs : undefined,
+      borough_mode: boroughs.length > 0 ? boroughMode : undefined,
       vehicle_types: getSelectedValues(els.vehicles),
       freq: Object.keys(freq).length > 0 ? freq : undefined,
       flags: Object.keys(flags).length > 0 ? flags : undefined,
@@ -589,6 +730,15 @@
       setMulti(els.boroughs, normalized.boroughs || []);
     } else {
       setMulti(els.boroughs, []);
+    }
+    if (els.boroughMode) {
+      const mode = normalized.borough_mode || "enter";
+      if (Array.from(els.boroughMode.options).some((option) => option.value === mode)) {
+        els.boroughMode.value = mode;
+      } else {
+        els.boroughMode.value = "enter";
+      }
+      els.boroughMode.disabled = !state.boroughsReady;
     }
     setMulti(els.vehicles, normalized.vehicle_types || []);
 
@@ -800,9 +950,13 @@
     });
   };
 
-  const applyFilters = (appState, els) => {
-    const filterSpec = buildFilterSpecFromUI(els);
+  const applyFilters = (appState, els, options = {}) => {
+    const filterSpec = options.filterSpec || buildFilterSpecFromUI(els);
     const normalizedSpec = window.RouteMapsterQueryEngine.normalizeFilterSpec(filterSpec);
+    const applySpec = options.applySpec
+      ? window.RouteMapsterQueryEngine.normalizeFilterSpec(options.applySpec)
+      : normalizedSpec;
+    const baseRows = Array.isArray(options.baseRows) ? options.baseRows : state.rows;
     const isActive = hasActiveFilters(normalizedSpec);
     if (!isActive) {
       state.filteredRows = [];
@@ -822,7 +976,7 @@
       document.dispatchEvent(new CustomEvent("routeFiltersUpdated", { detail: { rows: [], filterSpec: {} } }));
       return;
     }
-    const filtered = window.RouteMapsterQueryEngine.applyFilters(state.rows, normalizedSpec);
+    const filtered = window.RouteMapsterQueryEngine.applyFilters(baseRows, applySpec);
     const derived = window.RouteMapsterQueryEngine.computeDerivedFields(filtered);
     state.filteredRows = derived;
     state.filterSpec = normalizedSpec;
@@ -850,10 +1004,29 @@
     }
     const spec = buildFilterSpecFromUI(els);
     const normalized = engine.normalizeFilterSpec(spec);
+    let baseRows = null;
+    let applySpec = spec;
+    if (normalized.borough_mode === "within" && Array.isArray(normalized.boroughs) && normalized.boroughs.length > 0) {
+      const boroughSet = new Set(normalized.boroughs.map((token) => String(token).toLowerCase()));
+      const allowed = await computeRoutesWhollyWithin(state.rows, boroughSet);
+      if (allowed instanceof Set) {
+        baseRows = state.rows.filter((row) => row?.route_id_norm && allowed.has(row.route_id_norm));
+        applySpec = {
+          ...spec,
+          boroughs: undefined,
+          borough_mode: undefined
+        };
+      } else {
+        baseRows = null;
+      }
+    }
     if (normalized.extreme && !state.spatialReady) {
       await ensureSpatialMetrics(els, appState);
     }
-    applyFilters(appState, els);
+    applyFilters(appState, els, { baseRows, filterSpec: spec, applySpec });
+    if (hasActiveFilters(normalized)) {
+      await showAllFilteredRoutes(els, appState);
+    }
   };
 
   const populateSelects = (rows, els) => {
@@ -883,6 +1056,9 @@
         els.boroughs.innerHTML = "";
       }
       els.boroughs.disabled = !state.boroughsReady;
+    }
+    if (els.boroughMode) {
+      els.boroughMode.disabled = !state.boroughsReady;
     }
     if (els.boroughsSelectAll) {
       els.boroughsSelectAll.disabled = !state.boroughsReady;
@@ -924,6 +1100,7 @@
       garages: container.querySelector("#advancedGarages"),
       garagesSelectAll: container.querySelector("#advancedGaragesSelectAll"),
       boroughs: container.querySelector("#advancedBoroughs"),
+      boroughMode: container.querySelector("#advancedBoroughMode"),
       boroughsSelectAll: container.querySelector("#advancedBoroughsSelectAll"),
       boroughNote: container.querySelector("#advancedBoroughsNote"),
       vehicles: container.querySelector("#advancedVehicles"),
@@ -1013,21 +1190,7 @@
 
     if (els.showAllOnMap) {
       els.showAllOnMap.addEventListener("click", async () => {
-        if (els.mapWarning) {
-          els.mapWarning.textContent = "";
-        }
-        const list = state.filteredRows.map((row) => row.route_id_norm);
-        const sorted = sortRouteIds(list);
-        if (Number.isFinite(SHOW_ALL_CAP) && sorted.length > SHOW_ALL_CAP) {
-          if (els.mapWarning) {
-            els.mapWarning.textContent = `Showing first ${SHOW_ALL_CAP} of ${sorted.length} routes. Refine filters for more.`;
-          }
-        }
-        const toShow = Number.isFinite(SHOW_ALL_CAP) ? sorted.slice(0, SHOW_ALL_CAP) : sorted.slice();
-        for (const routeId of toShow) {
-          await showRouteOnMap(appState, routeId);
-        }
-        renderRouteList(state.filteredRows, els);
+        await showAllFilteredRoutes(els, appState);
       });
     }
 
