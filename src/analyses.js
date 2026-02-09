@@ -473,6 +473,9 @@
           termini: 0.2,
           number_series: 0.1
         };
+        const MIN_PAIR_CONFIDENCE = 0.2;
+        const ATTACH_MIN_SPATIAL_SCORE = 0.25;
+        const ATTACH_MIN_LENGTH_RATIO = 0.5;
 
         const list = Array.isArray(rows) ? rows : [];
         if (list.length === 0) {
@@ -631,12 +634,45 @@
           return 0;
         };
 
-        const spatialLinkStrong = (a, b) => {
+        const lengthRatio = (a, b) => {
+          const lenA = a?.length_miles;
+          const lenB = b?.length_miles;
+          if (!Number.isFinite(lenA) || !Number.isFinite(lenB) || lenA <= 0 || lenB <= 0) {
+            return null;
+          }
+          const minLen = Math.min(lenA, lenB);
+          const maxLen = Math.max(lenA, lenB);
+          return maxLen > 0 ? minLen / maxLen : null;
+        };
+
+        const getSpatialScores = (a, b) => {
           const endpointScore = endpointSimilarity(a, b);
           const overlapScore = bboxOverlapScore(a, b);
-          const spatialScore = endpointScore + overlapScore;
-          return endpointScore >= 0.4 || overlapScore >= 0.4 || spatialScore >= 0.55;
+          return {
+            endpointScore,
+            overlapScore,
+            spatialScore: endpointScore + overlapScore
+          };
         };
+
+        const isModerateSpatial = (scores) => {
+          if (!scores) {
+            return false;
+          }
+          return scores.endpointScore >= 0.2
+            || scores.overlapScore >= 0.25
+            || scores.spatialScore >= 0.25;
+        };
+
+        const spatialLinkStrong = (a, b) => {
+          const scores = getSpatialScores(a, b);
+          if (!scores) {
+            return false;
+          }
+          return scores.endpointScore >= 0.4 || scores.overlapScore >= 0.4 || scores.spatialScore >= 0.55;
+        };
+
+        const isSpecialPrefix = (parsed) => parsed?.prefixType === "other" || parsed?.prefixType === "superloop";
 
         const numericSimilarity = (a, b) => {
           if (!Number.isFinite(a.number) || !Number.isFinite(b.number)) {
@@ -791,6 +827,10 @@
             const strongSpatial = endpointScore >= 0.4 || overlapScore >= 0.4 || spatialScore >= 0.55;
             const allowNightExact = (a.parsed.prefixType === "night" && b.parsed.prefixType === "base")
               || (a.parsed.prefixType === "base" && b.parsed.prefixType === "night");
+            const specialPrefixPair = isSpecialPrefix(a.parsed) || isSpecialPrefix(b.parsed);
+            const specialPrefixAllowed = endpointScore >= 0.4
+              || (overlapScore >= 0.4 && endpointScore >= 0.2)
+              || spatialScore >= 0.7;
             const suffixKey = Number.isFinite(a.parsed.suffix2) ? String(a.parsed.suffix2).padStart(2, "0") : "";
             const seriesCount = suffixKey ? suffixSeriesCounts.get(suffixKey) || 0 : 0;
             const seriesStats = suffixKey ? suffixSeriesStats.get(suffixKey) : null;
@@ -807,6 +847,7 @@
               && Number.isFinite(a.parsed.suffix2)
               && Number.isFinite(b.parsed.suffix2)
               && a.parsed.suffix2 === b.parsed.suffix2;
+            const crossMagnitudeSuffixOnly = crossMagnitude && suffixOnly;
             const suffixCohesionOk = seriesStats && seriesStats.cohesion >= 0.2;
             if (
               (numericScore >= 0.4 && hasSpatial) ||
@@ -817,7 +858,10 @@
               if (allowNightExact && !hasSpatial) {
                 continue;
               }
-              if (crossMagnitude && suffixOnly && !strongSpatial) {
+              if (specialPrefixPair && !specialPrefixAllowed) {
+                continue;
+              }
+              if (crossMagnitudeSuffixOnly && !strongSpatial) {
                 continue;
               }
               union(a.routeId, b.routeId);
@@ -834,13 +878,14 @@
           grouped.get(root).set(entry.routeId, entry.row.route_type || "");
         });
 
-        const groups = Array.from(grouped.values())
+        const rawGroups = Array.from(grouped.values())
           .map((routesMap) => {
             const routes = Array.from(routesMap.entries()).map(([id, type]) => ({ id, type }));
             return { routes, count: routes.length };
           })
-          .filter((group) => group.count >= 2)
           .sort((a, b) => b.count - a.count);
+
+        const multiGroups = rawGroups.filter((group) => group.count >= 2);
 
         const hasNonNight = (group) => group.routes.some((route) => {
           const parsed = parseRouteId(route?.id || route?.routeId || route?.route || "");
@@ -851,7 +896,7 @@
           return parsed.prefixType === "night";
         });
 
-        const filteredGroups = groups.filter((group) => {
+        const filteredGroups = multiGroups.filter((group) => {
           if (group.count !== 2) {
             return true;
           }
@@ -867,6 +912,7 @@
         }
 
         const rowById = new Map(enriched.map((entry) => [entry.routeId, entry]));
+        const parsedById = new Map(enriched.map((entry) => [entry.routeId, entry.parsed]));
 
         const splitGroupBySpatial = (group) => {
           if (!group || group.count < 3) {
@@ -925,8 +971,7 @@
             .map((component) => ({
               routes: component.map((routeId) => ({ id: routeId, type: byIdType.get(routeId) || "" })),
               count: component.length
-            }))
-            .filter((component) => component.count >= 2);
+            }));
           if (splitGroups.length <= 1) {
             return [group];
           }
@@ -935,9 +980,123 @@
 
         const spatialGroups = filteredGroups
           .flatMap((group) => splitGroupBySpatial(group))
-          .filter((group) => group && group.count >= 2);
+          .filter((group) => group);
 
-        const groupsWithMetrics = spatialGroups.map((group) => {
+        const orphanGroups = rawGroups.filter((group) => group.count === 1);
+        const candidateGroups = [...spatialGroups, ...orphanGroups];
+        const coreGroups = candidateGroups
+          .filter((group) => group && group.count >= 2)
+          .map((group) => ({
+            ...group,
+            routes: Array.isArray(group.routes) ? group.routes.slice() : [],
+            count: group.count
+          }));
+        const orphanRoutes = candidateGroups.filter((group) => group && group.count === 1);
+
+        const isSeriesCandidate = (parsed) => Number.isFinite(parsed?.suffix2)
+          && parsed.prefixType !== "other"
+          && parsed.prefixType !== "superloop";
+        const seriesKeyFor = (parsed) => (isSeriesCandidate(parsed) ? String(parsed.suffix2).padStart(2, "0") : "");
+
+        const coreSeries = coreGroups.map((group) => {
+          const seriesKeys = new Set();
+          group.routes.forEach((route) => {
+            const routeId = String(route?.id || route?.routeId || route?.route || "").trim().toUpperCase();
+            if (!routeId) {
+              return;
+            }
+            const parsed = parsedById.get(routeId);
+            const key = seriesKeyFor(parsed);
+            if (key) {
+              seriesKeys.add(key);
+            }
+          });
+          return { group, seriesKeys };
+        });
+
+        orphanRoutes.forEach((orphanGroup) => {
+          const orphanRoute = Array.isArray(orphanGroup.routes) ? orphanGroup.routes[0] : null;
+          const orphanId = String(orphanRoute?.id || orphanRoute?.routeId || orphanRoute?.route || "").trim().toUpperCase();
+          if (!orphanId) {
+            return;
+          }
+          const orphanParsed = parsedById.get(orphanId);
+          const seriesKey = seriesKeyFor(orphanParsed);
+          if (!seriesKey) {
+            return;
+          }
+          const orphanEntry = rowById.get(orphanId);
+          if (!orphanEntry) {
+            return;
+          }
+          let bestGroup = null;
+          let bestScore = 0;
+          coreSeries.forEach(({ group, seriesKeys }) => {
+            if (!seriesKeys.has(seriesKey)) {
+              return;
+            }
+            let maxScore = 0;
+            group.routes.forEach((route) => {
+              const routeId = String(route?.id || route?.routeId || route?.route || "").trim().toUpperCase();
+              if (!routeId || routeId === orphanId) {
+                return;
+              }
+              const entry = rowById.get(routeId);
+              if (!entry) {
+                return;
+              }
+              const candidateParsed = parsedById.get(routeId);
+              const scores = getSpatialScores(orphanEntry.row, entry.row);
+              if (!isModerateSpatial(scores)) {
+                return;
+              }
+              const ratio = lengthRatio(orphanEntry.row, entry.row);
+              if (Number.isFinite(ratio) && ratio < ATTACH_MIN_LENGTH_RATIO) {
+                return;
+              }
+              const specialPrefixPair = isSpecialPrefix(orphanParsed) || isSpecialPrefix(candidateParsed);
+              const specialPrefixAllowed = scores.endpointScore >= 0.4
+                || (scores.overlapScore >= 0.4 && scores.endpointScore >= 0.2)
+                || scores.spatialScore >= 0.7;
+              if (specialPrefixPair && !specialPrefixAllowed) {
+                return;
+              }
+              const crossMagnitude = (orphanParsed?.number >= 100) !== (candidateParsed?.number >= 100);
+              const suffixOnly = orphanParsed?.number !== candidateParsed?.number
+                && Number.isFinite(orphanParsed?.suffix2)
+                && Number.isFinite(candidateParsed?.suffix2)
+                && orphanParsed?.suffix2 === candidateParsed?.suffix2;
+              if (crossMagnitude && suffixOnly && scores.endpointScore < 0.2 && scores.spatialScore < 0.55) {
+                return;
+              }
+              if (scores.spatialScore > maxScore) {
+                maxScore = scores.spatialScore;
+              }
+            });
+            if (maxScore > bestScore) {
+              bestScore = maxScore;
+              bestGroup = group;
+            }
+          });
+          if (bestGroup && bestScore >= ATTACH_MIN_SPATIAL_SCORE) {
+            bestGroup.routes.push({ id: orphanId, type: orphanRoute?.type || "" });
+            bestGroup.count = bestGroup.routes.length;
+          }
+        });
+
+        const attachedGroups = coreGroups
+          .filter((group) => group && group.count >= 2)
+          .sort((a, b) => b.count - a.count);
+
+        if (attachedGroups.length === 0) {
+          return {
+            type: "route-pills",
+            groups: [],
+            emptyMessage: "No route families found with the current heuristic."
+          };
+        }
+
+        const groupsWithMetrics = attachedGroups.map((group) => {
           const routeIds = group.routes
             .map((route) => String(route?.id || route?.routeId || route?.route || "").trim().toUpperCase())
             .filter(Boolean);
@@ -1018,9 +1177,25 @@
           };
         });
 
+        const filteredByConfidence = groupsWithMetrics.filter((group) => {
+          if (group.count > 2) {
+            return true;
+          }
+          const value = Number.isFinite(group.confidence) ? group.confidence : 0;
+          return value >= MIN_PAIR_CONFIDENCE;
+        });
+
+        if (filteredByConfidence.length === 0) {
+          return {
+            type: "route-pills",
+            groups: [],
+            emptyMessage: "No route families found with the current heuristic."
+          };
+        }
+
         return {
           type: "route-pills",
-          groups: groupsWithMetrics
+          groups: filteredByConfidence
         };
       }
     },

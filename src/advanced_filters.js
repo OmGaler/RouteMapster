@@ -88,6 +88,17 @@
     return Number.isFinite(num) ? num : null;
   };
 
+  const parseSeriesInput = (input) => {
+    const num = parseNumberInput(input);
+    if (!Number.isFinite(num) || !Number.isInteger(num)) {
+      return null;
+    }
+    if (num < 0 || num > 99) {
+      return null;
+    }
+    return num;
+  };
+
   const sortRouteIds = (ids) => {
     const api = window.RouteMapsterAPI;
     if (api && typeof api.sortRouteIds === "function") {
@@ -308,7 +319,6 @@
     mapLayerGroup: null,
     routeLayers: new Map(),
     visibleRoutes: new Set(),
-    lastHash: "",
     elements: null,
     moduleOpen: false,
     spatialReady: false,
@@ -659,6 +669,8 @@
     if (els.routePrefix?.value && els.routePrefix.value !== "any") {
       prefixValue = els.routePrefix.value;
     }
+    const seriesValue = parseSeriesInput(els.routeSeries);
+    const includePrefixRoutes = Boolean(els.seriesIncludePrefixes?.checked);
 
     const freq = {};
     const band = String(els.frequencyBand?.value || "peak_am");
@@ -686,6 +698,8 @@
     return {
       route_ids: routeIds.length > 0 ? routeIds : undefined,
       route_prefix: prefixValue ? prefixValue.toUpperCase() : undefined,
+      route_series: seriesValue !== null ? seriesValue : undefined,
+      include_prefix_routes: seriesValue !== null ? includePrefixRoutes : undefined,
       route_types: getSelectedValues(els.routeTypes),
       operators: getSelectedValues(els.operators),
       garages: getSelectedValues(els.garages),
@@ -711,6 +725,12 @@
       } else {
         els.routePrefix.value = "any";
       }
+    }
+    if (els.routeSeries) {
+      els.routeSeries.value = Number.isFinite(normalized.route_series) ? normalized.route_series : "";
+    }
+    if (els.seriesIncludePrefixes) {
+      els.seriesIncludePrefixes.checked = normalized.include_prefix_routes === true;
     }
 
     const setMulti = (select, values) => {
@@ -782,27 +802,30 @@
     }
   };
 
-  const getHashSpec = () => {
+  const clearFilterHash = () => {
     const hash = window.location.hash.replace(/^#/, "");
-    if (!hash) {
-      return {};
+    if (!hash || !hash.includes(FILTER_HASH_KEY)) {
+      return;
     }
     const params = new URLSearchParams(hash);
     if (!params.has(FILTER_HASH_KEY)) {
-      return {};
+      return;
     }
-    const value = params.get(FILTER_HASH_KEY);
-    if (!value) {
-      return {};
+    params.delete(FILTER_HASH_KEY);
+    const nextHash = params.toString();
+    if (nextHash === hash) {
+      return;
     }
-    const parsed = window.RouteMapsterQueryEngine.parseFilterSpec(value);
-    if (parsed?.flags && Object.prototype.hasOwnProperty.call(parsed.flags, "high_frequency_any")) {
-      delete parsed.flags.high_frequency_any;
-      if (Object.keys(parsed.flags).length === 0) {
-        delete parsed.flags;
-      }
+    if (nextHash) {
+      history.replaceState(null, "", `#${nextHash}`);
+    } else {
+      history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
     }
-    return parsed;
+  };
+
+  const getHashSpec = () => {
+    clearFilterHash();
+    return {};
   };
 
   const hasActiveFilters = (spec) => {
@@ -812,6 +835,9 @@
       return true;
     }
     if (normalized.route_prefix) {
+      return true;
+    }
+    if (Number.isFinite(normalized.route_series)) {
       return true;
     }
     if (hasList(normalized.route_types) || hasList(normalized.operators) || hasList(normalized.garages) || hasList(normalized.boroughs) || hasList(normalized.vehicle_types)) {
@@ -860,20 +886,8 @@
     }
   };
 
-  const updateHash = (spec) => {
-    const params = new URLSearchParams(window.location.hash.replace(/^#/, ""));
-    if (!hasActiveFilters(spec)) {
-      params.delete(FILTER_HASH_KEY);
-    } else {
-      const encoded = window.RouteMapsterQueryEngine.serializeFilterSpec(spec);
-      params.set(FILTER_HASH_KEY, encoded);
-    }
-    const nextHash = params.toString();
-    if (nextHash === state.lastHash) {
-      return;
-    }
-    state.lastHash = nextHash;
-    history.replaceState(null, "", `#${nextHash}`);
+  const updateHash = () => {
+    clearFilterHash();
   };
 
   const renderRouteList = (rows, els) => {
@@ -1093,6 +1107,8 @@
     const els = {
       routeSearch: container.querySelector("#advancedRouteSearch"),
       routePrefix: container.querySelector("#advancedRoutePrefix"),
+      routeSeries: container.querySelector("#advancedRouteSeries"),
+      seriesIncludePrefixes: container.querySelector("#advancedSeriesIncludePrefixes"),
       routeTypes: container.querySelector("#advancedRouteTypes"),
       routeTypesSelectAll: container.querySelector("#advancedRouteTypesSelectAll"),
       operators: container.querySelector("#advancedOperators"),
@@ -1159,6 +1175,30 @@
         option.selected = true;
       });
     };
+
+    const handleEnterApply = (event) => {
+      if (event.key !== "Enter" || event.isComposing) {
+        return;
+      }
+      event.preventDefault();
+      applyFromUI(appState, els).catch(() => {});
+    };
+
+    const bindEnterApply = (input) => {
+      if (!input) {
+        return;
+      }
+      input.addEventListener("keydown", handleEnterApply);
+    };
+
+    [
+      els.routeSearch,
+      els.routeSeries,
+      els.frequencyMin,
+      els.frequencyMax,
+      els.lengthMin,
+      els.lengthMax
+    ].forEach(bindEnterApply);
 
     if (els.routeTypesSelectAll) {
       els.routeTypesSelectAll.addEventListener("click", () => selectAll(els.routeTypes));
@@ -1276,12 +1316,6 @@
       if (bounds) {
         appState.map.fitBounds(bounds.pad(0.1));
       }
-    });
-
-    window.addEventListener("hashchange", () => {
-      const spec = getHashSpec();
-      applyFilterSpecToUI(spec, els);
-      applyFromUI(appState, els).catch(() => {});
     });
 
     if (hasHashSpec) {

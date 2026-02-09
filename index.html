@@ -1857,6 +1857,15 @@
                 <div class="module-note">Use spaces or commas to add multiple routes.</div>
               </div>
               <div class="field">
+                <label for="advancedRouteSeries">Route number series (00-99)</label>
+                <input id="advancedRouteSeries" type="number" min="0" max="99" step="1" placeholder="e.g. 40" />
+                <label class="toggle">
+                  <span>Include prefix routes (W40, SL7)</span>
+                  <input type="checkbox" id="advancedSeriesIncludePrefixes" />
+                </label>
+                <div class="module-note">Matches 40, 140, 240... plus night routes (N140). Prefix routes optional.</div>
+              </div>
+              <div class="field">
                 <label for="advancedRoutePrefix">Route prefix</label>
                 <div class="field-row">
                   <select id="advancedRoutePrefix" class="select-field"></select>
@@ -1961,13 +1970,6 @@
           </summary>
           <div class="module-body">
             <div class="module-note">Diagnostics and summaries for route performance.</div>
-            <div class="module-section">
-              <div class="section-title">Route families</div>
-              <label class="toggle">
-                <span>Rank 00-99 series</span>
-                <input type="checkbox" id="showFamilySeries" />
-              </label>
-            </div>
             <div class="module-section">
               <div class="section-title">Analyze</div>
               <div class="field">

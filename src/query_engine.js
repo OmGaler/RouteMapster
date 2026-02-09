@@ -112,6 +112,55 @@
   const normaliseToken = (value) => String(value || "").trim();
   const normaliseLower = (value) => normaliseToken(value).toLowerCase();
   const normaliseEndpointKey = (value) => normaliseToken(value).replace(/\s+/g, "");
+  const parseRouteIdParts = (value) => {
+    const token = normaliseToken(value).toUpperCase().replace(/[^A-Z0-9]/g, "");
+    if (!token) {
+      return null;
+    }
+    const match = token.match(/^([A-Z]*)(\d+)([A-Z]*)$/);
+    if (!match) {
+      return null;
+    }
+    const num = Number(match[2]);
+    if (!Number.isFinite(num)) {
+      return null;
+    }
+    return { prefix: match[1] || "", number: num, suffix: match[3] || "" };
+  };
+
+  const normaliseSeriesValue = (value) => {
+    if (value === null || value === undefined || value === "") {
+      return undefined;
+    }
+    const num = Number(value);
+    if (!Number.isFinite(num) || !Number.isInteger(num)) {
+      return undefined;
+    }
+    if (num < 0 || num > 99) {
+      return undefined;
+    }
+    return num;
+  };
+
+  const routeMatchesSeries = (routeId, seriesValue, includePrefixes) => {
+    if (!Number.isFinite(seriesValue)) {
+      return true;
+    }
+    const parts = parseRouteIdParts(routeId);
+    if (!parts) {
+      return false;
+    }
+    if (parts.prefix === "SL") {
+      return false;
+    }
+    if (parts.number % 100 !== seriesValue) {
+      return false;
+    }
+    if (!includePrefixes && parts.prefix && parts.prefix !== "N") {
+      return false;
+    }
+    return true;
+  };
 
   const resolveField = (row, keys) => {
     for (const key of keys) {
@@ -273,10 +322,16 @@
       : undefined;
     const boroughModeRaw = spec.borough_mode || spec.boroughMode || "";
     const boroughMode = String(boroughModeRaw || "").trim().toLowerCase() === "within" ? "within" : undefined;
+    const seriesValue = normaliseSeriesValue(spec.route_series ?? spec.routeSeries ?? spec.series);
+    const includePrefixRoutes = seriesValue !== undefined
+      ? Boolean(spec.include_prefix_routes ?? spec.includePrefixRoutes)
+      : undefined;
 
     const normalised = {
       route_ids: Array.isArray(spec.route_ids) ? spec.route_ids.map(normaliseToken).filter(Boolean) : undefined,
       route_prefix: spec.route_prefix ? normaliseToken(spec.route_prefix) : undefined,
+      route_series: seriesValue,
+      include_prefix_routes: includePrefixRoutes,
       route_types: Array.isArray(spec.route_types) ? spec.route_types.map(normaliseLower).filter(Boolean) : undefined,
       operators: Array.isArray(spec.operators) ? spec.operators.map(normaliseLower).filter(Boolean) : undefined,
       garages: Array.isArray(spec.garages) ? spec.garages.map(normaliseLower).filter(Boolean) : undefined,
@@ -298,6 +353,8 @@
       ? new Set(spec.route_ids.map((value) => value.toUpperCase()))
       : null;
     const routePrefix = spec.route_prefix ? spec.route_prefix.toUpperCase() : null;
+    const seriesValue = Number.isFinite(spec.route_series) ? spec.route_series : null;
+    const includePrefixRoutes = spec.include_prefix_routes === true;
     const routeTypeSet = spec.route_types && spec.route_types.length > 0
       ? new Set(spec.route_types)
       : null;
@@ -323,6 +380,9 @@
         return false;
       }
       if (routePrefix && !row.route_id_norm.startsWith(routePrefix)) {
+        return false;
+      }
+      if (!routeMatchesSeries(row.route_id_norm, seriesValue, includePrefixRoutes)) {
         return false;
       }
       if (routeTypeSet && !routeTypeSet.has(String(row.route_type || "").toLowerCase())) {
@@ -453,6 +513,12 @@
     }
     if (spec.route_prefix) {
       cleaned.route_prefix = spec.route_prefix;
+    }
+    if (Number.isFinite(spec.route_series)) {
+      cleaned.route_series = spec.route_series;
+      if (spec.include_prefix_routes === true) {
+        cleaned.include_prefix_routes = true;
+      }
     }
     if (Array.isArray(spec.route_types) && spec.route_types.length > 0) {
       cleaned.route_types = spec.route_types;

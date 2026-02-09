@@ -6016,34 +6016,13 @@ function setupUI() {
 	});
 
 	const showRouteFamilies = document.getElementById("showRouteFamilies");
-	const showFamilySeries = document.getElementById("showFamilySeries");
 	if (showRouteFamilies) {
 		showRouteFamilies.addEventListener("change", () => {
 			if (showRouteFamilies.checked) {
-				if (showFamilySeries) {
-					showFamilySeries.checked = false;
-				}
 				runAdvancedAnalysisById("route-families");
 				return;
 			}
-			if (!showFamilySeries || !showFamilySeries.checked) {
-				clearAdvancedAnalysisOutput();
-			}
-		});
-	}
-
-	if (showFamilySeries) {
-		showFamilySeries.addEventListener("change", () => {
-			if (showFamilySeries.checked) {
-				if (showRouteFamilies) {
-					showRouteFamilies.checked = false;
-				}
-				runAdvancedAnalysisById("route-family-series");
-				return;
-			}
-			if (!showRouteFamilies || !showRouteFamilies.checked) {
-				clearAdvancedAnalysisOutput();
-			}
+			clearAdvancedAnalysisOutput();
 		});
 	}
 
@@ -6089,8 +6068,7 @@ function setupUI() {
 			"showRegularRoutes",
 			"showNightRoutes",
 			"showSchoolRoutes",
-			"showRouteFamilies",
-			"showFamilySeries"
+			"showRouteFamilies"
 		];
 		ids.forEach((id) => {
 			const checkbox = document.getElementById(id);

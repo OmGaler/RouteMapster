@@ -1,3 +1,14 @@
+route families need fixing:
+
+17,217,317, 617
+43, 243, 143, 643
+
+
+218 remove from 18
+
+n253
+## legends / explainers
+
 ## add most north/e/w/s to advanced filters
 
 
@@ -11,8 +22,6 @@
 # route families
 # garages
 
-reload garages.csv from londonbusroutes.net every so often
-reload route geometries from tfl everyso often..
 
 # combined frequencies along corridors
 # postcode analysis
@@ -20,6 +29,7 @@ reload route geometries from tfl everyso often..
 # bus stop centrality
 # bus route similarity
 
+borough map -https://gis-tfl.opendata.arcgis.com/datasets/london-boroughs-1/
 
 https://tfl.gov.uk/corporate/terms-and-conditions/transport-data-service
 

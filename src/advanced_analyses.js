@@ -217,6 +217,8 @@
     }
     const groupOverlap = pairCount > 0 ? overlapSum / pairCount : null;
     const weights = group.weights || {};
+    const analysisId = rowEl.dataset.analysisId || "";
+    const allowGeometryConfidence = analysisId !== "route-families";
 
     const updateMetric = (container, key, value) => {
       if (!container) {
@@ -229,7 +231,7 @@
     };
 
     const details = rowEl.querySelector(".analysis-pill-details");
-    if (details) {
+    if (details && allowGeometryConfidence) {
       updateMetric(details, "overlap", groupOverlap);
       const metrics = {
         overlap: groupOverlap,
@@ -570,7 +572,8 @@
     const baseRows = await engine.loadRouteSummary();
     state.allRows = engine.computeDerivedFields(baseRows);
 
-    const analysisOptions = analyses.getAnalyses();
+    const analysisOptions = analyses.getAnalyses()
+      .filter((analysis) => analysis.id !== "route-family-series");
     if (els.analysisSelect) {
       els.analysisSelect.innerHTML = analysisOptions
         .map((analysis) => `<option value="${escapeHtml(analysis.id)}">${escapeHtml(analysis.label)}</option>`)
