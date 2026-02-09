@@ -609,11 +609,14 @@ function getRouteMetaFromRow(row) {
 	const operator = Array.isArray(row.operator_names_arr) && row.operator_names_arr.length > 0
 		? row.operator_names_arr[0]
 		: row.operator_names || "";
-	const garage = Array.isArray(row.garage_codes_arr) && row.garage_codes_arr.length > 0
-		? row.garage_codes_arr[0]
-		: Array.isArray(row.garage_names_arr) && row.garage_names_arr.length > 0
-			? row.garage_names_arr[0]
-			: row.garage_codes || row.garage_names || "";
+	const garageCodes = Array.isArray(row.garage_codes_arr) ? row.garage_codes_arr.filter(Boolean) : [];
+	const garageNames = Array.isArray(row.garage_names_arr) ? row.garage_names_arr.filter(Boolean) : [];
+	const garageList = garageCodes.length > 0
+		? garageCodes
+		: garageNames.length > 0
+			? garageNames
+			: [row.garage_codes || row.garage_names || ""].filter(Boolean);
+	const garage = garageList.length > 0 ? garageList.join(", ") : "";
 	const routeType = row.route_type || "";
 	const lengthMiles = Number.isFinite(row.length_miles) ? row.length_miles : null;
 	const freqs = {
@@ -3540,12 +3543,35 @@ async function loadNetworkRouteSets() {
 	if (appState.networkRouteSets) {
 		return appState.networkRouteSets;
 	}
+	const summaryRows = await loadRouteSummaryRows();
 	const gj = await loadGaragesGeojson();
 	const regular = new Set();
 	const night = new Set();
 	const school = new Set();
 	const other = new Set();
 	const twentyFour = new Set();
+	if (Array.isArray(summaryRows)) {
+		summaryRows.forEach((row) => {
+			const routeId = String(row?.route_id_norm || row?.route_id || "").trim().toUpperCase();
+			if (!routeId || isExcludedRoute(routeId)) {
+				return;
+			}
+			const type = String(row?.route_type || "").trim().toLowerCase();
+			if (type === "night") {
+				night.add(routeId);
+				return;
+			}
+			if (type === "school") {
+				school.add(routeId);
+				return;
+			}
+			if (type === "twentyfour") {
+				twentyFour.add(routeId);
+				return;
+			}
+			regular.add(routeId);
+		});
+	}
 	if (gj && Array.isArray(gj.features)) {
 		gj.features.forEach((feature) => {
 			const p = feature.properties || {};
@@ -4062,14 +4088,29 @@ async function renderGarageRoutes(loadToken) {
 
 function getSelectedRouteCategories() {
 	const categories = [];
-	if (isRouteTypeEnabled('showRegularRoutes') && appState.activeGarageRoutes?.regular) {
-		categories.push({ type: "regular", color: ROUTE_COLOURS.regular, routes: appState.activeGarageRoutes.regular });
+	const showRegular = isRouteTypeEnabled('showRegularRoutes');
+	const showNight = isRouteTypeEnabled('showNightRoutes');
+	const showSchool = isRouteTypeEnabled('showSchoolRoutes');
+	const regularRoutes = appState.activeGarageRoutes?.regular
+		? new Set(appState.activeGarageRoutes.regular)
+		: null;
+	const nightRoutes = appState.activeGarageRoutes?.night
+		? new Set(appState.activeGarageRoutes.night)
+		: null;
+	const schoolRoutes = appState.activeGarageRoutes?.school
+		? new Set(appState.activeGarageRoutes.school)
+		: null;
+	if (nightRoutes && regularRoutes) {
+		nightRoutes.forEach((routeId) => regularRoutes.delete(routeId));
 	}
-	if (isRouteTypeEnabled('showNightRoutes') && appState.activeGarageRoutes?.night) {
-		categories.push({ type: "night", color: ROUTE_COLOURS.night, routes: appState.activeGarageRoutes.night });
+	if (showRegular && regularRoutes && regularRoutes.size > 0) {
+		categories.push({ type: "regular", color: ROUTE_COLOURS.regular, routes: regularRoutes });
 	}
-	if (isRouteTypeEnabled('showSchoolRoutes') && appState.activeGarageRoutes?.school) {
-		categories.push({ type: "school", color: ROUTE_COLOURS.school, routes: appState.activeGarageRoutes.school });
+	if (showNight && nightRoutes && nightRoutes.size > 0) {
+		categories.push({ type: "night", color: ROUTE_COLOURS.night, routes: nightRoutes });
+	}
+	if (showSchool && schoolRoutes && schoolRoutes.size > 0) {
+		categories.push({ type: "school", color: ROUTE_COLOURS.school, routes: schoolRoutes });
 	}
 	return orderRouteCategories(categories);
 }
@@ -4250,6 +4291,7 @@ async function renderNetworkRoutes(loadToken) {
 							color: resolveRouteColour(category.color),
 							weight: weighted ?? baseWeight,
 							opacity: 0.7,
+							interactive: true,
 							pane: ROUTE_PANE
 						}).addTo(layerGroup);
 						line._routeId = routeId;
@@ -5745,6 +5787,9 @@ function setupUI() {
 			appState.advancedFiltersActive = false;
 			appState.suppressNetworkRoutes = Boolean(appState.advancedFiltersPrevSuppress);
 			appState.advancedFiltersPrevSuppress = null;
+			if (window.RouteMapsterAdvancedFilters?.clearMapHighlights) {
+				window.RouteMapsterAdvancedFilters.clearMapHighlights(appState);
+			}
 			if (!appState.suppressNetworkRoutes) {
 				appState.networkRouteLoadToken += 1;
 				renderNetworkRoutes(appState.networkRouteLoadToken);

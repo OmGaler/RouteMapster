@@ -275,6 +275,7 @@
         const PRIMARY_PRECISION = 3;
         const FALLBACK_PRECISION = 2;
         const MIN_ENDPOINT_DISTANCE_KM = 0.3;
+        const MAX_FALLBACK_SPREAD_KM = 0.4;
 
         const roundCoord = (value, decimals) => {
           if (!Number.isFinite(value)) {
@@ -304,6 +305,25 @@
           const sinLon = Math.sin(dLon / 2);
           const h = sinLat * sinLat + Math.cos(rLat1) * Math.cos(rLat2) * sinLon * sinLon;
           return 2 * 6371 * Math.asin(Math.min(1, Math.sqrt(h)));
+        };
+
+        const maxDistanceWithin = (points) => {
+          if (!Array.isArray(points) || points.length < 2) {
+            return 0;
+          }
+          let max = 0;
+          for (let i = 0; i < points.length; i += 1) {
+            for (let j = i + 1; j < points.length; j += 1) {
+              const dist = distanceKm(points[i], points[j]);
+              if (dist > max) {
+                max = dist;
+              }
+              if (max >= MAX_FALLBACK_SPREAD_KM) {
+                return max;
+              }
+            }
+          }
+          return max;
         };
 
         const isCircularPair = (startLat, startLon, endLat, endLon) => {
@@ -343,6 +363,7 @@
             map.set(key, {
               key,
               routes: new Map(),
+              points: [],
               aLatSum: 0,
               aLonSum: 0,
               bLatSum: 0,
@@ -353,12 +374,13 @@
           const entry = map.get(key);
           if (!entry.routes.has(routeId)) {
             entry.routes.set(routeId, routeType);
+            entry.points.push({ a, b });
+            entry.aLatSum += a[0];
+            entry.aLonSum += a[1];
+            entry.bLatSum += b[0];
+            entry.bLonSum += b[1];
+            entry.count += 1;
           }
-          entry.aLatSum += a[0];
-          entry.aLonSum += a[1];
-          entry.bLatSum += b[0];
-          entry.bLonSum += b[1];
-          entry.count += 1;
         };
 
         const normalisedRows = rows
@@ -424,6 +446,16 @@
         });
 
         const fallbackEntries = Array.from(fallbackGroups.values())
+          .filter((entry) => {
+            const points = entry.points || [];
+            if (points.length < 2) {
+              return false;
+            }
+            const aPoints = points.map((point) => point.a);
+            const bPoints = points.map((point) => point.b);
+            return maxDistanceWithin(aPoints) <= MAX_FALLBACK_SPREAD_KM
+              && maxDistanceWithin(bPoints) <= MAX_FALLBACK_SPREAD_KM;
+          })
           .map(formatGroup)
           .filter((entry) => entry.count >= 2);
 
