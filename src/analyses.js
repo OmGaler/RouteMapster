@@ -631,6 +631,13 @@
           return 0;
         };
 
+        const spatialLinkStrong = (a, b) => {
+          const endpointScore = endpointSimilarity(a, b);
+          const overlapScore = bboxOverlapScore(a, b);
+          const spatialScore = endpointScore + overlapScore;
+          return endpointScore >= 0.4 || overlapScore >= 0.4 || spatialScore >= 0.55;
+        };
+
         const numericSimilarity = (a, b) => {
           if (!Number.isFinite(a.number) || !Number.isFinite(b.number)) {
             return 0;
@@ -778,9 +785,10 @@
             const numericScore = numericSimilarity(a.parsed, b.parsed);
             const endpointScore = endpointSimilarity(a.row, b.row);
             const overlapScore = bboxOverlapScore(a.row, b.row);
-            const score = numericScore + endpointScore + overlapScore;
+            const spatialScore = endpointScore + overlapScore;
+            const score = numericScore + spatialScore;
             const hasSpatial = endpointScore >= 0.2 || overlapScore >= 0.25;
-            const strongSpatial = endpointScore >= 0.4 || overlapScore >= 0.4;
+            const strongSpatial = endpointScore >= 0.4 || overlapScore >= 0.4 || spatialScore >= 0.55;
             const allowNightExact = (a.parsed.prefixType === "night" && b.parsed.prefixType === "base")
               || (a.parsed.prefixType === "base" && b.parsed.prefixType === "night");
             const suffixKey = Number.isFinite(a.parsed.suffix2) ? String(a.parsed.suffix2).padStart(2, "0") : "";
@@ -794,13 +802,22 @@
               && Number.isFinite(a.parsed.suffix2)
               && Number.isFinite(b.parsed.suffix2)
               && a.parsed.suffix2 === b.parsed.suffix2;
+            const crossMagnitude = (a.parsed.number >= 100) !== (b.parsed.number >= 100);
+            const suffixOnly = a.parsed.number !== b.parsed.number
+              && Number.isFinite(a.parsed.suffix2)
+              && Number.isFinite(b.parsed.suffix2)
+              && a.parsed.suffix2 === b.parsed.suffix2;
+            const suffixCohesionOk = seriesStats && seriesStats.cohesion >= 0.2;
             if (
               (numericScore >= 0.4 && hasSpatial) ||
               (strongSpatial && numericScore >= 0.2) ||
               score >= 0.85 ||
-              (sameSuffixSeries && numericScore >= 0.2 && hasSpatial)
+              (sameSuffixSeries && numericScore >= 0.2 && suffixCohesionOk && strongSpatial)
             ) {
               if (allowNightExact && !hasSpatial) {
+                continue;
+              }
+              if (crossMagnitude && suffixOnly && !strongSpatial) {
                 continue;
               }
               union(a.routeId, b.routeId);
@@ -851,7 +868,76 @@
 
         const rowById = new Map(enriched.map((entry) => [entry.routeId, entry]));
 
-        const groupsWithMetrics = filteredGroups.map((group) => {
+        const splitGroupBySpatial = (group) => {
+          if (!group || group.count < 3) {
+            return [group];
+          }
+          const routes = Array.isArray(group.routes) ? group.routes : [];
+          const routeIds = routes
+            .map((route) => String(route?.id || route?.routeId || route?.route || "").trim().toUpperCase())
+            .filter(Boolean);
+          if (routeIds.length < 3) {
+            return [group];
+          }
+          const adjacency = new Map();
+          routeIds.forEach((routeId) => {
+            adjacency.set(routeId, new Set());
+          });
+          for (let i = 0; i < routeIds.length; i += 1) {
+            for (let j = i + 1; j < routeIds.length; j += 1) {
+              const a = rowById.get(routeIds[i]);
+              const b = rowById.get(routeIds[j]);
+              if (!a || !b) {
+                continue;
+              }
+              if (spatialLinkStrong(a.row, b.row)) {
+                adjacency.get(routeIds[i]).add(routeIds[j]);
+                adjacency.get(routeIds[j]).add(routeIds[i]);
+              }
+            }
+          }
+          const visited = new Set();
+          const components = [];
+          routeIds.forEach((routeId) => {
+            if (visited.has(routeId)) {
+              return;
+            }
+            const stack = [routeId];
+            const component = [];
+            visited.add(routeId);
+            while (stack.length) {
+              const current = stack.pop();
+              component.push(current);
+              adjacency.get(current).forEach((neighbor) => {
+                if (!visited.has(neighbor)) {
+                  visited.add(neighbor);
+                  stack.push(neighbor);
+                }
+              });
+            }
+            components.push(component);
+          });
+          const byIdType = new Map(routes.map((route) => {
+            const id = String(route?.id || route?.routeId || route?.route || "").trim().toUpperCase();
+            return [id, route?.type || ""];
+          }));
+          const splitGroups = components
+            .map((component) => ({
+              routes: component.map((routeId) => ({ id: routeId, type: byIdType.get(routeId) || "" })),
+              count: component.length
+            }))
+            .filter((component) => component.count >= 2);
+          if (splitGroups.length <= 1) {
+            return [group];
+          }
+          return splitGroups;
+        };
+
+        const spatialGroups = filteredGroups
+          .flatMap((group) => splitGroupBySpatial(group))
+          .filter((group) => group && group.count >= 2);
+
+        const groupsWithMetrics = spatialGroups.map((group) => {
           const routeIds = group.routes
             .map((route) => String(route?.id || route?.routeId || route?.route || "").trim().toUpperCase())
             .filter(Boolean);
