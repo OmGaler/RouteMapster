@@ -300,10 +300,8 @@
         weightedSum += overnight * 0.05;
         weightTotal += 0.05;
       }
-      const serviceIntensity = weightTotal > 0 ? weightedSum / weightTotal : null;
       return {
         ...row,
-        service_intensity_score: serviceIntensity,
         peakiness_index: Number.isFinite(peakAvg) && Number.isFinite(offpeak) ? peakAvg - offpeak : null,
         has_overnight: Number.isFinite(overnight) ? overnight > 0 : false
       };
@@ -317,6 +315,20 @@
       : spec.length_km && typeof spec.length_km === "object"
         ? spec.length_km
         : undefined;
+    const lengthRankRaw = spec.length_rank && typeof spec.length_rank === "object"
+      ? spec.length_rank
+      : spec.lengthRank && typeof spec.lengthRank === "object"
+        ? spec.lengthRank
+        : undefined;
+    const lengthRankModeRaw = lengthRankRaw?.mode ?? lengthRankRaw?.direction ?? lengthRankRaw?.order;
+    const lengthRankMode = ["shortest", "longest"].includes(String(lengthRankModeRaw || "").toLowerCase())
+      ? String(lengthRankModeRaw).toLowerCase()
+      : undefined;
+    const lengthRankCountRaw = parseNumber(lengthRankRaw?.count ?? lengthRankRaw?.n ?? lengthRankRaw?.limit);
+    const lengthRankCount = Number.isFinite(lengthRankCountRaw) ? Math.round(lengthRankCountRaw) : null;
+    const lengthRank = lengthRankMode && Number.isFinite(lengthRankCount) && lengthRankCount >= 1 && lengthRankCount <= 25
+      ? { mode: lengthRankMode, count: lengthRankCount }
+      : undefined;
     const extreme = spec.extreme && ["north", "south", "east", "west"].includes(String(spec.extreme).toLowerCase())
       ? String(spec.extreme).toLowerCase()
       : undefined;
@@ -341,6 +353,7 @@
       freq: spec.freq && typeof spec.freq === "object" ? spec.freq : undefined,
       flags: spec.flags && typeof spec.flags === "object" ? spec.flags : undefined,
       length_miles: lengthSpec,
+      length_rank: lengthRank,
       extreme
     };
     return normalised;
@@ -498,7 +511,22 @@
         ? Math.max(...values)
         : Math.min(...values);
       const epsilon = 1e-6;
-      return filtered.filter((row) => Number.isFinite(row?.[field]) && Math.abs(row[field] - target) <= epsilon);
+      filtered = filtered.filter((row) => Number.isFinite(row?.[field]) && Math.abs(row[field] - target) <= epsilon);
+    }
+    if (spec.length_rank) {
+      const direction = spec.length_rank.mode === "longest" ? "longest" : "shortest";
+      const limit = Number.isFinite(spec.length_rank.count) ? Math.round(spec.length_rank.count) : 0;
+      if (limit > 0) {
+        const ranked = filtered
+          .filter((row) => Number.isFinite(row.length_miles))
+          .slice()
+          .sort((a, b) => direction === "longest"
+            ? b.length_miles - a.length_miles
+            : a.length_miles - b.length_miles)
+          .slice(0, limit);
+        return ranked;
+      }
+      return [];
     }
     return filtered;
   };
@@ -570,6 +598,13 @@
         ...(Number.isFinite(spec.length_miles.min) ? { min: spec.length_miles.min } : {}),
         ...(Number.isFinite(spec.length_miles.max) ? { max: spec.length_miles.max } : {})
       };
+    }
+    if (spec.length_rank && typeof spec.length_rank === "object") {
+      const mode = spec.length_rank.mode;
+      const count = spec.length_rank.count;
+      if ((mode === "shortest" || mode === "longest") && Number.isFinite(count)) {
+        cleaned.length_rank = { mode, count };
+      }
     }
     if (spec.extreme) {
       cleaned.extreme = spec.extreme;

@@ -150,6 +150,31 @@
       .join("");
   };
 
+  const buildGarageLabels = (row) => {
+    const codes = Array.isArray(row?.garage_codes_arr) ? row.garage_codes_arr : [];
+    const names = Array.isArray(row?.garage_names_arr) ? row.garage_names_arr : [];
+    const max = Math.max(codes.length, names.length);
+    const combined = [];
+    const seen = new Set();
+    for (let i = 0; i < max; i += 1) {
+      const code = codes[i];
+      const name = names[i];
+      let label = "";
+      if (name && code) {
+        label = `${name} (${code})`;
+      } else if (name) {
+        label = name;
+      } else if (code) {
+        label = code;
+      }
+      if (label && !seen.has(label)) {
+        seen.add(label);
+        combined.push(label);
+      }
+    }
+    return combined;
+  };
+
   const buildGarageOptions = (rows) => {
     const codeToName = new Map();
     const nameOnly = new Set();
@@ -361,7 +386,8 @@
   const buildRoutePopupHtml = (row) => {
     const routeId = row.route_id_norm || row.route_id || "";
     const operator = cleanMetaValue(row.operator_names_arr?.[0] || "");
-    const garage = cleanMetaValue(row.garage_codes_arr?.[0] || row.garage_names_arr?.[0] || "");
+    const garageLabels = buildGarageLabels(row);
+    const garage = cleanMetaValue(garageLabels[0] || "");
     const routeType = cleanMetaValue(row.route_type || "");
     const meta = [routeType, operator, garage].filter(Boolean).join(" · ");
     return `
@@ -689,6 +715,13 @@
     const length = lengthMin !== null || lengthMax !== null
       ? { min: lengthMin ?? undefined, max: lengthMax ?? undefined }
       : undefined;
+    const lengthRankMode = String(els.lengthRankMode?.value || "").trim().toLowerCase();
+    const lengthRankCountRaw = parseNumberInput(els.lengthRankCount);
+    const lengthRankCount = Number.isFinite(lengthRankCountRaw) ? Math.round(lengthRankCountRaw) : null;
+    const lengthRank = (lengthRankMode === "shortest" || lengthRankMode === "longest") && lengthRankCount !== null
+      && lengthRankCount >= 1 && lengthRankCount <= 25
+      ? { mode: lengthRankMode, count: lengthRankCount }
+      : undefined;
 
     const extreme = String(els.extremeSelect?.value || "").trim().toLowerCase();
     const boroughs = state.boroughsReady ? getSelectedValues(els.boroughs) : [];
@@ -709,6 +742,7 @@
       freq: Object.keys(freq).length > 0 ? freq : undefined,
       flags: Object.keys(flags).length > 0 ? flags : undefined,
       length_miles: length,
+      length_rank: lengthRank,
       extreme: extreme || undefined
     };
   };
@@ -797,6 +831,12 @@
     if (els.lengthMax) {
       els.lengthMax.value = Number.isFinite(normalized.length_miles?.max) ? normalized.length_miles.max : "";
     }
+    if (els.lengthRankMode) {
+      els.lengthRankMode.value = normalized.length_rank?.mode || "";
+    }
+    if (els.lengthRankCount) {
+      els.lengthRankCount.value = Number.isFinite(normalized.length_rank?.count) ? normalized.length_rank.count : "";
+    }
     if (els.extremeSelect) {
       els.extremeSelect.value = normalized.extreme || "";
     }
@@ -863,6 +903,9 @@
     if (normalized.length_miles && (Number.isFinite(normalized.length_miles.min) || Number.isFinite(normalized.length_miles.max))) {
       return true;
     }
+    if (normalized.length_rank && Number.isFinite(normalized.length_rank.count)) {
+      return true;
+    }
     if (normalized.extreme) {
       return true;
     }
@@ -913,12 +956,13 @@
       const offpeak = formatNumber(row.frequency_offpeak);
       const weekend = formatNumber(row.frequency_weekend);
       const overnight = formatNumber(row.frequency_overnight);
-      const intensity = formatNumber(row.service_intensity_score, 2);
       const hasOvernight = row.has_overnight ? "Yes" : "No";
+      const lengthMiles = Number.isFinite(row.length_miles) ? formatNumber(row.length_miles, 2) : "";
       const isVisible = state.visibleRoutes.has(routeId);
       const metaParts = [routeType, operator, garage, cleanMetaValue(vehicle)]
         .filter(Boolean)
         .join(" · ");
+      const lengthText = lengthMiles ? `${lengthMiles} mi` : "–";
       return `
         <div class="route-card" data-route="${escapeHtml(routeId)}">
           <div class="route-card__header">
@@ -928,8 +972,8 @@
             </button>
           </div>
           <div class="route-card__meta">${escapeHtml(metaParts)}</div>
-          <div class="route-card__freq">Peak AM: ${peakAm || "–"} · Peak PM: ${peakPm || "–"} · Offpeak: ${offpeak || "–"} · Weekend: ${weekend || "–"} · Overnight: ${overnight || "–"}</div>
-          <div class="route-card__kpi">Intensity: ${intensity || "–"} · Overnight: ${hasOvernight}</div>
+          <div class="route-card__freq">Frequency (BPH): Peak AM: ${peakAm || "–"} · Peak PM: ${peakPm || "–"} · Offpeak: ${offpeak || "–"} · Weekend: ${weekend || "–"} · Overnight: ${overnight || "–"}</div>
+          <div class="route-card__kpi">Length: ${lengthText} · Overnight: ${hasOvernight}</div>
         </div>
       `;
     }).join("");
@@ -1127,6 +1171,8 @@
       hasOvernight: container.querySelector("#advancedHasOvernight"),
       lengthMin: container.querySelector("#advancedLengthMin"),
       lengthMax: container.querySelector("#advancedLengthMax"),
+      lengthRankMode: container.querySelector("#advancedLengthRankMode"),
+      lengthRankCount: container.querySelector("#advancedLengthRankCount"),
       extremeSelect: container.querySelector("#advancedExtremeSelect"),
       applyButton: container.querySelector("#advancedApplyFilters"),
       routeCount: document.getElementById("advancedRouteCount"),
@@ -1197,7 +1243,8 @@
       els.frequencyMin,
       els.frequencyMax,
       els.lengthMin,
-      els.lengthMax
+      els.lengthMax,
+      els.lengthRankCount
     ].forEach(bindEnterApply);
 
     if (els.routeTypesSelectAll) {
@@ -1258,20 +1305,18 @@
           "frequency_offpeak",
           "frequency_weekend",
           "frequency_overnight",
-          "service_intensity_score",
         ];
         const csvRows = rows.map((row) => [
           row.route_id_norm || row.route_id,
           row.route_type,
           (row.operator_names_arr || []).join("; "),
-          [...(row.garage_codes_arr || []), ...(row.garage_names_arr || [])].join("; "),
+          buildGarageLabels(row).join("; "),
           row.vehicle_type,
           row.frequency_peak_am,
           row.frequency_peak_pm,
           row.frequency_offpeak,
           row.frequency_weekend,
-          row.frequency_overnight,
-          formatNumber(row.service_intensity_score, 2),
+          row.frequency_overnight
         ]);
         downloadCsv("filtered_routes.csv", columns, csvRows);
       });

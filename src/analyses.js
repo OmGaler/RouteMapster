@@ -27,14 +27,28 @@
   };
 
   const getGarages = (row) => {
-    const list = [];
-    if (row.garage_codes_arr && row.garage_codes_arr.length > 0) {
-      list.push(...row.garage_codes_arr);
+    const codes = Array.isArray(row.garage_codes_arr) ? row.garage_codes_arr : [];
+    const names = Array.isArray(row.garage_names_arr) ? row.garage_names_arr : [];
+    const max = Math.max(codes.length, names.length);
+    const combined = [];
+    const seen = new Set();
+    for (let i = 0; i < max; i += 1) {
+      const code = codes[i];
+      const name = names[i];
+      let label = "";
+      if (name && code) {
+        label = `${name} (${code})`;
+      } else if (name) {
+        label = name;
+      } else if (code) {
+        label = code;
+      }
+      if (label && !seen.has(label)) {
+        seen.add(label);
+        combined.push(label);
+      }
     }
-    if (row.garage_names_arr && row.garage_names_arr.length > 0) {
-      list.push(...row.garage_names_arr);
-    }
-    return list.length > 0 ? list : ["Unknown"];
+    return combined.length > 0 ? combined : ["Unknown"];
   };
 
   const analysisRegistry = {
@@ -264,6 +278,64 @@
           type: "table",
           columns: ["Operator", "Avg length (mi)"],
           rows: rowsOut
+        };
+      }
+    },
+    "longest-routes": {
+      id: "longest-routes",
+      label: "Longest routes",
+      run: (rows) => {
+        const sorted = rows
+          .filter((row) => Number.isFinite(row.length_miles))
+          .slice()
+          .sort((a, b) => b.length_miles - a.length_miles)
+          .slice(0, 25);
+        if (sorted.length === 0) {
+          return {
+            type: "table",
+            columns: ["Rank", "Route", "Length (mi)", "Operator", "Garage"],
+            rows: [["No length_miles data available", "", "", "", ""]]
+          };
+        }
+        return {
+          type: "table",
+          columns: ["Rank", "Route", "Length (mi)", "Operator", "Garage"],
+          rows: sorted.map((row, index) => [
+            index + 1,
+            row.route_id || row.route_id_norm,
+            formatNumber(row.length_miles, 2),
+            getOperators(row)[0],
+            getGarages(row)[0]
+          ])
+        };
+      }
+    },
+    "shortest-routes": {
+      id: "shortest-routes",
+      label: "Shortest routes",
+      run: (rows) => {
+        const sorted = rows
+          .filter((row) => Number.isFinite(row.length_miles))
+          .slice()
+          .sort((a, b) => a.length_miles - b.length_miles)
+          .slice(0, 25);
+        if (sorted.length === 0) {
+          return {
+            type: "table",
+            columns: ["Rank", "Route", "Length (mi)", "Operator", "Garage"],
+            rows: [["No length_miles data available", "", "", "", ""]]
+          };
+        }
+        return {
+          type: "table",
+          columns: ["Rank", "Route", "Length (mi)", "Operator", "Garage"],
+          rows: sorted.map((row, index) => [
+            index + 1,
+            row.route_id || row.route_id_norm,
+            formatNumber(row.length_miles, 2),
+            getOperators(row)[0],
+            getGarages(row)[0]
+          ])
         };
       }
     },
