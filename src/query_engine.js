@@ -385,7 +385,7 @@
       ? new Set(spec.vehicle_types)
       : null;
 
-    const filtered = list.filter((row) => {
+    let filtered = list.filter((row) => {
       if (!row || !row.route_id_norm) {
         return false;
       }
