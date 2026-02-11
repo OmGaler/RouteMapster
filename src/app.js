@@ -539,7 +539,14 @@ function buildCentralityDetailLines(props) {
 		.map(([label, value]) => `<div>${escapeHtml(label)}: ${escapeHtml(formatCentralityValue(value))}</div>`);
 }
 
-function buildRouteFrequencySummary(freqs) {
+function isSchoolRoute(routeType) {
+	return String(routeType || "").trim().toLowerCase() === "school";
+}
+
+function buildRouteFrequencySummary(freqs, routeId, routeType) {
+	if (isSchoolRoute(routeType)) {
+		return "";
+	}
 	if (!freqs || typeof freqs !== "object") {
 		return "";
 	}
@@ -590,6 +597,9 @@ function getOmniTypeLabel(type) {
 	if (type === "station") {
 		return "Bus station";
 	}
+	if (type === "stop") {
+		return "Bus stop";
+	}
 	if (type === "garage") {
 		return "Garage";
 	}
@@ -618,6 +628,7 @@ function getRouteMetaFromRow(row) {
 			: [row.garage_codes || row.garage_names || ""].filter(Boolean);
 	const garage = garageList.length > 0 ? garageList.join(", ") : "";
 	const routeType = row.route_type || "";
+	const vehicleType = row.vehicle_type || "";
 	const lengthMiles = Number.isFinite(row.length_miles) ? row.length_miles : null;
 	const freqs = {
 		peak_am: Number.isFinite(row.frequency_peak_am) ? row.frequency_peak_am : null,
@@ -626,7 +637,7 @@ function getRouteMetaFromRow(row) {
 		weekend: Number.isFinite(row.frequency_weekend) ? row.frequency_weekend : null,
 		overnight: Number.isFinite(row.frequency_overnight) ? row.frequency_overnight : null
 	};
-	return { operator, garage, routeType, lengthMiles, freqs };
+	return { operator, garage, routeType, vehicleType, lengthMiles, freqs };
 }
 
 function collectGarageGroupRoutes(group) {
@@ -754,16 +765,17 @@ async function buildOmniSearchIndex() {
 			const row = summaryIndex.get(routeId) || null;
 			const meta = getRouteMetaFromRow(row);
 			const typeLabel = formatRouteTypeLabel(meta.routeType);
-			const subtitleParts = [typeLabel, meta.operator, meta.garage].filter(Boolean);
+			const subtitleParts = [typeLabel, meta.operator, meta.garage, meta.vehicleType].filter(Boolean);
 			const subtitle = subtitleParts.length > 0 ? subtitleParts.join(" · ") : "Bus route";
-			const freqText = buildRouteFrequencySummary(meta.freqs);
+			const freqText = buildRouteFrequencySummary(meta.freqs, routeId, meta.routeType);
 			const title = `Route ${routeId}`;
 			const searchText = buildOmniSearchText([
 				"route",
 				routeId,
 				meta.operator,
 				meta.garage,
-				meta.routeType
+				meta.routeType,
+				meta.vehicleType
 			]);
 			items.push({
 				id: `route:${routeId}`,
@@ -834,6 +846,54 @@ async function buildOmniSearchIndex() {
 	}
 
 	if (stopsGeojson && Array.isArray(stopsGeojson.features)) {
+		stopsGeojson.features.forEach((feature) => {
+			const props = feature?.properties || {};
+			const name = getStopDisplayName(props);
+			const stopCode = getStopCode(props);
+			const road = getStopRoadName(props);
+			const borough = props?.borough || props?.BOROUGH || props?.Borough || props?.["Borough"] || "";
+			const coords = feature?.geometry?.coordinates;
+			const lon = Array.isArray(coords) ? Number(coords[0]) : null;
+			const lat = Array.isArray(coords) ? Number(coords[1]) : null;
+			const routes = getStopRouteTokens(props);
+			if (routes.length === 0) {
+				return;
+			}
+			const routePills = routes.length > 0
+				? renderRoutePills(routes, routeSetsForPills)
+				: "";
+			const subtitleParts = ["Bus stop"];
+			if (road) {
+				subtitleParts.push(road);
+			}
+			if (stopCode) {
+				subtitleParts.push(stopCode);
+			}
+			const subtitle = subtitleParts.join(" · ");
+			const searchText = buildOmniSearchText([
+				"stop",
+				"bus stop",
+				name,
+				road,
+				stopCode,
+				borough,
+				...routes
+			]);
+			items.push({
+				id: `stop:${stopCode || name}`,
+				type: "stop",
+				typeLabel: getOmniTypeLabel("stop"),
+				title: name,
+				subtitle,
+				metaHtml: routePills,
+				searchText,
+				titleLower: String(name).toLowerCase(),
+				stopProps: props,
+				stopLat: lat,
+				stopLon: lon
+			});
+		});
+
 		const { districtMap } = buildPostcodeAggregates(stopsGeojson);
 		const makePostcodeItem = (entry) => {
 			if (!entry || entry.stopCount <= 0) {
@@ -1019,7 +1079,7 @@ function parseOmniQuery(query) {
 	if (!trimmed) {
 		return { type: null, tokens: [] };
 	}
-	const match = trimmed.match(/^(route|station|garage|operator|postcode|district)\s*:\s*(.*)$/i);
+	const match = trimmed.match(/^(route|station|stop|garage|operator|postcode|district)\s*:\s*(.*)$/i);
 	if (match) {
 		const rawType = match[1].toLowerCase();
 		const type = rawType === "district" ? "postcode" : rawType;
@@ -1033,6 +1093,15 @@ function parseOmniQuery(query) {
 
 function scoreOmniItem(item, tokens, rawLower) {
 	let score = 0;
+	const typeBoost = {
+		route: 500,
+		station: 400,
+		stop: 300,
+		garage: 200,
+		operator: 150,
+		postcode: 0
+	};
+	score += typeBoost[item.type] ?? 0;
 	const titleLower = item.titleLower || String(item.title || "").toLowerCase();
 	if (rawLower && titleLower === rawLower) {
 		score += 200;
@@ -1077,7 +1146,7 @@ function filterOmniSearchResults(query) {
 		omniSearchState.filteredItems = [];
 		omniSearchState.selectedIndex = 0;
 		renderOmniResults([], 0);
-		setOmniStatus("Start typing to search routes, stations, garages, or operators.");
+		setOmniStatus("Start typing to explore routes, stops, stations, garages, or operators.");
 		return;
 	}
 	const matches = omniSearchState.items
@@ -1087,7 +1156,15 @@ function filterOmniSearchResults(query) {
 			}
 			return tokens.every((token) => item.searchText?.includes(token));
 		})
-		.map((item) => ({ item, score: scoreOmniItem(item, tokens, rawLower) }))
+		.map((item) => {
+			let score = 0;
+			try {
+				score = scoreOmniItem(item, tokens, rawLower);
+			} catch (error) {
+				score = 0;
+			}
+			return { item, score };
+		})
 		.sort((a, b) => b.score - a.score || String(a.item.title).localeCompare(String(b.item.title)))
 		.map((entry) => entry.item);
 
@@ -1102,366 +1179,6 @@ function filterOmniSearchResults(query) {
 	}
 	renderOmniResults(limited, totalCount);
 }
-
-function clearOmniRouteLayer() {
-	if (appState.omniRouteLayer && appState.map) {
-		appState.map.removeLayer(appState.omniRouteLayer);
-		appState.omniRouteLayer = null;
-	}
-	appState.omniRouteLoadToken += 1;
-}
-
-function clearOmniStopsLayer() {
-	if (appState.omniStopsLayer && appState.map) {
-		appState.map.removeLayer(appState.omniStopsLayer);
-		appState.omniStopsLayer = null;
-	}
-	appState.omniStopsLoadToken += 1;
-}
-
-function clearOmniSearchLayers({ restoreNetwork = true } = {}) {
-	clearOmniRouteLayer();
-	clearOmniStopsLayer();
-	if (!appState.omniActive) {
-		return;
-	}
-	const prevSuppress = appState.omniPrevSuppress;
-	appState.omniActive = false;
-	appState.omniPrevSuppress = null;
-	appState.suppressNetworkRoutes = Boolean(prevSuppress);
-	if (restoreNetwork && !appState.suppressNetworkRoutes) {
-		appState.networkRouteLoadToken += 1;
-		renderNetworkRoutes(appState.networkRouteLoadToken);
-	}
-}
-
-async function showOmniRoutes(routeIds, label) {
-	if (!appState.map) {
-		return;
-	}
-	const list = Array.isArray(routeIds)
-		? Array.from(new Set(routeIds.map((id) => String(id || "").trim().toUpperCase()).filter(Boolean)))
-		: [];
-	if (list.length === 0) {
-		clearOmniSearchLayers();
-		return;
-	}
-
-	if (!appState.omniActive) {
-		appState.omniPrevSuppress = appState.suppressNetworkRoutes;
-	}
-	appState.omniActive = true;
-	appState.suppressNetworkRoutes = true;
-	appState.networkRouteLoadToken += 1;
-	clearNetworkRoutes();
-	clearActiveRouteSelections();
-
-	if (appState.focusRouteId) {
-		appState.focusRouteId = null;
-		appState.focusRouteLoadToken += 1;
-		clearFocusedRouteLayer();
-	}
-	if (appState.filteredRoutesLayer) {
-		appState.filteredRoutesLayer.clearLayers();
-	}
-	if (appState.analysisRouteLayer) {
-		clearAnalysisRoutes();
-	}
-	clearOmniRouteLayer();
-
-	const loadToken = appState.omniRouteLoadToken + 1;
-	appState.omniRouteLoadToken = loadToken;
-	const layerGroup = L.layerGroup().addTo(appState.map);
-	appState.omniRouteLayer = layerGroup;
-
-	const routeSets = appState.useRouteTypeColours ? await loadNetworkRouteSets() : null;
-	const concurrency = 6;
-	let index = 0;
-	const worker = async () => {
-		while (index < list.length) {
-			const routeId = list[index];
-			index += 1;
-			const segments = await loadRouteGeometry(routeId);
-			if (loadToken !== appState.omniRouteLoadToken) {
-				return;
-			}
-			if (!segments || segments.length === 0) {
-				continue;
-			}
-			const color = getFocusedRouteColour(routeId, routeSets);
-			segments.forEach((segment) => {
-				const line = L.polyline(segment, {
-					color,
-					weight: 3.2,
-					opacity: 0.85,
-					pane: ROUTE_PANE
-				}).addTo(layerGroup);
-				line._routeId = routeId;
-				bindRouteHoverPopup(line, layerGroup);
-			});
-		}
-	};
-	await Promise.all(Array.from({ length: concurrency }, () => worker()));
-	if (loadToken === appState.omniRouteLoadToken) {
-		updateSelectedInfo(label ? `${label} (${list.length} routes)` : `${list.length} routes selected`);
-	}
-}
-
-async function renderOmniRouteStops(routeId) {
-	if (!appState.map) {
-		return 0;
-	}
-	clearOmniStopsLayer();
-	const normalised = String(routeId || "").trim().toUpperCase();
-	if (!normalised || isExcludedRoute(normalised)) {
-		return 0;
-	}
-	const loadToken = appState.omniStopsLoadToken + 1;
-	appState.omniStopsLoadToken = loadToken;
-	await ensureRouteStopData(normalised);
-	if (loadToken !== appState.omniStopsLoadToken) {
-		return 0;
-	}
-	const geojson = await loadBusStopsGeojson();
-	if (!geojson || !Array.isArray(geojson.features)) {
-		return 0;
-	}
-	if (loadToken !== appState.omniStopsLoadToken) {
-		return 0;
-	}
-	const layerGroup = L.layerGroup();
-	let count = 0;
-	geojson.features.forEach((feature) => {
-		const coords = feature?.geometry?.coordinates;
-		if (!Array.isArray(coords) || coords.length < 2) {
-			return;
-		}
-		const props = feature?.properties || {};
-		const routes = getStopRouteTokens(props);
-		if (!routes.includes(normalised)) {
-			return;
-		}
-		const lon = Number(coords[0]);
-		const lat = Number(coords[1]);
-		if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
-			return;
-		}
-		const marker = L.circleMarker([lat, lon], {
-			radius: 4,
-			weight: 1,
-			color: "#0f766e",
-			fillColor: "#34d399",
-			fillOpacity: 0.85,
-			pane: STOP_PANE
-		});
-		bindHoverPopup(marker, () => buildBusStopPopup(props));
-		marker.on("click", () => {
-			setSelectedFeature("stop", props);
-			refreshSelectedInfoPanel().catch(() => {});
-			ensureStopPointRoutes(props)
-				.then(() => refreshSelectedInfoPanel().catch(() => {}))
-				.catch(() => {});
-		});
-		marker.addTo(layerGroup);
-		count += 1;
-	});
-	if (loadToken !== appState.omniStopsLoadToken) {
-		return 0;
-	}
-	layerGroup.addTo(appState.map);
-	appState.omniStopsLayer = layerGroup;
-	return count;
-}
-
-async function renderOmniPostcodeStops(postcodeData) {
-	if (!appState.map || !postcodeData) {
-		return 0;
-	}
-	clearOmniStopsLayer();
-	const loadToken = appState.omniStopsLoadToken + 1;
-	appState.omniStopsLoadToken = loadToken;
-
-	const geojson = await loadBusStopsGeojson();
-	if (!geojson || !Array.isArray(geojson.features)) {
-		return 0;
-	}
-	if (loadToken !== appState.omniStopsLoadToken) {
-		return 0;
-	}
-	const layerGroup = L.layerGroup();
-	let count = 0;
-	geojson.features.forEach((feature) => {
-		const coords = feature?.geometry?.coordinates;
-		if (!Array.isArray(coords) || coords.length < 2) {
-			return;
-		}
-		const props = feature?.properties || {};
-		const rawPostcode = normalisePostcodeValue(props?.POSTCODE);
-		if (!rawPostcode) {
-			return;
-		}
-		const matches = postcodeData.isDistrict
-			? normalisePostcodeDistrict(rawPostcode) === postcodeData.key
-			: rawPostcode === postcodeData.key;
-		if (!matches) {
-			return;
-		}
-		const lon = Number(coords[0]);
-		const lat = Number(coords[1]);
-		if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
-			return;
-		}
-		const marker = L.circleMarker([lat, lon], {
-			radius: 4,
-			weight: 1,
-			color: "#0f766e",
-			fillColor: "#38bdf8",
-			fillOpacity: 0.85,
-			pane: STOP_PANE
-		});
-		bindHoverPopup(marker, () => buildBusStopPopup(props));
-		marker.on("click", () => {
-			setSelectedFeature("stop", props);
-			refreshSelectedInfoPanel().catch(() => {});
-			ensureStopPointRoutes(props)
-				.then(() => refreshSelectedInfoPanel().catch(() => {}))
-				.catch(() => {});
-		});
-		marker.addTo(layerGroup);
-		count += 1;
-	});
-	if (loadToken !== appState.omniStopsLoadToken) {
-		return 0;
-	}
-	layerGroup.addTo(appState.map);
-	appState.omniStopsLayer = layerGroup;
-	return count;
-}
-
-function setRouteInfoPanelFromOmni(item, stopCount) {
-	const routeId = item?.routeId || "";
-	const meta = item?.meta || {};
-	const details = [];
-	const typeLabel = formatRouteTypeLabel(meta.routeType);
-	if (typeLabel) {
-		details.push(`Type: ${escapeHtml(typeLabel)}`);
-	}
-	if (meta.operator) {
-		details.push(`Operator: ${escapeHtml(meta.operator)}`);
-	}
-	if (meta.garage) {
-		details.push(`Garage: ${escapeHtml(meta.garage)}`);
-	}
-	if (Number.isFinite(meta.lengthMiles)) {
-		details.push(`Length: ${escapeHtml(meta.lengthMiles.toFixed(1))} miles`);
-	}
-	const lines = details.length > 0
-		? details.map((line) => `<div>${line}</div>`).join("")
-		: '<div class="info-empty">No extra route details listed.</div>';
-	const subtitle = Number.isFinite(stopCount) && stopCount > 0 ? `${stopCount} stops` : "Bus route";
-	setInfoPanel({
-		title: routeId ? `Route ${routeId}` : "Route",
-		subtitle,
-		bodyHtml: `
-			<div class="info-section">
-				<div class="info-label">Route details</div>
-				${lines}
-			</div>
-		`
-	});
-	clearSelectedFeature();
-}
-
-async function setOperatorInfoPanel(operatorName, routeIds) {
-	const list = Array.isArray(routeIds) ? routeIds.slice() : [];
-	const sorted = sortRouteIds(list);
-	const routeSets = appState.useRouteTypeColours ? await loadNetworkRouteSets() : null;
-	setInfoPanel({
-		title: operatorName || "Operator",
-		subtitle: `${sorted.length} routes`,
-		bodyHtml: `
-			<div class="info-section">
-				<div class="info-label">Routes operated</div>
-				${renderRoutePills(sorted, routeSets)}
-			</div>
-		`
-	});
-	clearSelectedFeature();
-}
-
-function ensureGaragesVisible() {
-	const checkbox = document.getElementById("showGarages");
-	if (!checkbox) {
-		return;
-	}
-	if (!checkbox.checked) {
-		checkbox.checked = true;
-		appState.garageLoadToken += 1;
-		addGaragesLayer(appState.map);
-	}
-}
-
-async function applyOmniRouteSelection(item) {
-	if (!item?.routeId) {
-		return;
-	}
-	clearOmniSearchLayers({ restoreNetwork: false });
-	if (window.RouteMapsterAdvancedFilters?.clearMapHighlights) {
-		window.RouteMapsterAdvancedFilters.clearMapHighlights(appState);
-	}
-	if (appState.analysisRouteLayer) {
-		clearAnalysisRoutes();
-	}
-	clearAdvancedStopsLayer();
-
-	const layerToggles = ["showGarages", "showBusStations", "showBusStops"];
-	layerToggles.forEach((id) => {
-		const checkbox = document.getElementById(id);
-		if (checkbox && checkbox.checked) {
-			checkbox.checked = false;
-			checkbox.dispatchEvent(new Event("change"));
-		}
-	});
-
-	await focusRoute(item.routeId);
-	const stopCount = await renderOmniRouteStops(item.routeId);
-	setRouteInfoPanelFromOmni(item, stopCount);
-	updateSelectedInfo(`Focused route: ${item.routeId} · ${stopCount} stops`);
-}
-
-function applyOmniStationSelection(item) {
-	const station = item?.station;
-	if (!station) {
-		return;
-	}
-	clearOmniSearchLayers({ restoreNetwork: false });
-	ensureBusStationsVisible();
-	highlightBusStation(station);
-	setBusStationSelectValue(station.key);
-	setSelectedFeature("station", station);
-	refreshSelectedInfoPanel().catch(() => {});
-	selectBusStationRoutes(station);
-	if (appState.map && station.latlng) {
-		appState.map.flyTo(station.latlng, Math.max(appState.map.getZoom(), 13));
-	}
-}
-
-function applyOmniGarageSelection(item) {
-	const group = item?.garageGroup;
-	if (!group) {
-		return;
-	}
-	clearOmniSearchLayers({ restoreNetwork: false });
-	ensureGaragesVisible();
-	setGarageSelectValue(buildGarageSelectKey(group.features));
-	setSelectedFeature("garage", group.features);
-	refreshSelectedInfoPanel().catch(() => {});
-	selectGarageRoutes(group.features);
-	if (appState.map && group.latlng) {
-		appState.map.flyTo(group.latlng, Math.max(appState.map.getZoom(), 12));
-	}
-}
-
 async function applyOmniOperatorSelection(item) {
 	const operatorName = item?.operatorName;
 	const routes = Array.isArray(item?.operatorRoutes) ? item.operatorRoutes : [];
@@ -1509,6 +1226,54 @@ async function applyOmniPostcodeSelection(item) {
 	updateSelectedInfo(`${title} · ${stopCount} stops`);
 }
 
+async function applyOmniStopSelection(item) {
+	const props = item?.stopProps;
+	if (!props) {
+		return;
+	}
+	clearOmniSearchLayers({ restoreNetwork: false });
+	clearAdvancedStopsLayer();
+	clearOmniStopsLayer();
+	const loadToken = appState.omniStopsLoadToken + 1;
+	appState.omniStopsLoadToken = loadToken;
+	const layerGroup = L.layerGroup();
+	const lat = Number(item?.stopLat);
+	const lon = Number(item?.stopLon);
+	if (Number.isFinite(lat) && Number.isFinite(lon)) {
+		const marker = L.circleMarker([lat, lon], {
+			radius: 5,
+			weight: 1.2,
+			color: "#0f766e",
+			fillColor: "#22c55e",
+			fillOpacity: 0.9,
+			pane: STOP_PANE
+		});
+		bindHoverPopup(marker, () => buildBusStopPopup(props));
+		marker.on("click", () => {
+			setSelectedFeature("stop", props);
+			refreshSelectedInfoPanel().catch(() => {});
+			ensureStopPointRoutes(props)
+				.then(() => refreshSelectedInfoPanel().catch(() => {}))
+				.catch(() => {});
+		});
+		marker.addTo(layerGroup);
+	}
+	if (loadToken !== appState.omniStopsLoadToken) {
+		return;
+	}
+	if (appState.map) {
+		layerGroup.addTo(appState.map);
+		appState.omniStopsLayer = layerGroup;
+		if (Number.isFinite(lat) && Number.isFinite(lon)) {
+			appState.map.flyTo([lat, lon], Math.max(appState.map.getZoom(), 14));
+		}
+	}
+	setSelectedFeature("stop", props);
+	await refreshSelectedInfoPanel().catch(() => {});
+	await ensureStopPointRoutes(props).then(() => refreshSelectedInfoPanel().catch(() => {})).catch(() => {});
+	updateSelectedInfo(getStopDisplayName(props));
+}
+
 function handleOmniSelection(item) {
 	if (!item) {
 		return;
@@ -1520,6 +1285,10 @@ function handleOmniSelection(item) {
 	}
 	if (item.type === "station") {
 		applyOmniStationSelection(item);
+		return;
+	}
+	if (item.type === "stop") {
+		applyOmniStopSelection(item).catch(() => {});
 		return;
 	}
 	if (item.type === "garage") {
@@ -1547,13 +1316,13 @@ function openOmniSearch() {
 	omniSearchState.filteredItems = [];
 	omniSearchState.selectedIndex = 0;
 	els.results.innerHTML = "";
-	setOmniStatus("Loading search catalog...");
+	setOmniStatus("Loading Explorer catalog...");
 	ensureOmniSearchIndex()
 		.then((items) => {
 			omniSearchState.items = items;
 			els.input.disabled = false;
 			els.input.focus();
-			setOmniStatus("Start typing to search routes, stations, garages, or operators.");
+			setOmniStatus("Start typing to explore routes, stops, stations, garages, or operators.");
 		})
 		.catch(() => {
 			els.input.disabled = false;

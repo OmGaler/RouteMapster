@@ -34,6 +34,8 @@
     return value;
   };
 
+  const isSchoolRoute = (value) => String(value || "").trim().toLowerCase() === "school";
+
   const parseTokens = (value) => {
     if (!value) {
       return [];
@@ -956,6 +958,7 @@
       const offpeak = formatNumber(row.frequency_offpeak);
       const weekend = formatNumber(row.frequency_weekend);
       const overnight = formatNumber(row.frequency_overnight);
+      const showFrequencies = !isSchoolRoute(row.route_type);
       const hasOvernight = row.has_overnight ? "Yes" : "No";
       const lengthMiles = Number.isFinite(row.length_miles) ? formatNumber(row.length_miles, 2) : "";
       const isVisible = state.visibleRoutes.has(routeId);
@@ -972,7 +975,7 @@
             </button>
           </div>
           <div class="route-card__meta">${escapeHtml(metaParts)}</div>
-          <div class="route-card__freq">Frequency (BPH): Peak AM: ${peakAm || "–"} · Peak PM: ${peakPm || "–"} · Offpeak: ${offpeak || "–"} · Weekend: ${weekend || "–"} · Overnight: ${overnight || "–"}</div>
+          ${showFrequencies ? `<div class="route-card__freq">Frequency (BPH): Peak AM: ${peakAm || "–"} · Peak PM: ${peakPm || "–"} · Offpeak: ${offpeak || "–"} · Weekend: ${weekend || "–"} · Overnight: ${overnight || "–"}</div>` : ""}
           <div class="route-card__kpi">Length: ${lengthText} · Overnight: ${hasOvernight}</div>
         </div>
       `;

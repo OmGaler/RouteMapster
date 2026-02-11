@@ -33,8 +33,8 @@ If you truly want “no tooling”, you can also open `index.html` directly, but
 - **Garages:** garage locations with operator metadata and route allocation views.
 - **Frequency trunks overlay:** an optional overlay that highlights high-frequency corridors for the selected frequency band.
 
-### Omnisearch
-
+### Explorer
+Omnisearch
 The floating search button opens a quick-search UI that helps you jump to routes, stops, stations, and garages without hunting around the map.
 
 ## Advanced route filters (module)
