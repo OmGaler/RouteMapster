@@ -347,6 +347,8 @@
     routeLayers: new Map(),
     visibleRoutes: new Set(),
     elements: null,
+    container: null,
+    initPromise: null,
     moduleOpen: false,
     spatialReady: false,
     spatialPromise: null,
@@ -1145,76 +1147,124 @@
     }
   };
 
+  const applyFilterSpec = async (filterSpec, appState, options = {}) => {
+    const engine = window.RouteMapsterQueryEngine;
+    if (!engine) {
+      return;
+    }
+    if (!state.elements && state.initPromise) {
+      await state.initPromise;
+    }
+    if (!state.elements) {
+      return;
+    }
+    const els = state.elements;
+    const normalized = engine.normalizeFilterSpec(filterSpec || {});
+    applyFilterSpecToUI(normalized, els);
+
+    if (options.openModule && state.container) {
+      state.container.open = true;
+    }
+    state.moduleOpen = Boolean(state.container?.open);
+
+    let baseRows = null;
+    let applySpec = normalized;
+    if (normalized.borough_mode === "within" && Array.isArray(normalized.boroughs) && normalized.boroughs.length > 0) {
+      const boroughSet = new Set(normalized.boroughs.map((token) => String(token).toLowerCase()));
+      const allowed = await computeRoutesWhollyWithin(state.rows, boroughSet);
+      if (allowed instanceof Set) {
+        baseRows = state.rows.filter((row) => row?.route_id_norm && allowed.has(row.route_id_norm));
+        applySpec = {
+          ...normalized,
+          boroughs: undefined,
+          borough_mode: undefined
+        };
+      }
+    }
+    if (normalized.extreme && !state.spatialReady) {
+      await ensureSpatialMetrics(els, appState);
+    }
+    applyFilters(appState, els, { baseRows, filterSpec: normalized, applySpec });
+    if (hasActiveFilters(normalized)) {
+      await showAllFilteredRoutes(els, appState);
+    }
+  };
+
   const initAdvancedFilters = async (container, appState) => {
     const engine = window.RouteMapsterQueryEngine;
     if (!container || !engine) {
       return;
     }
-
-    const els = {
-      routeSearch: container.querySelector("#advancedRouteSearch"),
-      routePrefix: container.querySelector("#advancedRoutePrefix"),
-      routeSeries: container.querySelector("#advancedRouteSeries"),
-      seriesIncludePrefixes: container.querySelector("#advancedSeriesIncludePrefixes"),
-      routeTypes: container.querySelector("#advancedRouteTypes"),
-      routeTypesSelectAll: container.querySelector("#advancedRouteTypesSelectAll"),
-      operators: container.querySelector("#advancedOperators"),
-      operatorsSelectAll: container.querySelector("#advancedOperatorsSelectAll"),
-      garages: container.querySelector("#advancedGarages"),
-      garagesSelectAll: container.querySelector("#advancedGaragesSelectAll"),
-      boroughs: container.querySelector("#advancedBoroughs"),
-      boroughMode: container.querySelector("#advancedBoroughMode"),
-      boroughsSelectAll: container.querySelector("#advancedBoroughsSelectAll"),
-      boroughNote: container.querySelector("#advancedBoroughsNote"),
-      vehicles: container.querySelector("#advancedVehicles"),
-      vehiclesSelectAll: container.querySelector("#advancedVehiclesSelectAll"),
-      frequencyBand: container.querySelector("#advancedFrequencyBand"),
-      frequencyMin: container.querySelector("#advancedFrequencyMin"),
-      frequencyMax: container.querySelector("#advancedFrequencyMax"),
-      hasOvernight: container.querySelector("#advancedHasOvernight"),
-      lengthMin: container.querySelector("#advancedLengthMin"),
-      lengthMax: container.querySelector("#advancedLengthMax"),
-      lengthRankMode: container.querySelector("#advancedLengthRankMode"),
-      lengthRankCount: container.querySelector("#advancedLengthRankCount"),
-      extremeSelect: container.querySelector("#advancedExtremeSelect"),
-      applyButton: container.querySelector("#advancedApplyFilters"),
-      routeCount: document.getElementById("advancedRouteCount"),
-      routeList: document.getElementById("advancedRouteList"),
-      showAllOnMap: document.getElementById("advancedShowAllOnMap"),
-      clearMap: document.getElementById("advancedClearMap"),
-      exportCsv: document.getElementById("advancedExportCsv"),
-      mapWarning: document.getElementById("advancedMapWarning"),
-      resultsPanel: document.getElementById("advancedResultsPanel"),
-      clearButton: container.querySelector("#advancedClearFilters"),
-      lengthWrap: container.querySelector("#advancedLengthWrap")
-    };
-    els.appState = appState;
-    state.elements = els;
-    state.moduleOpen = Boolean(container.open);
-    updateResultsVisibility(els, false, state.moduleOpen);
-
-    state.rows = await engine.loadRouteSummary();
-    await hydrateRouteBoroughs().catch(() => {});
-    state.derivedRows = engine.computeDerivedFields(state.rows);
-
-    populateSelects(state.derivedRows, els);
-
-    const hasLength = state.derivedRows.some((row) => Number.isFinite(row.length_miles));
-    if (els.lengthWrap) {
-      els.lengthWrap.style.display = hasLength ? "" : "none";
+    if (state.initPromise) {
+      return state.initPromise;
     }
 
-    const hashSpec = getHashSpec();
-    const hasHashSpec = Object.keys(hashSpec).length > 0;
-    if (hasSpatialFilters(hashSpec)) {
-      await ensureSpatialMetrics(els, appState);
-    }
-    applyFilterSpecToUI(hasHashSpec ? hashSpec : {}, els);
-
-    container.addEventListener("toggle", () => {
+    state.initPromise = (async () => {
+      const els = {
+        routeSearch: container.querySelector("#advancedRouteSearch"),
+        routePrefix: container.querySelector("#advancedRoutePrefix"),
+        routeSeries: container.querySelector("#advancedRouteSeries"),
+        seriesIncludePrefixes: container.querySelector("#advancedSeriesIncludePrefixes"),
+        routeTypes: container.querySelector("#advancedRouteTypes"),
+        routeTypesSelectAll: container.querySelector("#advancedRouteTypesSelectAll"),
+        operators: container.querySelector("#advancedOperators"),
+        operatorsSelectAll: container.querySelector("#advancedOperatorsSelectAll"),
+        garages: container.querySelector("#advancedGarages"),
+        garagesSelectAll: container.querySelector("#advancedGaragesSelectAll"),
+        boroughs: container.querySelector("#advancedBoroughs"),
+        boroughMode: container.querySelector("#advancedBoroughMode"),
+        boroughsSelectAll: container.querySelector("#advancedBoroughsSelectAll"),
+        boroughNote: container.querySelector("#advancedBoroughsNote"),
+        vehicles: container.querySelector("#advancedVehicles"),
+        vehiclesSelectAll: container.querySelector("#advancedVehiclesSelectAll"),
+        frequencyBand: container.querySelector("#advancedFrequencyBand"),
+        frequencyMin: container.querySelector("#advancedFrequencyMin"),
+        frequencyMax: container.querySelector("#advancedFrequencyMax"),
+        hasOvernight: container.querySelector("#advancedHasOvernight"),
+        lengthMin: container.querySelector("#advancedLengthMin"),
+        lengthMax: container.querySelector("#advancedLengthMax"),
+        lengthRankMode: container.querySelector("#advancedLengthRankMode"),
+        lengthRankCount: container.querySelector("#advancedLengthRankCount"),
+        extremeSelect: container.querySelector("#advancedExtremeSelect"),
+        applyButton: container.querySelector("#advancedApplyFilters"),
+        routeCount: document.getElementById("advancedRouteCount"),
+        routeList: document.getElementById("advancedRouteList"),
+        showAllOnMap: document.getElementById("advancedShowAllOnMap"),
+        clearMap: document.getElementById("advancedClearMap"),
+        exportCsv: document.getElementById("advancedExportCsv"),
+        mapWarning: document.getElementById("advancedMapWarning"),
+        resultsPanel: document.getElementById("advancedResultsPanel"),
+        clearButton: container.querySelector("#advancedClearFilters"),
+        lengthWrap: container.querySelector("#advancedLengthWrap")
+      };
+      els.appState = appState;
+      state.elements = els;
+      state.container = container;
       state.moduleOpen = Boolean(container.open);
-      updateResultsVisibility(els, hasActiveFilters(state.filterSpec), state.moduleOpen);
-    });
+      updateResultsVisibility(els, false, state.moduleOpen);
+
+      state.rows = await engine.loadRouteSummary();
+      await hydrateRouteBoroughs().catch(() => {});
+      state.derivedRows = engine.computeDerivedFields(state.rows);
+
+      populateSelects(state.derivedRows, els);
+
+      const hasLength = state.derivedRows.some((row) => Number.isFinite(row.length_miles));
+      if (els.lengthWrap) {
+        els.lengthWrap.style.display = hasLength ? "" : "none";
+      }
+
+      const hashSpec = getHashSpec();
+      const hasHashSpec = Object.keys(hashSpec).length > 0;
+      if (hasSpatialFilters(hashSpec)) {
+        await ensureSpatialMetrics(els, appState);
+      }
+      applyFilterSpecToUI(hasHashSpec ? hashSpec : {}, els);
+
+      container.addEventListener("toggle", () => {
+        state.moduleOpen = Boolean(container.open);
+        updateResultsVisibility(els, hasActiveFilters(state.filterSpec), state.moduleOpen);
+      });
 
     const selectAll = (selectEl) => {
       if (!selectEl) {
@@ -1366,18 +1416,21 @@
       }
     });
 
-    if (hasHashSpec) {
-      await applyFromUI(appState, els);
-    } else {
-      applyFilters(appState, els);
-    }
+      if (hasHashSpec) {
+        await applyFromUI(appState, els);
+      } else {
+        applyFilters(appState, els);
+      }
+    })();
+    return state.initPromise;
   };
 
   window.RouteMapsterAdvancedFilters = {
     initAdvancedFilters,
     clearMapHighlights: (appState) => clearMapHighlights(appState),
     getCurrentFilterSpec: () => state.filterSpec,
-    getCurrentRows: () => state.filteredRows
+    getCurrentRows: () => state.filteredRows,
+    applyFilterSpec
   };
 })();
 

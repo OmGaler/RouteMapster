@@ -1,4 +1,11 @@
-﻿# RouteMapster
+﻿
+To submit a bug report or  feature request, open a github issue
+
+allow brough filter to ignore spaces e.g. borough:cityoflondon / perhaps fuzzy too
+
+
+
+# RouteMapster
 
 RouteMapster is an interactive, map-first explorer for the London bus network. It’s built to make it easy to visualise how routes, stops, stations, garages, operators, and service patterns fit together across London — and to support “explore → filter → analyse → export” workflows without needing a backend.
 
@@ -36,6 +43,65 @@ If you truly want “no tooling”, you can also open `index.html` directly, but
 ### Explorer
 Omnisearch
 The floating search button opens a quick-search UI that helps you jump to routes, stops, stations, and garages without hunting around the map.
+
+You can also build Advanced route filters directly in Explorer with `key:value` tokens.
+
+### Explorer advanced filter syntax
+
+Format:
+- Separate tokens with spaces.
+- Use quotes for values with spaces, e.g. `operator:"London United"`.
+- Multi-value fields can use commas, e.g. `vehicle:DD,SD`.
+
+When Explorer applies Advanced filters:
+- It applies when you enter multiple `key:value` tokens.
+- It also applies for a single advanced-only token like `vehicle:DD`, `length:10+`, `freq:peak_am:8+`, `spatial:east`.
+- For single tokens that are also normal search categories (`route`, `garage`, `operator`), force Advanced mode with `type:any`.
+- Optional force prefixes are also supported: `filter:`, `filters:`, `advanced:`, `adv:`.
+
+Accepted keys and values:
+- `route`, `routes`, `routeid`, `routeids`, `id`:
+`route:12` or `route:N205,SL7`
+- `prefix`, `routeprefix`:
+`prefix:N`
+- `series`, `routeseries`:
+`series:40` (00-99), `series:40+` to include prefixed routes
+- `include_prefixes`, `includeprefixes`, `series_prefixes`, `seriesprefixes`:
+`include_prefixes:true`
+- `type`, `routetype`, `routetypes`:
+`regular`, `night`, `school`, `prefix`, `24`, `24hr`, `24hour`, `24-hour`, `twentyfour`
+- `type:any` or `type:all`:
+forces Advanced mode without restricting route type
+- `operator`, `operators`:
+`operator:"London United"`
+- `garage`, `garages`:
+`garage:X` or `garage:PD`
+- `borough`, `boroughs`:
+`borough:camden`
+- `borough_mode`, `boroughmode`:
+`borough_mode:within` (otherwise default behavior is enter/intersects)
+- `vehicle`, `vehicles`, `vehicletype`, `vehicletypes`:
+`vehicle:DD` (stored uppercase)
+- `spatial`, `extreme`, `extremity`:
+`north`, `south`, `east`, `west` (short forms `n/s/e/w` also work)
+- `overnight`, `hasovernight`:
+boolean: `true/false`, `yes/no`, `on/off`, `1/0`
+- `length`, `miles`, `lengthmiles`:
+numeric range syntax: `10+`, `5-12`, `>=8`, `<=14`, `12`
+- `freq`, `frequency`, `bph`:
+`freq:peak_am:8-12`, `freq:weekend:>=6`
+- Band-specific frequency keys:
+`peakam`, `peak_am`, `peakpm`, `peak_pm`, `offpeak`, `weekend`, `overnightband`
+Examples: `peak_pm:>=10`, `offpeak:6-9`
+- `length_rank`, `lengthrank`:
+`length_rank:longest:10` or `lengthrank:shortest:5`
+
+Examples:
+- `garage:PD spatial:east vehicle:DD`
+- `route:12 type:any`
+- `operator:"London United" borough:camden borough_mode:within`
+- `freq:peak_am:8-12 length:10+`
+- `type:any garage:X`
 
 ## Advanced route filters (module)
 

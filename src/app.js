@@ -609,6 +609,9 @@ function getOmniTypeLabel(type) {
 	if (type === "postcode") {
 		return "Postcode district";
 	}
+	if (type === "advanced_filters") {
+		return "Advanced filters";
+	}
 	return "Result";
 }
 
@@ -851,6 +854,7 @@ async function buildOmniSearchIndex() {
 			const name = getStopDisplayName(props);
 			const stopCode = getStopCode(props);
 			const road = getStopRoadName(props);
+			const postcode = normalisePostcodeValue(props?.POSTCODE || props?.postcode);
 			const borough = props?.borough || props?.BOROUGH || props?.Borough || props?.["Borough"] || "";
 			const coords = feature?.geometry?.coordinates;
 			const lon = Array.isArray(coords) ? Number(coords[0]) : null;
@@ -869,6 +873,9 @@ async function buildOmniSearchIndex() {
 			if (stopCode) {
 				subtitleParts.push(stopCode);
 			}
+			if (postcode) {
+				subtitleParts.push(postcode);
+			}
 			const subtitle = subtitleParts.join(" · ");
 			const searchText = buildOmniSearchText([
 				"stop",
@@ -876,6 +883,7 @@ async function buildOmniSearchIndex() {
 				name,
 				road,
 				stopCode,
+				postcode,
 				borough,
 				...routes
 			]);
@@ -1091,6 +1099,609 @@ function parseOmniQuery(query) {
 	return { type: null, tokens };
 }
 
+const ADVANCED_FILTER_FORCE_PREFIX = /^(filters?|advanced|adv)\s*:\s*(.*)$/i;
+const ADVANCED_FILTER_OMNI_KEYS = new Set(["route", "station", "stop", "garage", "operator", "postcode", "district"]);
+const ADVANCED_FILTER_BANDS = new Map([
+	["peakam", "peak_am"],
+	["peak", "peak_am"],
+	["am", "peak_am"],
+	["peakpm", "peak_pm"],
+	["pm", "peak_pm"],
+	["offpeak", "offpeak"],
+	["off", "offpeak"],
+	["weekend", "weekend"],
+	["wknd", "weekend"],
+	["overnight", "overnight"],
+	["night", "overnight"]
+]);
+
+function tokenizeAdvancedFilterQuery(query) {
+	const text = String(query || "").trim();
+	if (!text) {
+		return [];
+	}
+	const tokens = [];
+	let current = "";
+	let quote = null;
+	for (let i = 0; i < text.length; i += 1) {
+		const char = text[i];
+		if (quote) {
+			if (char === quote) {
+				quote = null;
+			} else {
+				current += char;
+			}
+			continue;
+		}
+		if (char === "\"" || char === "'") {
+			quote = char;
+			continue;
+		}
+		if (/\s/.test(char)) {
+			if (current) {
+				tokens.push(current);
+				current = "";
+			}
+			continue;
+		}
+		current += char;
+	}
+	if (current) {
+		tokens.push(current);
+	}
+	return tokens;
+}
+
+function normalizeAdvancedFilterKey(rawKey) {
+	const cleaned = String(rawKey || "").trim().toLowerCase();
+	if (!cleaned) {
+		return null;
+	}
+	const token = cleaned.replace(/[^a-z0-9_]/g, "");
+	const map = {
+		route: { key: "route_ids", group: "route" },
+		routes: { key: "route_ids", group: "route" },
+		routeid: { key: "route_ids", group: null },
+		routeids: { key: "route_ids", group: null },
+		id: { key: "route_ids", group: null },
+		routeprefix: { key: "route_prefix", group: null },
+		prefix: { key: "route_prefix", group: null },
+		routeseries: { key: "route_series", group: null },
+		series: { key: "route_series", group: null },
+		include_prefixes: { key: "include_prefix_routes", group: null },
+		includeprefixes: { key: "include_prefix_routes", group: null },
+		series_prefixes: { key: "include_prefix_routes", group: null },
+		seriesprefixes: { key: "include_prefix_routes", group: null },
+		routetype: { key: "route_types", group: null },
+		routetypes: { key: "route_types", group: null },
+		type: { key: "route_types", group: null },
+		operator: { key: "operators", group: "operator" },
+		operators: { key: "operators", group: "operator" },
+		garage: { key: "garages", group: "garage" },
+		garages: { key: "garages", group: "garage" },
+		borough: { key: "boroughs", group: null },
+		boroughs: { key: "boroughs", group: null },
+		boroughmode: { key: "borough_mode", group: null },
+		borough_mode: { key: "borough_mode", group: null },
+		vehicle: { key: "vehicle_types", group: null },
+		vehicles: { key: "vehicle_types", group: null },
+		vehicletype: { key: "vehicle_types", group: null },
+		vehicletypes: { key: "vehicle_types", group: null },
+		spatial: { key: "extreme", group: null },
+		extreme: { key: "extreme", group: null },
+		extremity: { key: "extreme", group: null },
+		overnight: { key: "flags_has_overnight", group: null },
+		hasovernight: { key: "flags_has_overnight", group: null },
+		freq: { key: "freq", group: null },
+		frequency: { key: "freq", group: null },
+		bph: { key: "freq", group: null },
+		peakam: { key: "freq_band", group: null, band: "peak_am" },
+		peak_am: { key: "freq_band", group: null, band: "peak_am" },
+		peakpm: { key: "freq_band", group: null, band: "peak_pm" },
+		peak_pm: { key: "freq_band", group: null, band: "peak_pm" },
+		offpeak: { key: "freq_band", group: null, band: "offpeak" },
+		weekend: { key: "freq_band", group: null, band: "weekend" },
+		overnightband: { key: "freq_band", group: null, band: "overnight" },
+		length: { key: "length_miles", group: null },
+		miles: { key: "length_miles", group: null },
+		lengthmiles: { key: "length_miles", group: null },
+		length_rank: { key: "length_rank", group: null },
+		lengthrank: { key: "length_rank", group: null }
+	};
+	return map[token] || null;
+}
+
+function normalizeFrequencyBand(value) {
+	const cleaned = String(value || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+	return ADVANCED_FILTER_BANDS.get(cleaned) || null;
+}
+
+function splitAdvancedFilterValues(value) {
+	return String(value || "")
+		.split(/[,|]+/)
+		.map((entry) => entry.trim())
+		.filter(Boolean);
+}
+
+function parseAdvancedBoolean(value) {
+	if (value === undefined || value === null || value === "") {
+		return true;
+	}
+	const token = String(value).trim().toLowerCase();
+	if (!token) {
+		return true;
+	}
+	if (["true", "yes", "y", "on", "1"].includes(token)) {
+		return true;
+	}
+	if (["false", "no", "n", "off", "0"].includes(token)) {
+		return false;
+	}
+	return null;
+}
+
+function parseAdvancedRange(value) {
+	const trimmed = String(value || "").trim();
+	if (!trimmed) {
+		return null;
+	}
+	const plusMatch = trimmed.match(/^(-?\d+(?:\.\d+)?)\+$/);
+	if (plusMatch) {
+		const num = Number(plusMatch[1]);
+		return Number.isFinite(num) ? { min: num } : null;
+	}
+	const betweenMatch = trimmed.match(/^(-?\d+(?:\.\d+)?)\s*-\s*(-?\d+(?:\.\d+)?)$/);
+	if (betweenMatch) {
+		const min = Number(betweenMatch[1]);
+		const max = Number(betweenMatch[2]);
+		if (!Number.isFinite(min) || !Number.isFinite(max)) {
+			return null;
+		}
+		return { min, max };
+	}
+	const cmpMatch = trimmed.match(/^(<=|>=|<|>)(-?\d+(?:\.\d+)?)$/);
+	if (cmpMatch) {
+		const op = cmpMatch[1];
+		const num = Number(cmpMatch[2]);
+		if (!Number.isFinite(num)) {
+			return null;
+		}
+		if (op === "<" || op === "<=") {
+			return { max: num };
+		}
+		return { min: num };
+	}
+	const exactMatch = trimmed.match(/^(-?\d+(?:\.\d+)?)$/);
+	if (exactMatch) {
+		const num = Number(exactMatch[1]);
+		return Number.isFinite(num) ? { min: num } : null;
+	}
+	return null;
+}
+
+function parseAdvancedSeriesValue(value) {
+	const token = String(value || "").trim();
+	if (!token) {
+		return null;
+	}
+	const num = Number(token);
+	if (!Number.isFinite(num) || !Number.isInteger(num)) {
+		return null;
+	}
+	if (num < 0 || num > 99) {
+		return null;
+	}
+	return num;
+}
+
+function normalizeAdvancedRouteType(value) {
+	const token = String(value || "").trim().toLowerCase();
+	if (!token) {
+		return "";
+	}
+	if (token === "any" || token === "all") {
+		return "any";
+	}
+	if (token === "24" || token === "24hr" || token === "24hour" || token === "24-hour") {
+		return "twentyfour";
+	}
+	if (token === "twentyfour" || token === "twenty-four") {
+		return "twentyfour";
+	}
+	return token;
+}
+
+function normalizeAdvancedExtreme(value) {
+	const token = String(value || "").trim().toLowerCase();
+	if (["north", "n"].includes(token)) {
+		return "north";
+	}
+	if (["south", "s"].includes(token)) {
+		return "south";
+	}
+	if (["east", "e"].includes(token)) {
+		return "east";
+	}
+	if (["west", "w"].includes(token)) {
+		return "west";
+	}
+	return "";
+}
+
+function parseAdvancedFrequency(value, fallbackBand) {
+	const raw = String(value || "").trim();
+	if (!raw) {
+		return null;
+	}
+	let band = fallbackBand || null;
+	let rangeValue = raw;
+	if (raw.includes(":")) {
+		const parts = raw.split(":");
+		const candidate = normalizeFrequencyBand(parts[0]);
+		if (candidate) {
+			band = candidate;
+			rangeValue = parts.slice(1).join(":");
+		}
+	} else {
+		const bandMatch = raw.match(/^([a-z_]+)(.*)$/i);
+		if (bandMatch) {
+			const candidate = normalizeFrequencyBand(bandMatch[1]);
+			if (candidate) {
+				band = candidate;
+				rangeValue = bandMatch[2] || "";
+			}
+		}
+	}
+	if (!band) {
+		band = "peak_am";
+	}
+	const range = parseAdvancedRange(rangeValue);
+	if (!range || (!Number.isFinite(range.min) && !Number.isFinite(range.max))) {
+		return null;
+	}
+	return { band, range };
+}
+
+function hasActiveAdvancedFilters(spec) {
+	if (!spec || typeof spec !== "object") {
+		return false;
+	}
+	const hasList = (value) => Array.isArray(value) && value.length > 0;
+	if (hasList(spec.route_ids)) {
+		return true;
+	}
+	if (spec.route_prefix) {
+		return true;
+	}
+	if (Number.isFinite(spec.route_series)) {
+		return true;
+	}
+	if (hasList(spec.route_types) || hasList(spec.operators) || hasList(spec.garages) || hasList(spec.boroughs) || hasList(spec.vehicle_types)) {
+		return true;
+	}
+	if (spec.freq) {
+		const bands = ["peak_am", "peak_pm", "offpeak", "weekend", "overnight"];
+		for (const band of bands) {
+			const range = spec.freq[band];
+			if (range && (Number.isFinite(range.min) || Number.isFinite(range.max))) {
+				return true;
+			}
+		}
+	}
+	if (spec.flags && typeof spec.flags.has_overnight === "boolean") {
+		return true;
+	}
+	if (spec.length_miles && (Number.isFinite(spec.length_miles.min) || Number.isFinite(spec.length_miles.max))) {
+		return true;
+	}
+	if (spec.length_rank && Number.isFinite(spec.length_rank.count)) {
+		return true;
+	}
+	if (spec.extreme) {
+		return true;
+	}
+	return false;
+}
+
+function buildAdvancedFilterSummary(spec) {
+	if (!spec || typeof spec !== "object") {
+		return "";
+	}
+	const parts = [];
+	if (spec.route_ids?.length) {
+		parts.push(`routes: ${spec.route_ids.join(", ")}`);
+	}
+	if (spec.route_prefix) {
+		parts.push(`prefix: ${spec.route_prefix}`);
+	}
+	if (Number.isFinite(spec.route_series)) {
+		parts.push(`series: ${spec.route_series}${spec.include_prefix_routes ? "+" : ""}`);
+	}
+	if (spec.route_types?.length) {
+		parts.push(`types: ${spec.route_types.join(", ")}`);
+	}
+	if (spec.operators?.length) {
+		parts.push(`operators: ${spec.operators.join(", ")}`);
+	}
+	if (spec.garages?.length) {
+		parts.push(`garages: ${spec.garages.join(", ")}`);
+	}
+	if (spec.boroughs?.length) {
+		parts.push(`boroughs: ${spec.boroughs.join(", ")}`);
+	}
+	if (spec.borough_mode === "within") {
+		parts.push("borough mode: within");
+	}
+	if (spec.vehicle_types?.length) {
+		parts.push(`vehicles: ${spec.vehicle_types.join(", ")}`);
+	}
+	if (spec.extreme) {
+		parts.push(`spatial: ${spec.extreme}`);
+	}
+	if (spec.flags?.has_overnight === true) {
+		parts.push("overnight: yes");
+	}
+	if (spec.length_miles && (Number.isFinite(spec.length_miles.min) || Number.isFinite(spec.length_miles.max))) {
+		const hasMin = Number.isFinite(spec.length_miles.min);
+		const hasMax = Number.isFinite(spec.length_miles.max);
+		const min = hasMin ? spec.length_miles.min : "";
+		const max = hasMax ? spec.length_miles.max : "";
+		const rangeText = hasMin && hasMax ? `${min}-${max}` : hasMin ? `${min}+` : `<=${max}`;
+		parts.push(`length: ${rangeText} mi`);
+	}
+	if (spec.freq) {
+		const freqParts = [];
+		const bands = ["peak_am", "peak_pm", "offpeak", "weekend", "overnight"];
+		const labels = {
+			peak_am: "peak am",
+			peak_pm: "peak pm",
+			offpeak: "off-peak",
+			weekend: "weekend",
+			overnight: "overnight"
+		};
+		bands.forEach((band) => {
+			const range = spec.freq?.[band];
+			if (!range) {
+				return;
+			}
+			const hasMin = Number.isFinite(range.min);
+			const hasMax = Number.isFinite(range.max);
+			const min = hasMin ? range.min : "";
+			const max = hasMax ? range.max : "";
+			const rangeText = hasMin && hasMax ? `${min}-${max}` : hasMin ? `${min}+` : `<=${max}`;
+			freqParts.push(`${labels[band]} ${rangeText}`);
+		});
+		if (freqParts.length) {
+			parts.push(`freq: ${freqParts.join(", ")}`);
+		}
+	}
+	return parts.join(" · ");
+}
+
+function parseAdvancedFilterQuery(query) {
+	const trimmed = String(query || "").trim();
+	if (!trimmed) {
+		return { active: false };
+	}
+	let force = false;
+	let working = trimmed;
+	const forcedMatch = trimmed.match(ADVANCED_FILTER_FORCE_PREFIX);
+	if (forcedMatch) {
+		force = true;
+		working = forcedMatch[2] || "";
+	}
+	const tokens = tokenizeAdvancedFilterQuery(working);
+	const spec = {};
+	const freq = {};
+	const flags = {};
+	const keyStats = { total: 0, nonOmni: 0 };
+	let includePrefixRoutes = undefined;
+	let hasAnyType = false;
+
+	const addList = (key, values) => {
+		if (!values || values.length === 0) {
+			return;
+		}
+		if (!Array.isArray(spec[key])) {
+			spec[key] = [];
+		}
+		spec[key].push(...values);
+	};
+
+	tokens.forEach((token) => {
+		const idx = token.indexOf(":");
+		if (idx <= 0) {
+			return;
+		}
+		const rawKey = token.slice(0, idx);
+		const rawValue = token.slice(idx + 1);
+		const keyInfo = normalizeAdvancedFilterKey(rawKey);
+		if (!keyInfo) {
+			return;
+		}
+		let applied = false;
+		const value = String(rawValue || "").trim();
+		const valueParts = splitAdvancedFilterValues(value);
+		switch (keyInfo.key) {
+			case "route_ids": {
+				const tokensValue = extractRouteTokens(valueParts.join(" "));
+				if (tokensValue.length > 0) {
+					addList("route_ids", tokensValue);
+					applied = true;
+				}
+				break;
+			}
+			case "route_prefix": {
+				if (valueParts.length > 0) {
+					spec.route_prefix = String(valueParts[0] || "").trim().toUpperCase();
+					applied = Boolean(spec.route_prefix);
+				}
+				break;
+			}
+			case "route_series": {
+				let seriesValue = value;
+				if (seriesValue.endsWith("+")) {
+					includePrefixRoutes = true;
+					seriesValue = seriesValue.slice(0, -1);
+				}
+				const parsed = parseAdvancedSeriesValue(seriesValue);
+				if (parsed !== null) {
+					spec.route_series = parsed;
+					applied = true;
+				}
+				break;
+			}
+			case "include_prefix_routes": {
+				const boolValue = parseAdvancedBoolean(value);
+				if (boolValue !== null) {
+					includePrefixRoutes = boolValue;
+					applied = true;
+				}
+				break;
+			}
+			case "route_types": {
+				const types = valueParts.map(normalizeAdvancedRouteType).filter(Boolean);
+				const filtered = types.filter((entry) => entry !== "any");
+				if (types.includes("any")) {
+					hasAnyType = true;
+				}
+				if (filtered.length > 0) {
+					addList("route_types", filtered);
+					applied = true;
+				} else if (types.length > 0) {
+					applied = true;
+				}
+				break;
+			}
+			case "operators": {
+				if (valueParts.length > 0) {
+					addList("operators", valueParts.map((entry) => entry.toLowerCase()));
+					applied = true;
+				}
+				break;
+			}
+			case "garages": {
+				if (valueParts.length > 0) {
+					addList("garages", valueParts.map((entry) => entry.toLowerCase()));
+					applied = true;
+				}
+				break;
+			}
+			case "boroughs": {
+				if (valueParts.length > 0) {
+					addList("boroughs", valueParts.map((entry) => entry.toLowerCase()));
+					applied = true;
+				}
+				break;
+			}
+			case "borough_mode": {
+				if (value && value.toLowerCase() === "within") {
+					spec.borough_mode = "within";
+					applied = true;
+				}
+				break;
+			}
+			case "vehicle_types": {
+				if (valueParts.length > 0) {
+					addList("vehicle_types", valueParts.map((entry) => entry.toUpperCase()));
+					applied = true;
+				}
+				break;
+			}
+			case "extreme": {
+				const extreme = normalizeAdvancedExtreme(value);
+				if (extreme) {
+					spec.extreme = extreme;
+					applied = true;
+				}
+				break;
+			}
+			case "length_miles": {
+				const range = parseAdvancedRange(value);
+				if (range) {
+					spec.length_miles = range;
+					applied = true;
+				}
+				break;
+			}
+			case "freq": {
+				const parsed = parseAdvancedFrequency(value, null);
+				if (parsed) {
+					freq[parsed.band] = parsed.range;
+					applied = true;
+				}
+				break;
+			}
+			case "freq_band": {
+				const band = keyInfo.band || normalizeFrequencyBand(rawKey);
+				if (band) {
+					const range = parseAdvancedRange(value);
+					if (range) {
+						freq[band] = range;
+						applied = true;
+					}
+				}
+				break;
+			}
+			case "flags_has_overnight": {
+				const boolValue = parseAdvancedBoolean(value);
+				if (boolValue !== null) {
+					flags.has_overnight = boolValue;
+					applied = true;
+				}
+				break;
+			}
+			case "length_rank": {
+				const segments = value.split(/[:=]/).map((entry) => entry.trim()).filter(Boolean);
+				if (segments.length >= 2) {
+					const mode = segments[0].toLowerCase();
+					const count = Number(segments[1]);
+					if ((mode === "shortest" || mode === "longest") && Number.isFinite(count)) {
+						spec.length_rank = { mode, count: Math.round(count) };
+						applied = true;
+					}
+				}
+				break;
+			}
+			default:
+				break;
+		}
+		if (applied) {
+			keyStats.total += 1;
+			if (!keyInfo.group || !ADVANCED_FILTER_OMNI_KEYS.has(keyInfo.group)) {
+				keyStats.nonOmni += 1;
+			}
+		}
+	});
+
+	if (Object.keys(freq).length > 0) {
+		spec.freq = freq;
+	}
+	if (Object.keys(flags).length > 0) {
+		spec.flags = flags;
+	}
+	if (includePrefixRoutes !== undefined && Number.isFinite(spec.route_series)) {
+		spec.include_prefix_routes = includePrefixRoutes;
+	}
+	if (hasAnyType) {
+		force = true;
+	}
+
+	const normalizedSpec = window.RouteMapsterQueryEngine?.normalizeFilterSpec
+		? window.RouteMapsterQueryEngine.normalizeFilterSpec(spec)
+		: spec;
+	const hasFilters = hasActiveAdvancedFilters(normalizedSpec);
+	const shouldApply = force || keyStats.nonOmni > 0 || keyStats.total >= 2;
+	if (!hasFilters || !shouldApply) {
+		return { active: false };
+	}
+	return {
+		active: true,
+		spec: normalizedSpec,
+		summary: buildAdvancedFilterSummary(normalizedSpec)
+	};
+}
+
 function scoreOmniItem(item, tokens, rawLower) {
 	let score = 0;
 	const typeBoost = {
@@ -1125,6 +1736,15 @@ function scoreOmniItem(item, tokens, rawLower) {
 			score += 200;
 		}
 	}
+	if (item.type === "garage" && rawLower && item.garageDetails?.codes) {
+		const raw = String(rawLower || "").trim().toLowerCase();
+		const codes = item.garageDetails.codes.map((code) => String(code || "").trim().toLowerCase());
+		if (codes.some((code) => code === raw)) {
+			score += 220;
+		} else if (codes.some((code) => code.startsWith(raw))) {
+			score += 90;
+		}
+	}
 	if (item.type === "postcode" && rawLower && item.postcodeData?.key) {
 		const compact = String(item.postcodeData.key).replace(/\s+/g, "").toLowerCase();
 		if (compact === rawLower) {
@@ -1139,6 +1759,24 @@ function scoreOmniItem(item, tokens, rawLower) {
 
 function filterOmniSearchResults(query) {
 	omniSearchState.lastQuery = query || "";
+	const advanced = parseAdvancedFilterQuery(query);
+	if (advanced.active) {
+		const summary = advanced.summary || "Apply advanced filters";
+		const item = {
+			id: "advanced-filters",
+			type: "advanced_filters",
+			typeLabel: getOmniTypeLabel("advanced_filters"),
+			title: "Apply advanced filters",
+			subtitle: summary,
+			searchText: "",
+			filterSpec: advanced.spec
+		};
+		omniSearchState.filteredItems = [item];
+		omniSearchState.selectedIndex = 0;
+		renderOmniResults(omniSearchState.filteredItems, 1);
+		setOmniStatus("Press Enter to apply advanced filters.");
+		return;
+	}
 	const parsed = parseOmniQuery(query);
 	const tokens = parsed.tokens;
 	const rawLower = tokens.join(" ");
@@ -1178,6 +1816,227 @@ function filterOmniSearchResults(query) {
 		return;
 	}
 	renderOmniResults(limited, totalCount);
+}
+
+function clearOmniStopsLayer() {
+	if (appState.omniStopsLayer && appState.map) {
+		appState.map.removeLayer(appState.omniStopsLayer);
+		appState.omniStopsLayer = null;
+	}
+}
+
+function clearOmniRouteLayer() {
+	if (appState.omniRouteLayer && appState.map) {
+		appState.map.removeLayer(appState.omniRouteLayer);
+		appState.omniRouteLayer = null;
+	}
+}
+
+function clearOmniSearchLayers(options = {}) {
+	const restoreNetwork = options.restoreNetwork !== false;
+	clearOmniRouteLayer();
+	clearOmniStopsLayer();
+	if (!appState.omniActive) {
+		return;
+	}
+	const previousSuppress = appState.omniPrevSuppress;
+	appState.omniActive = false;
+	appState.omniPrevSuppress = null;
+	if (!restoreNetwork) {
+		return;
+	}
+	appState.suppressNetworkRoutes = Boolean(previousSuppress);
+	if (!appState.suppressNetworkRoutes) {
+		appState.networkRouteLoadToken += 1;
+		renderNetworkRoutes(appState.networkRouteLoadToken);
+	}
+}
+
+async function showOmniRoutes(routeIds, contextLabel = "Explorer") {
+	if (!appState.map) {
+		return;
+	}
+	const routes = Array.isArray(routeIds)
+		? Array.from(new Set(routeIds.map((id) => String(id || "").trim().toUpperCase()).filter(Boolean)))
+			.filter((routeId) => !isExcludedRoute(routeId))
+		: [];
+	if (routes.length === 0) {
+		clearOmniSearchLayers();
+		return;
+	}
+	if (!appState.omniActive) {
+		appState.omniPrevSuppress = appState.suppressNetworkRoutes;
+	}
+	appState.omniActive = true;
+	appState.suppressNetworkRoutes = true;
+	appState.networkRouteLoadToken += 1;
+	clearNetworkRoutes();
+	clearActiveRouteSelections();
+	if (appState.focusRouteId) {
+		clearFocusedRoute();
+	}
+	clearOmniRouteLayer();
+	const loadToken = appState.omniRouteLoadToken + 1;
+	appState.omniRouteLoadToken = loadToken;
+	const layerGroup = L.layerGroup().addTo(appState.map);
+	appState.omniRouteLayer = layerGroup;
+	const routeSets = appState.useRouteTypeColours ? await loadNetworkRouteSets() : null;
+	const tasks = routes.map((routeId) => loadRouteGeometry(routeId)
+		.then((segments) => {
+			if (loadToken !== appState.omniRouteLoadToken) {
+				return;
+			}
+			if (!segments || segments.length === 0) {
+				return;
+			}
+			const color = getFocusedRouteColour(routeId, routeSets);
+			segments.forEach((segment) => {
+				const line = L.polyline(segment, {
+					color,
+					weight: 3.4,
+					opacity: 0.88,
+					interactive: true,
+					pane: ROUTE_PANE
+				}).addTo(layerGroup);
+				line._routeId = routeId;
+				bindRouteHoverPopup(line, layerGroup);
+			});
+		})
+		.catch(() => {}));
+	await Promise.all(tasks);
+	if (loadToken !== appState.omniRouteLoadToken) {
+		return;
+	}
+	updateSelectedInfo(`${contextLabel}: ${routes.length} routes`);
+}
+
+async function setOperatorInfoPanel(operatorName, routes) {
+	const routeSets = appState.useRouteTypeColours ? await loadNetworkRouteSets() : null;
+	const safeRoutes = Array.isArray(routes) ? routes : [];
+	const routeHtml = safeRoutes.length > 0
+		? renderRoutePills(safeRoutes, routeSets)
+		: '<div class="info-empty">No routes listed.</div>';
+	setInfoPanel({
+		title: operatorName || "Operator",
+		subtitle: "Operator",
+		bodyHtml: `
+			<div class="info-section">
+				<div class="info-label">Routes</div>
+				${routeHtml}
+			</div>
+		`
+	});
+}
+
+async function renderOmniPostcodeStops(data) {
+	if (!data) {
+		return 0;
+	}
+	const geojson = await loadBusStopsGeojson().catch(() => null);
+	if (!geojson || !Array.isArray(geojson.features)) {
+		return Number.isFinite(data.stopCount) ? data.stopCount : 0;
+	}
+	const districtToken = normalisePostcodeDistrict(data.key || data.district || "");
+	const matches = geojson.features.filter((feature) => {
+		const props = feature?.properties || {};
+		const postcode = normalisePostcodeValue(props?.POSTCODE || props?.postcode);
+		if (!postcode) {
+			return false;
+		}
+		return normalisePostcodeDistrict(postcode) === districtToken;
+	});
+	clearOmniStopsLayer();
+	if (!appState.map) {
+		return matches.length;
+	}
+	const layerGroup = L.layerGroup().addTo(appState.map);
+	appState.omniStopsLayer = layerGroup;
+	matches.forEach((feature) => {
+		const coords = feature?.geometry?.coordinates;
+		const lon = Array.isArray(coords) ? Number(coords[0]) : null;
+		const lat = Array.isArray(coords) ? Number(coords[1]) : null;
+		if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+			return;
+		}
+		const props = feature?.properties || {};
+		const marker = L.circleMarker([lat, lon], {
+			radius: 4,
+			weight: 1,
+			color: "#0f766e",
+			fillColor: "#22c55e",
+			fillOpacity: 0.8,
+			pane: STOP_PANE
+		});
+		bindHoverPopup(marker, () => buildBusStopPopup(props));
+		marker.addTo(layerGroup);
+	});
+	return matches.length;
+}
+
+async function applyOmniRouteSelection(item) {
+	const routeId = item?.routeId;
+	if (!routeId) {
+		return;
+	}
+	clearOmniSearchLayers({ restoreNetwork: false });
+	clearAdvancedStopsLayer();
+	clearOmniStopsLayer();
+	await focusRoute(routeId);
+}
+
+function applyOmniStationSelection(item) {
+	const station = item?.station;
+	if (!station) {
+		return;
+	}
+	clearOmniSearchLayers({ restoreNetwork: false });
+	clearAdvancedStopsLayer();
+	clearOmniStopsLayer();
+	ensureBusStationsVisible();
+	setBusStationSelectValue(station.key || "");
+	const select = document.getElementById("busStationSelect");
+	if (select) {
+		select.dispatchEvent(new Event("change"));
+	}
+}
+
+function applyOmniGarageSelection(item) {
+	const group = item?.garageGroup;
+	if (!group?.features) {
+		return;
+	}
+	clearOmniSearchLayers({ restoreNetwork: false });
+	clearAdvancedStopsLayer();
+	clearOmniStopsLayer();
+	ensureGaragesVisible();
+	const key = buildGarageSelectKey(group.features);
+	setGarageSelectValue(key);
+	const select = document.getElementById("garageSelect");
+	if (select) {
+		select.dispatchEvent(new Event("change"));
+	}
+}
+
+async function applyOmniAdvancedFilterSelection(item) {
+	const spec = item?.filterSpec;
+	if (!spec) {
+		return;
+	}
+	closeOmniSearch();
+	clearOmniSearchLayers({ restoreNetwork: false });
+	clearAdvancedStopsLayer();
+	clearOmniStopsLayer();
+	const module = document.querySelector('[data-module="advanced-filters"]');
+	if (module) {
+		module.open = true;
+	}
+	if (module && window.RouteMapsterAdvancedFilters?.initAdvancedFilters) {
+		await window.RouteMapsterAdvancedFilters.initAdvancedFilters(module, appState);
+	}
+	if (window.RouteMapsterAdvancedFilters?.applyFilterSpec) {
+		await window.RouteMapsterAdvancedFilters.applyFilterSpec(spec, appState, { openModule: true });
+		updateSelectedInfo("Advanced filters applied.");
+	}
 }
 async function applyOmniOperatorSelection(item) {
 	const operatorName = item?.operatorName;
@@ -1301,6 +2160,10 @@ function handleOmniSelection(item) {
 	}
 	if (item.type === "postcode") {
 		applyOmniPostcodeSelection(item).catch(() => {});
+		return;
+	}
+	if (item.type === "advanced_filters") {
+		applyOmniAdvancedFilterSelection(item).catch(() => {});
 	}
 }
 
@@ -1375,6 +2238,29 @@ function setupOmniSearch() {
 		}
 	});
 
+	const handleOmniEnter = (event) => {
+		if (event.defaultPrevented) {
+			return;
+		}
+		if (event.key !== "Enter" && event.key !== "NumpadEnter") {
+			return;
+		}
+		if (event.isComposing) {
+			return;
+		}
+		const button = event.target?.closest?.(".omni-result");
+		const index = button ? Number(button.dataset.index || 0) : omniSearchState.selectedIndex;
+		const item = omniSearchState.filteredItems[index];
+		if (!item) {
+			return;
+		}
+		event.preventDefault();
+		handleOmniSelection(item);
+	};
+
+	results.addEventListener("keydown", handleOmniEnter);
+	modal.addEventListener("keydown", handleOmniEnter);
+
 	input.addEventListener("input", () => {
 		filterOmniSearchResults(input.value);
 	});
@@ -1397,12 +2283,8 @@ function setupOmniSearch() {
 			renderOmniResults(omniSearchState.filteredItems, omniSearchState.filteredItems.length);
 			return;
 		}
-		if (event.key === "Enter") {
-			event.preventDefault();
-			const item = omniSearchState.filteredItems[omniSearchState.selectedIndex];
-			if (item) {
-				handleOmniSelection(item);
-			}
+		if (event.key === "Enter" || event.key === "NumpadEnter") {
+			handleOmniEnter(event);
 			return;
 		}
 		if (event.key === "Escape") {
@@ -3056,6 +3938,24 @@ function clearActiveRouteSelections() {
 		clearBusStationHighlight();
 		setBusStationSelectValue("");
 	}
+}
+
+function clearDetailsRouteHighlights() {
+	clearFocusedRoute();
+	clearActiveRouteSelections();
+	clearOmniSearchLayers({ restoreNetwork: true });
+	setGarageSelectValue("");
+	if (appState.analysisActive) {
+		clearAnalysisRoutes();
+	}
+	if (appState.suppressNetworkRoutes && !appState.advancedFiltersActive && !appState.analysisActive && !appState.omniActive) {
+		appState.suppressNetworkRoutes = false;
+	}
+	if (!appState.suppressNetworkRoutes && appState.showNetworkRoutes) {
+		appState.networkRouteLoadToken += 1;
+		renderNetworkRoutes(appState.networkRouteLoadToken);
+	}
+	updateRouteFilterVisibilityNote();
 }
 
 function selectGarageRoutes(features) {
@@ -5288,6 +6188,18 @@ function ensureBusStationsVisible() {
 	}
 }
 
+function ensureGaragesVisible() {
+	const checkbox = document.getElementById("showGarages");
+	if (!checkbox) {
+		return;
+	}
+	if (!checkbox.checked) {
+		checkbox.checked = true;
+		appState.garageLoadToken += 1;
+		addGaragesLayer(appState.map).catch(() => {});
+	}
+}
+
 function setBusStationSelectValue(key) {
 	const select = document.getElementById("busStationSelect");
 	if (!select) {
@@ -5525,6 +6437,7 @@ function setupUI() {
 	const closeInfoPanel = document.getElementById("closeInfoPanel");
 	if (closeInfoPanel) {
 		closeInfoPanel.addEventListener("click", () => {
+			clearDetailsRouteHighlights();
 			resetInfoPanel();
 		});
 	}
