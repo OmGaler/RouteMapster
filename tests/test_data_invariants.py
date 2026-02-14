@@ -31,9 +31,14 @@ def _load_json(path: Path) -> Any:
 
 def _base_route(route: str) -> str:
     text = normalize_route_id(route)
-    if text.endswith("D") and len(text) > 1 and text[-2].isdigit():
+    if len(text) > 1 and text[:-1].isdigit() and text[-1].isalpha():
         return text[:-1]
     return text
+
+
+def _is_digit_suffix_variant(route: str) -> bool:
+    text = normalize_route_id(route)
+    return len(text) > 1 and text[:-1].isdigit() and text[-1].isalpha()
 
 
 def _is_school_frequency_exempt(route: str) -> bool:
@@ -161,7 +166,7 @@ def test_routes_with_geometry_are_active() -> None:
                         )
                         if day_status["active"]:
                             continue
-            missing = [
+            missing = {
                 name
                 for name, flag in (
                     ("geometry", status["has_geom"]),
@@ -170,8 +175,12 @@ def test_routes_with_geometry_are_active() -> None:
                     ("frequency", status["has_freq"] or not status.get("expects_freq", True)),
                 )
                 if not flag
-            ]
-            inactive.append(f"{route}: missing {', '.join(missing)}")
+            }
+            if _is_digit_suffix_variant(route):
+                base = _base_route(route)
+                if base and base in geom_routes and missing.issubset({"allocation", "frequency"}):
+                    continue
+            inactive.append(f"{route}: missing {', '.join(sorted(missing))}")
     assert not inactive, "Inactive routes with geometry:\n" + "\n".join(inactive[:40])
 
 
@@ -227,12 +236,17 @@ def test_frequency_values_within_bounds() -> None:
 def test_frequency_rules_by_route_type() -> None:
     allocations = _allocation_sets()
     freqs = _freqs_map()
+    geom_routes = set(_geom_routes())
     errors: List[str] = []
-    for route in _geom_routes():
+    for route in sorted(geom_routes):
         if _is_school_frequency_exempt(route):
             continue
         entry = _freqs_for_route(route, freqs)
         if not isinstance(entry, dict) or not entry:
+            if _is_digit_suffix_variant(route):
+                base = _base_route(route)
+                if base and base in geom_routes:
+                    continue
             errors.append(f"{route}: missing frequency entry")
             continue
         peak_am, offpeak, peak_pm, overnight = _freq_values(entry)

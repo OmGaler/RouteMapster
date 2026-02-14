@@ -164,7 +164,7 @@ Most table outputs support CSV export.
 
 ## Bus stop analyses (module)
 
-The **Bus stop analyses** module runs analyses over bus stops (a stop-level dataset enriched with route counts, districts/boroughs, and optional frequency + centrality fields).
+The **Bus stop analyses** module runs analyses over bus stops (a stop-level dataset enriched with route counts, districts/boroughs, and frequency fields).
 
  
 
@@ -179,7 +179,7 @@ The **Bus stop analyses** module runs analyses over bus stops (a stop-level data
 ### Map overlays (top-N)
 
 Show the **top N bus stops** on the map by:
-- **Routes per stop**, or (if centrality data is present) **betweenness**, **closeness**, **eigenvector**, **degree**, and related metrics.
+- **Routes per stop**.
 
 ### Analyses
 
@@ -189,7 +189,6 @@ Built-in analyses include:
 - Bus stop summary by **postcode district**
 - **Coverage gaps** by district (low average routes, with minimum sample size)
 - **Routes-per-stop distribution**
-- Top bus stops by **betweenness / closeness / eigenvector** (when centrality data is available)
   
 Outputs can be exported as CSV.
 
@@ -206,13 +205,12 @@ python -m pip install -r scripts/requirements-dev.txt
 python scripts/fetch_bus_routes.py
 python scripts/process_routes_xml_to_geojson.py
 python scripts/fetch_bus_stops.py
-python scripts/fetch_stop_sequences.py
 python scripts/build_frequency_cache.py
 python scripts/fetch_and_process_garages.py --base data/garages-base.geojson
 python scripts/build_route_summary.py
 ```
 
-Some steps (notably timetable frequency/sequence fetches) use the TfL Unified API and may require credentials:
+Some steps (notably timetable frequency fetches) use the TfL Unified API and may require credentials:
 - `TFL_APP_ID`
 - `TFL_APP_KEY`
 
@@ -223,7 +221,7 @@ You can put these in a `.env` file in the repo root.
 - `index.html`: UI shell and module layout.
 - `src/app.js`: main application logic and map interactions.
 - `src/advanced_filters.js`, `src/query_engine.js`, `src/analyses.js`, `src/stop_analyses.js`: feature modules.
-- `scripts/`: fetch + processing pipeline (routes, stops, sequences, frequencies, garages).
+- `scripts/`: fetch + processing pipeline (routes, stops, frequencies, garages).
 - `data/processed/`: browser-ready outputs (GeoJSON/JSON).
 
 ## Scope (what this is / isn’t)

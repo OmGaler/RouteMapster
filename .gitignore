@@ -12,3 +12,6 @@ __pycache__/
 .env
 .env.*
 .vscode/settings.json
+route_summary.csv
+scratch.md
+todo.md
