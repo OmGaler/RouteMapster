@@ -241,9 +241,14 @@ RouteMapster is not:
 - `S`: toggle bus stations (opens Stations module)
 - `F`: toggle frequency overlay (opens Frequencies module)
 - `R`: show routes (opens Routes module + enables “Show all routes”)
-- `A`: open Advanced route filters
-- `N`: open Advanced route analyses
-- `P`: open Bus stop analyses
+- `A`: show all routes
+- `0`: show 24 hour routes only
+- `N`: show night routes only
+- `P`: show prefix routes only
+- `H`: show school routes only
+- `X`: open Advanced route filters
+- `Y`: open Advanced route analyses
+- `Z`: open Bus stop analyses
 - `C`: clear all (layers + route highlights)
 
 ## Attribution & disclaimer

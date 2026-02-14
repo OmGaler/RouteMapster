@@ -20,13 +20,7 @@
   ];
   const DEFAULT_MAP_TOP_N = 50;
   const MAP_METRICS = [
-    { value: "route_count", label: "Routes per stop" },
-    { value: "betweenness", label: "Betweenness (LCC)", requiresCentrality: true },
-    { value: "closeness_topo", label: "Closeness (topo, LCC)", requiresCentrality: true },
-    { value: "eigenvector", label: "Eigenvector (LCC)", requiresCentrality: true },
-    { value: "degree", label: "Degree", requiresCentrality: true },
-    { value: "degree_norm", label: "Degree (normalized)", requiresCentrality: true },
-    { value: "route_degree", label: "Route degree", requiresCentrality: true }
+    { value: "route_count", label: "Routes per stop" }
   ];
 
   const utils = window.RouteMapsterUtils || {};
@@ -230,16 +224,8 @@
       .split(",")
       .map((token) => token.trim())
       .filter(Boolean);
-    if (tokens.length <= limit) {
-      return escapeHtml(listString);
-    }
-    const summary = formatRouteList(tokens, limit);
-    return `
-      <details class="route-list-details">
-        <summary>${escapeHtml(summary)}</summary>
-        <div class="route-list-full">${escapeHtml(listString)}</div>
-      </details>
-    `;
+    const summary = tokens.length <= limit ? listString : formatRouteList(tokens, limit);
+    return `<span title="${escapeHtml(listString)}">${escapeHtml(summary)}</span>`;
   };
 
   const buildFrequencyTotals = (routes, frequencyData) => {
@@ -307,9 +293,7 @@
       items.push({ value: "", label: "None", disabled: false });
     }
     MAP_METRICS.forEach((entry) => {
-      const needsCentrality = entry.requiresCentrality && !context?.centralityAvailable;
-      const label = needsCentrality ? `${entry.label} (needs centrality)` : entry.label;
-      items.push({ value: entry.value, label, disabled: needsCentrality });
+      items.push({ value: entry.value, label: entry.label, disabled: false });
     });
     selectEl.innerHTML = items
       .map((item) => `<option value="${escapeHtml(item.value)}"${item.disabled ? " disabled" : ""}>${escapeHtml(item.label)}</option>`)
@@ -500,11 +484,14 @@
       return `<tr>${cells}</tr>`;
     }).join("");
     return `
-      <div class="analysis-table-wrap">
-        <table class="analysis-table">
-          <thead><tr>${header}</tr></thead>
-          <tbody>${body}</tbody>
-        </table>
+      <div class="analysis-table-shell">
+        <div class="analysis-scroll-cue" aria-hidden="true">▸</div>
+        <div class="analysis-table-wrap">
+          <table class="analysis-table">
+            <thead><tr>${header}</tr></thead>
+            <tbody>${body}</tbody>
+          </table>
+        </div>
       </div>
     `;
   };
@@ -667,84 +654,6 @@
           rows: buildDistribution(rows)
         };
       }
-    },
-    "top-stops-betweenness": {
-      id: "top-stops-betweenness",
-      label: "Top bus stops by betweenness",
-      requiresCentrality: true,
-      run: (rows) => {
-        const candidates = rows.filter((row) => Number.isFinite(row.betweenness));
-        if (candidates.length === 0) {
-          return { type: "note", message: "Betweenness values are not available for this dataset." };
-        }
-        const sorted = candidates
-          .slice()
-          .sort((a, b) => b.betweenness - a.betweenness)
-          .slice(0, 25);
-        return {
-          type: "table",
-          columns: ["Rank", "Bus stop", "Borough", "Region", "Betweenness"],
-          rows: sorted.map((row, index) => [
-            index + 1,
-            formatStopLabel(row),
-            row.borough,
-            row.region,
-            formatCentralityValue(row.betweenness)
-          ])
-        };
-      }
-    },
-    "top-stops-closeness": {
-      id: "top-stops-closeness",
-      label: "Top bus stops by closeness",
-      requiresCentrality: true,
-      run: (rows) => {
-        const candidates = rows.filter((row) => Number.isFinite(row.closeness_topo));
-        if (candidates.length === 0) {
-          return { type: "note", message: "Closeness values are not available for this dataset." };
-        }
-        const sorted = candidates
-          .slice()
-          .sort((a, b) => b.closeness_topo - a.closeness_topo)
-          .slice(0, 25);
-        return {
-          type: "table",
-          columns: ["Rank", "Bus stop", "Borough", "Region", "Closeness (topo)"],
-          rows: sorted.map((row, index) => [
-            index + 1,
-            formatStopLabel(row),
-            row.borough,
-            row.region,
-            formatCentralityValue(row.closeness_topo)
-          ])
-        };
-      }
-    },
-    "top-stops-eigenvector": {
-      id: "top-stops-eigenvector",
-      label: "Top bus stops by eigenvector",
-      requiresCentrality: true,
-      run: (rows) => {
-        const candidates = rows.filter((row) => Number.isFinite(row.eigenvector));
-        if (candidates.length === 0) {
-          return { type: "note", message: "Eigenvector values are not available for this dataset." };
-        }
-        const sorted = candidates
-          .slice()
-          .sort((a, b) => b.eigenvector - a.eigenvector)
-          .slice(0, 25);
-        return {
-          type: "table",
-          columns: ["Rank", "Bus stop", "Borough", "Region", "Eigenvector"],
-          rows: sorted.map((row, index) => [
-            index + 1,
-            formatStopLabel(row),
-            row.borough,
-            row.region,
-            formatCentralityValue(row.eigenvector)
-          ])
-        };
-      }
     }
   };
 
@@ -758,12 +667,12 @@
     resultsByKey: new Map(),
     debounceHandle: null,
     districtTokens: [],
-    boroughTokens: [],
+    boroughToken: "",
     regionToken: "",
     moduleOpen: true,
     mapMode: "filtered",
     mapTopN: DEFAULT_MAP_TOP_N,
-    mapTopMetric: "betweenness",
+    mapTopMetric: "route_count",
     mapColourMetric: "",
     suppressedBaseStops: false,
     suppressedBaseStopsPrev: null
@@ -771,7 +680,7 @@
 
   const buildFilterSpec = (els) => {
     const districts = state.districtTokens.slice();
-    const boroughs = state.boroughTokens.slice();
+    const boroughs = state.boroughToken ? [state.boroughToken] : [];
     const region = parseRegionToken(els.regionSelect?.value || "");
     return {
       districts,
@@ -948,8 +857,6 @@
       let suffix = "";
       if (entry.requiresFrequency && !state.frequencyAvailable) {
         suffix = " (needs frequency data)";
-      } else if (entry.requiresCentrality && !state.centralityAvailable) {
-        suffix = " (needs centrality data)";
       }
       return `<option value="${escapeHtml(entry.id)}">${escapeHtml(entry.label + suffix)}</option>`;
     });
@@ -1159,7 +1066,7 @@
     }
     const target = container.querySelector ? (container.querySelector("#stopAnalysesContainer") || container) : container;
     target.innerHTML = `
-      <div class="module-note">Topological connectivity model using bus stops, not demand or frequency.</div>
+      <div class="module-note">Bus stop analysis using stop, route, and frequency data.</div>
       <div class="module-note" id="stopAnalysisStatus">Loading bus stop datasets...</div>
       <div class="module-section">
         <div class="section-title">Scope</div>
@@ -1177,13 +1084,10 @@
           <div class="module-note">Use commas or spaces to add multiple districts.</div>
         </div>
         <div class="field">
-          <label for="stopBoroughEntry">Boroughs</label>
-          <div class="tag-input" id="stopBoroughInput">
-            <div class="tag-list" id="stopBoroughTags"></div>
-            <input id="stopBoroughEntry" type="search" placeholder="e.g. Camden" autocomplete="off" list="stopBoroughOptions" />
-          </div>
-          <datalist id="stopBoroughOptions"></datalist>
-          <div class="module-note">Use commas to add multiple boroughs.</div>
+          <label for="stopBoroughSelect">Borough</label>
+          <select id="stopBoroughSelect" class="select-field">
+            <option value="">All boroughs</option>
+          </select>
         </div>
         <div class="field">
           <label for="stopRegionSelect">Region</label>
@@ -1247,9 +1151,7 @@
       districtEntry: target.querySelector("#stopDistrictEntry"),
       districtTags: target.querySelector("#stopDistrictTags"),
       districtOptions: target.querySelector("#stopDistrictOptions"),
-      boroughEntry: target.querySelector("#stopBoroughEntry"),
-      boroughTags: target.querySelector("#stopBoroughTags"),
-      boroughOptions: target.querySelector("#stopBoroughOptions"),
+      boroughSelect: target.querySelector("#stopBoroughSelect"),
       regionSelect: target.querySelector("#stopRegionSelect"),
       frequencyBand: target.querySelector("#stopFrequencyBand"),
       frequencyNote: target.querySelector("#stopFrequencyNote"),
@@ -1358,88 +1260,12 @@
 
     syncDistrictTags();
 
-    const syncBoroughTags = () => {
-      if (!els.boroughTags) {
-        return;
-      }
-      els.boroughTags.innerHTML = state.boroughTokens
-        .map((token) => {
-          const safe = token.replace(/"/g, "&quot;");
-          return `<span class="tag-chip" data-token="${safe}">
-            <span>${safe}</span>
-            <button type="button" class="tag-remove" aria-label="Remove ${safe}">x</button>
-          </span>`;
-        })
-        .join("");
-    };
-
-    const addBoroughTokensFromValue = (value) => {
-      const newTokens = parseBoroughTokens(value);
-      if (newTokens.length === 0) {
-        return;
-      }
-      const tokenSet = new Set(state.boroughTokens);
-      newTokens.forEach((token) => {
-        if (!tokenSet.has(token)) {
-          state.boroughTokens.push(token);
-          tokenSet.add(token);
-        }
-      });
-      syncBoroughTags();
-      scheduleRefresh(els);
-    };
-
-    const commitBoroughInput = () => {
-      const value = els.boroughEntry?.value?.trim();
-      if (!value) {
-        return;
-      }
-      addBoroughTokensFromValue(value);
-      if (els.boroughEntry) {
-        els.boroughEntry.value = "";
-      }
-    };
-
-    if (els.boroughEntry) {
-      els.boroughEntry.addEventListener("keydown", (event) => {
-        if (event.key === "Enter") {
-          event.preventDefault();
-          commitBoroughInput();
-          return;
-        }
-        if (event.key === "Backspace" && els.boroughEntry.value.trim() === "" && state.boroughTokens.length > 0) {
-          event.preventDefault();
-          state.boroughTokens = state.boroughTokens.slice(0, -1);
-          syncBoroughTags();
-          scheduleRefresh(els);
-        }
-      });
-      els.boroughEntry.addEventListener("blur", () => {
-        commitBoroughInput();
-      });
-    }
-
-    if (els.boroughTags) {
-      els.boroughTags.addEventListener("click", (event) => {
-        const button = event.target.closest(".tag-remove");
-        if (!button) {
-          return;
-        }
-        const chip = button.closest(".tag-chip");
-        if (!chip) {
-          return;
-        }
-        const token = chip.getAttribute("data-token");
-        if (!token) {
-          return;
-        }
-        state.boroughTokens = state.boroughTokens.filter((entry) => entry !== token);
-        syncBoroughTags();
+    if (els.boroughSelect) {
+      els.boroughSelect.addEventListener("change", () => {
+        state.boroughToken = normaliseBoroughToken(els.boroughSelect.value || "");
         scheduleRefresh(els);
       });
     }
-
-    syncBoroughTags();
 
     if (els.regionSelect) {
       els.regionSelect.innerHTML = REGION_OPTIONS
@@ -1489,12 +1315,12 @@
           .map((row) => row.borough)
           .filter((borough) => borough && borough !== "Unknown")
       );
-      if (els.boroughOptions) {
+      if (els.boroughSelect) {
         const options = Array.from(boroughSet)
           .sort((a, b) => String(a).localeCompare(String(b)))
-          .map((borough) => `<option value="${escapeHtml(borough)}"></option>`)
+          .map((borough) => `<option value="${escapeHtml(borough)}">${escapeHtml(borough)}</option>`)
           .join("");
-        els.boroughOptions.innerHTML = options;
+        els.boroughSelect.innerHTML = `<option value="">All boroughs</option>${options}`;
       }
 
       if (els.frequencyBand) {
@@ -1507,8 +1333,7 @@
           : "Frequency dataset not available.";
       }
       if (els.status) {
-        const centralityNote = state.centralityAvailable ? " Centrality ready." : "";
-        els.status.textContent = `Loaded ${state.stops.length} bus stops.${centralityNote}`;
+        els.status.textContent = `Loaded ${state.stops.length} bus stops.`;
       }
     } catch (error) {
       state.stops = [];
@@ -1521,7 +1346,7 @@
 
     state.mapTopMetric = resolveMetricSelection(state.mapTopMetric, state, { allowNone: false });
     state.mapColourMetric = resolveMetricSelection(
-      state.mapColourMetric || (state.centralityAvailable ? "closeness_topo" : ""),
+      state.mapColourMetric || "route_count",
       state,
       { allowNone: true }
     );
@@ -1603,7 +1428,7 @@
         input === els.frequencyBand ||
         input === els.analysisSelect ||
         input === els.districtEntry ||
-        input === els.boroughEntry ||
+        input === els.boroughSelect ||
         input === els.regionSelect
       ) {
         return;
@@ -1619,3 +1444,4 @@
     initStopAnalyses
   };
 })();
+

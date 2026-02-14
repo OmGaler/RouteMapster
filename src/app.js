@@ -2595,17 +2595,10 @@ function clearAdvancedStopsLayer() {
 }
 
 const ADVANCED_STOP_METRIC_LABELS = {
-	route_count: "Routes per stop",
-	betweenness: "Betweenness (LCC)",
-	closeness_topo: "Closeness (topo, LCC)",
-	eigenvector: "Eigenvector (LCC)",
-	degree: "Degree",
-	degree_norm: "Degree (normalized)",
-	route_degree: "Route degree"
+	route_count: "Routes per stop"
 };
 const ADVANCED_STOP_GRADIENT = {
-	low: "#ccfbf1",
-	high: "#0f766e",
+	steps: ["#2c7bb6", "#5aa4d6", "#abd9e9", "#fee090", "#fdae61", "#d7191c"],
 	fallback: "#e2e8f0",
 	fallbackStroke: "#94a3b8"
 };
@@ -2738,24 +2731,32 @@ function renderAdvancedStopsLayer(stops, options = {}) {
 		}
 		let fillColor = "#14b8a6";
 		let strokeColor = "#0f766e";
+		let radius = 4;
 		if (colorMetric && metricRange) {
 			const value = getAdvancedStopMetricValue(stop, colorMetric);
 			if (Number.isFinite(value)) {
 				const t = metricRange.max === metricRange.min
 					? 1
 					: (value - metricRange.min) / (metricRange.max - metricRange.min);
-				fillColor = lerpColor(ADVANCED_STOP_GRADIENT.low, ADVANCED_STOP_GRADIENT.high, t);
+				const palette = ADVANCED_STOP_GRADIENT.steps;
+				const idx = Math.min(
+					palette.length - 1,
+					Math.max(0, Math.round(t * (palette.length - 1)))
+				);
+				fillColor = palette[idx];
+				strokeColor = "#334155";
+				radius = 3.5 + (t * 2.5);
 			} else {
 				fillColor = ADVANCED_STOP_GRADIENT.fallback;
 				strokeColor = ADVANCED_STOP_GRADIENT.fallbackStroke;
 			}
 		}
 		const marker = L.circleMarker([lat, lon], {
-			radius: 4,
+			radius,
 			weight: 1,
 			color: strokeColor,
 			fillColor,
-			fillOpacity: 0.75,
+			fillOpacity: 0.88,
 			pane: STOP_PANE
 		});
 		bindHoverPopup(marker, () => buildAdvancedStopPopup(stop, options));
@@ -7559,6 +7560,19 @@ function setupKeyboardShortcuts() {
 		const details = document.querySelector(`[data-module="${moduleId}"]`);
 		if (details) {
 			details.open = true;
+			const summary = details.querySelector("summary") || details;
+			const scrollHost = details.closest(".sidebar-scroll");
+			if (scrollHost) {
+				const hostRect = scrollHost.getBoundingClientRect();
+				const summaryRect = summary.getBoundingClientRect();
+				const targetTop = scrollHost.scrollTop + (summaryRect.top - hostRect.top) - 12;
+				scrollHost.scrollTo({
+					top: Math.max(0, targetTop),
+					behavior: "smooth"
+				});
+			} else {
+				summary.scrollIntoView({ behavior: "smooth", block: "start", inline: "nearest" });
+			}
 		}
 	};
 
@@ -7573,6 +7587,50 @@ function setupKeyboardShortcuts() {
 		if (next && moduleId) {
 			openModule(moduleId);
 		}
+	};
+
+	const setNetworkRouteFilters = ({ showAll, regular, prefix, twentyfour, night, school }) => {
+		openModule("routes");
+		const showAllCheckbox = document.getElementById("showAllRoutes");
+		if (showAll) {
+			if (showAllCheckbox && !showAllCheckbox.checked) {
+				showAllCheckbox.checked = true;
+				showAllCheckbox.dispatchEvent(new Event("change"));
+				return;
+			}
+			appState.networkRouteLoadToken += 1;
+			renderNetworkRoutes(appState.networkRouteLoadToken);
+			return;
+		}
+
+		if (showAllCheckbox && showAllCheckbox.checked) {
+			showAllCheckbox.checked = false;
+			showAllCheckbox.dispatchEvent(new Event("change"));
+		}
+
+		const entries = [
+			["regular", "showNetworkRegularRoutes"],
+			["prefix", "showNetworkPrefixRoutes"],
+			["twentyfour", "showNetwork24hrRoutes"],
+			["night", "showNetworkNightRoutes"],
+			["school", "showNetworkSchoolRoutes"]
+		];
+		entries.forEach(([key, id]) => {
+			const checkbox = document.getElementById(id);
+			if (!checkbox) {
+				return;
+			}
+			checkbox.disabled = false;
+			delete checkbox.dataset.prevChecked;
+			const label = checkbox.closest("label");
+			if (label) {
+				label.classList.remove("is-disabled");
+			}
+			checkbox.checked = Boolean({ regular, prefix, twentyfour, night, school }[key]);
+		});
+
+		appState.networkRouteLoadToken += 1;
+		renderNetworkRoutes(appState.networkRouteLoadToken);
 	};
 
 	const showRoutes = () => {
@@ -7636,13 +7694,69 @@ function setupKeyboardShortcuts() {
 				break;
 			case "a":
 				event.preventDefault();
-				openModule("advanced-filters");
+				setNetworkRouteFilters({
+					showAll: true,
+					regular: true,
+					prefix: true,
+					twentyfour: true,
+					night: true,
+					school: true
+				});
 				break;
 			case "n":
 				event.preventDefault();
-				openModule("advanced-analyses");
+				setNetworkRouteFilters({
+					showAll: false,
+					regular: false,
+					prefix: false,
+					twentyfour: false,
+					night: true,
+					school: false
+				});
 				break;
 			case "p":
+				event.preventDefault();
+				setNetworkRouteFilters({
+					showAll: false,
+					regular: false,
+					prefix: true,
+					twentyfour: false,
+					night: false,
+					school: false
+				});
+				break;
+			case "0":
+			case "numpad0":
+				event.preventDefault();
+				setNetworkRouteFilters({
+					showAll: false,
+					regular: false,
+					prefix: false,
+					twentyfour: true,
+					night: false,
+					school: false
+				});
+				break;
+			case "h":
+				event.preventDefault();
+				setNetworkRouteFilters({
+					showAll: false,
+					regular: false,
+					prefix: false,
+					twentyfour: false,
+					night: false,
+					school: true
+				});
+				break;
+			case "x":
+				event.preventDefault();
+				openModule("advanced-filters");
+				break;
+			case "y":
+				event.preventDefault();
+				openModule("advanced-analyses");
+				break;
+			case "z":
 				event.preventDefault();
 				openModule("stop-analyses");
 				break;
