@@ -771,21 +771,26 @@
       els.seriesIncludePrefixes.checked = normalized.include_prefix_routes === true;
     }
 
-    const setMulti = (select, values) => {
+    const setMulti = (select, values, normalizer) => {
       if (!select) {
         return;
       }
-      const set = new Set(values || []);
+      const normalize = typeof normalizer === "function"
+        ? normalizer
+        : (value) => String(value ?? "").trim();
+      const set = new Set((values || []).map((value) => normalize(value)).filter(Boolean));
       Array.from(select.options).forEach((option) => {
-        option.selected = set.has(option.value);
+        const exactValue = String(option.value ?? "").trim();
+        const normalizedValue = normalize(option.value);
+        option.selected = set.has(exactValue) || set.has(normalizedValue);
       });
     };
 
     setMulti(els.routeTypes, normalized.route_types || []);
-    setMulti(els.operators, normalized.operators || []);
-    setMulti(els.garages, normalized.garages || []);
+    setMulti(els.operators, normalized.operators || [], (value) => String(value ?? "").trim().toLowerCase());
+    setMulti(els.garages, normalized.garages || [], (value) => String(value ?? "").trim().toLowerCase());
     if (state.boroughsReady) {
-      setMulti(els.boroughs, normalized.boroughs || []);
+      setMulti(els.boroughs, normalized.boroughs || [], (value) => String(value ?? "").trim().toLowerCase());
     } else {
       setMulti(els.boroughs, []);
     }

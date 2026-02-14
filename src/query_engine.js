@@ -111,7 +111,27 @@
 
   const normaliseToken = (value) => String(value || "").trim();
   const normaliseLower = (value) => normaliseToken(value).toLowerCase();
+  const normaliseLooseToken = (value) => normaliseLower(value).replace(/[^a-z0-9]/g, "");
   const normaliseEndpointKey = (value) => normaliseToken(value).replace(/\s+/g, "");
+  const buildBoroughMatcher = (value) => {
+    const lower = normaliseLower(value);
+    const loose = normaliseLooseToken(value);
+    return { lower, loose };
+  };
+  const boroughTokenMatches = (value, matcher) => {
+    if (!matcher || (!matcher.lower && !matcher.loose)) {
+      return false;
+    }
+    const lower = normaliseLower(value);
+    if (matcher.lower && lower.includes(matcher.lower)) {
+      return true;
+    }
+    if (!matcher.loose) {
+      return false;
+    }
+    const loose = normaliseLooseToken(value);
+    return Boolean(loose) && loose.includes(matcher.loose);
+  };
   const parseRouteIdParts = (value) => {
     const token = normaliseToken(value).toUpperCase().replace(/[^A-Z0-9]/g, "");
     if (!token) {
@@ -377,8 +397,8 @@
     const garageSet = spec.garages && spec.garages.length > 0
       ? new Set(spec.garages)
       : null;
-    const boroughSet = spec.boroughs && spec.boroughs.length > 0
-      ? new Set(spec.boroughs)
+    const boroughMatchers = spec.boroughs && spec.boroughs.length > 0
+      ? spec.boroughs.map((value) => buildBoroughMatcher(value)).filter((matcher) => matcher.lower || matcher.loose)
       : null;
     const boroughMode = spec.borough_mode === "within" ? "within" : "enter";
     const vehicleSet = spec.vehicle_types && spec.vehicle_types.length > 0
@@ -413,18 +433,19 @@
           return false;
         }
       }
-      if (boroughSet) {
+      if (boroughMatchers) {
         const boroughs = Array.isArray(row.boroughs_norm) ? row.boroughs_norm : [];
+        const matchesAnyBorough = (token) => boroughMatchers.some((matcher) => boroughTokenMatches(token, matcher));
         if (boroughMode === "within") {
           if (boroughs.length === 0) {
             return false;
           }
-          const allInside = boroughs.every((token) => boroughSet.has(String(token).toLowerCase()));
+          const allInside = boroughs.every((token) => matchesAnyBorough(token));
           if (!allInside) {
             return false;
           }
         } else {
-          const matchesBorough = boroughs.some((token) => boroughSet.has(String(token).toLowerCase()));
+          const matchesBorough = boroughs.some((token) => matchesAnyBorough(token));
           if (!matchesBorough) {
             return false;
           }
