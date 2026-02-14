@@ -119,6 +119,10 @@ function setStopsPanePriority(enabled) {
 	}
 }
 
+function refreshStopsPanePriority() {
+	setStopsPanePriority(false);
+}
+
 async function initialiseRouteGeometryIndex() {
 	const routeIds = await loadRouteGeometryRouteIds();
 	if (routeIds && routeIds.size) {
@@ -162,6 +166,7 @@ const appState = {
 	busStopBoroughLookup: new Map(),
 	advancedStopsLayer: null,
 	busStopRenderer: null,
+	garageRenderer: null,
 	stopRoutesIndex: null,
 	stopRoutesFromLines: new Map(),
 	stopPointFetches: new Map(),
@@ -169,6 +174,7 @@ const appState = {
 	vehicleLookup: null,
 	vehicleLookupPromise: null,
 	busStationLayer: null,
+	busStationRenderer: null,
 	busStationLoadToken: 0,
 	busStationData: null,
 	activeBusStationRoutes: null,
@@ -2476,6 +2482,15 @@ async function addGaragesLayer(map) {
   }
 
   clearGarageMarkers();
+  if (appState.garageRenderer && appState.map) {
+    appState.map.removeLayer(appState.garageRenderer);
+    appState.garageRenderer = null;
+  }
+  const renderer = L.svg({ pane: GARAGE_PANE });
+  if (renderer._container) {
+    renderer._container.style.pointerEvents = "auto";
+  }
+  appState.garageRenderer = renderer;
   const scaleEnabled = isGarageScaleEnabled();
   const labelsEnabled = isGarageLabelEnabled();
   const filteredGeojson = {
@@ -2495,7 +2510,9 @@ async function addGaragesLayer(map) {
       radius,
       weight: 1,
       fillOpacity: 0.9,
-      pane: GARAGE_PANE
+      pane: GARAGE_PANE,
+      renderer,
+      interactive: true
     });
     const hoverHtml = buildGarageHoverHtml(group.features);
     bindHoverPopup(marker, hoverHtml);
@@ -2529,6 +2546,10 @@ function clearGarageMarkers() {
 		appState.map.removeLayer(appState.garageLayer);
 		appState.garageLayer = null;
 	}
+	if (appState.garageRenderer && appState.map) {
+		appState.map.removeLayer(appState.garageRenderer);
+		appState.garageRenderer = null;
+	}
 }
 
 function clearGarageRoutes() {
@@ -2548,6 +2569,22 @@ function clearBusStopsLayer() {
 		appState.map.removeLayer(appState.busStopRenderer);
 		appState.busStopRenderer = null;
 	}
+}
+
+function hideBusStopsIfVisible() {
+	const showBusStops = document.getElementById("showBusStops");
+	if (!showBusStops || !showBusStops.checked) {
+		return false;
+	}
+	showBusStops.checked = false;
+	appState.busStopLoadToken += 1;
+	clearBusStopsLayer();
+	refreshStopsPanePriority();
+	updateBusStopVisibilityNote();
+	if (appState.selectedFeature?.type === "stop") {
+		resetInfoPanel();
+	}
+	return true;
 }
 
 function clearAdvancedStopsLayer() {
@@ -3960,6 +3997,7 @@ function clearDetailsRouteHighlights() {
 
 function selectGarageRoutes(features) {
 	clearOmniSearchLayers({ restoreNetwork: false });
+	hideBusStopsIfVisible();
 	if (!appState.suppressNetworkRoutes) {
 		appState.suppressNetworkRoutes = true;
 	}
@@ -5768,6 +5806,10 @@ function clearBusStationsLayer() {
 		appState.map.removeLayer(appState.busStationLayer);
 		appState.busStationLayer = null;
 	}
+	if (appState.busStationRenderer && appState.map) {
+		appState.map.removeLayer(appState.busStationRenderer);
+		appState.busStationRenderer = null;
+	}
 }
 
 function clearBusStationHighlight() {
@@ -6124,9 +6166,18 @@ async function addBusStationsLayer(map) {
 	}
 
 	clearBusStationsLayer();
+	if (appState.busStationRenderer && appState.map) {
+		appState.map.removeLayer(appState.busStationRenderer);
+		appState.busStationRenderer = null;
+	}
 	if (appState.useRouteTypeColours) {
 		await loadNetworkRouteSets();
 	}
+	const renderer = L.svg({ pane: STATION_PANE });
+	if (renderer._container) {
+		renderer._container.style.pointerEvents = "auto";
+	}
+	appState.busStationRenderer = renderer;
 	const scaleEnabled = isBusStationScaleEnabled();
 	const maxRoutes = scaleEnabled ? getBusStationScaleMax(stations) : 0;
 	const layerGroup = L.layerGroup();
@@ -6142,7 +6193,9 @@ async function addBusStationsLayer(map) {
 			color: "#0f766e",
 			fillColor: "#14b8a6",
 			fillOpacity: 0.85,
-			pane: GARAGE_PANE
+			pane: STATION_PANE,
+			renderer,
+			interactive: true
 		});
 		bindHoverPopup(marker, buildBusStationPopup(station));
 		marker.on("click", () => {
@@ -6161,6 +6214,7 @@ async function addBusStationsLayer(map) {
 
 function selectBusStationRoutes(station) {
 	clearOmniSearchLayers({ restoreNetwork: false });
+	hideBusStopsIfVisible();
 	if (!appState.suppressNetworkRoutes) {
 		appState.suppressNetworkRoutes = true;
 	}
@@ -6548,11 +6602,13 @@ function setupUI() {
 		if (e.target.checked) {
 			appState.garageLoadToken += 1;
 			addGaragesLayer(appState.map);
+			refreshStopsPanePriority();
 			return;
 		}
 		appState.garageLoadToken += 1;
 		clearGarageMarkers();
 		clearGarageRoutes();
+		refreshStopsPanePriority();
 		appState.activeGarageRoutes = null;
 		if (appState.suppressNetworkRoutes && !appState.activeBusStationRoutes) {
 			appState.suppressNetworkRoutes = false;
@@ -6570,13 +6626,13 @@ function setupUI() {
 		showBusStops.addEventListener("change", (event) => {
 			appState.busStopLoadToken += 1;
 			if (event.target.checked) {
-				setStopsPanePriority(true);
+				refreshStopsPanePriority();
 				addBusStopsLayer(appState.map).catch(() => {});
 				updateBusStopVisibilityNote();
 				return;
 			}
 			clearBusStopsLayer();
-			setStopsPanePriority(false);
+			refreshStopsPanePriority();
 			updateSelectedInfo("Bus stops hidden.");
 			updateBusStopVisibilityNote();
 			if (appState.selectedFeature?.type === "stop") {
@@ -6590,12 +6646,14 @@ function setupUI() {
 		showBusStations.addEventListener("change", (event) => {
 			appState.busStationLoadToken += 1;
 			if (event.target.checked) {
+				refreshStopsPanePriority();
 				addBusStationsLayer(appState.map).catch(() => {});
 				return;
 			}
 			clearBusStationsLayer();
 			clearBusStationHighlight();
 			clearBusStationRoutes();
+			refreshStopsPanePriority();
 			appState.activeBusStationRoutes = null;
 			if (appState.suppressNetworkRoutes && !appState.activeGarageRoutes) {
 				appState.suppressNetworkRoutes = false;
@@ -6609,6 +6667,8 @@ function setupUI() {
 			}
 		});
 	}
+
+	refreshStopsPanePriority();
 
 	const scaleBusStations = document.getElementById("scaleBusStationMarkers");
 	if (scaleBusStations) {
