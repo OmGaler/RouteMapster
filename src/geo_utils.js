@@ -31,6 +31,7 @@
     ["hammersmith and fulham", "NW"],
     ["hillingdon", "NW"],
     ["wandsworth", "SW"],
+    ["hounslow", "SW"],
     ["richmond upon thames", "SW"],
     ["kingston upon thames", "SW"],
     ["merton", "SW"],
