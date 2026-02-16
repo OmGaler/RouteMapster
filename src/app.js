@@ -331,6 +331,52 @@ function escapeHtml(value) {
 		.replace(/'/g, "&#39;");
 }
 
+function isCompactMobileLayout() {
+	if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+		return false;
+	}
+	return window.matchMedia("(max-width: 900px)").matches;
+}
+
+function compactOptionText(label, maxChars = 34) {
+	const raw = String(label ?? "").trim();
+	if (!raw || raw.length <= maxChars) {
+		return raw;
+	}
+	if (maxChars <= 6) {
+		return `${raw.slice(0, maxChars)}...`;
+	}
+	return `${raw.slice(0, maxChars - 3).trimEnd()}...`;
+}
+
+function applyMobileSelectOptionCompaction(maxChars = 34) {
+	if (typeof document === "undefined") {
+		return;
+	}
+	const compact = isCompactMobileLayout();
+	const selects = Array.from(document.querySelectorAll("select.select-field:not([multiple])"));
+	selects.forEach((select) => {
+		Array.from(select.options).forEach((option) => {
+			const baseLabel = option.dataset.fullLabel || option.textContent || "";
+			if (!option.dataset.fullLabel) {
+				option.dataset.fullLabel = baseLabel;
+			}
+			if (compact) {
+				const compactLabel = compactOptionText(baseLabel, maxChars);
+				option.textContent = compactLabel;
+				if (compactLabel !== baseLabel) {
+					option.title = baseLabel;
+				} else {
+					option.removeAttribute("title");
+				}
+			} else {
+				option.textContent = baseLabel;
+				option.removeAttribute("title");
+			}
+		});
+	});
+}
+
 function downloadCsv(filename, columns, rows) {
 	if (window.RouteMapsterUtils?.downloadCsv) {
 		window.RouteMapsterUtils.downloadCsv(filename, columns, rows);
@@ -6576,6 +6622,23 @@ function setupUI() {
 	setupAboutModal();
 	setupOmniSearch();
 	setupSidebarResize();
+	applyMobileSelectOptionCompaction();
+	window.addEventListener("resize", () => applyMobileSelectOptionCompaction());
+	window.addEventListener("orientationchange", () => applyMobileSelectOptionCompaction());
+	document.addEventListener("focusin", (event) => {
+		if (event.target?.closest?.("select.select-field")) {
+			applyMobileSelectOptionCompaction();
+		}
+	});
+	document.addEventListener(
+		"touchstart",
+		(event) => {
+			if (event.target?.closest?.("select.select-field")) {
+				applyMobileSelectOptionCompaction();
+			}
+		},
+		{ passive: true }
+	);
 
 	const closeInfoPanel = document.getElementById("closeInfoPanel");
 	if (closeInfoPanel) {
@@ -6587,7 +6650,10 @@ function setupUI() {
 
 	const advancedFiltersModule = document.querySelector('[data-module="advanced-filters"]');
 	if (advancedFiltersModule && window.RouteMapsterAdvancedFilters?.initAdvancedFilters) {
-		window.RouteMapsterAdvancedFilters.initAdvancedFilters(advancedFiltersModule, appState).catch(() => {});
+		window.RouteMapsterAdvancedFilters
+			.initAdvancedFilters(advancedFiltersModule, appState)
+			.then(() => applyMobileSelectOptionCompaction())
+			.catch(() => {});
 	}
 
 	document.addEventListener("routeFiltersUpdated", (event) => {
@@ -7916,6 +7982,7 @@ function setupBusStationSelect() {
 			.map((station) => `<option value="${escapeHtml(station.key)}">${escapeHtml(station.name)}</option>`)
 			.join("");
 		select.innerHTML = `<option value="">Choose a station</option>${options}`;
+		applyMobileSelectOptionCompaction();
 	};
 
 	loadBusStationData()
@@ -7963,6 +8030,7 @@ function setupGarageSelect() {
 			.map((entry) => `<option value="${escapeHtml(entry.selectKey)}">${escapeHtml(entry.details.label)}</option>`)
 			.join("");
 		select.innerHTML = `<option value="">Choose a garage</option>${options}`;
+		applyMobileSelectOptionCompaction();
 	};
 
 	loadGaragesGeojson()

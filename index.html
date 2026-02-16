@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>RouteMapster</title>
 
   <!-- Leaflet CSS (required) -->
@@ -40,6 +41,7 @@
       background: var(--bg);
       color: var(--ink);
       overflow: hidden;
+      -webkit-text-size-adjust: 100%;
     }
 
     body::before {
@@ -569,7 +571,10 @@
     }
 
     .analysis-toolbar .select-field {
-      flex: 1 1 200px;
+      flex: 1 1 auto;
+      min-width: 0;
+      width: 100%;
+      max-width: 100%;
     }
 
     .analysis-block {
@@ -1118,22 +1123,34 @@
     .sidebar-resize-handle {
       position: absolute;
       top: 50%;
-      right: -6px;
+      right: -14px;
       transform: translateY(-50%);
-      width: 8px;
-      height: 44px;
+      width: 4px;
+      height: 56px;
       border-radius: 999px;
-      background: rgba(15, 23, 42, 0.18);
-      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.2), inset 0 0 0 1px rgba(255, 255, 255, 0.75);
+      background: rgba(107, 114, 128, 0.45);
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.6);
       cursor: ew-resize;
       touch-action: none;
-      opacity: 0.7;
-      transition: opacity 0.2s ease, transform 0.2s ease;
+      opacity: 0.5;
+      transition: opacity 0.2s ease, background-color 0.2s ease;
       z-index: 6;
     }
 
+    .sidebar-resize-handle::before {
+      content: "";
+      position: absolute;
+      inset: -10px;
+    }
+
     #sidebar:hover .sidebar-resize-handle {
+      opacity: 0.8;
+      background: rgba(107, 114, 128, 0.6);
+    }
+
+    body.is-resizing .sidebar-resize-handle {
       opacity: 1;
+      background: rgba(15, 118, 110, 0.8);
     }
 
     body.is-resizing {
@@ -1599,19 +1616,43 @@
 
       #app {
         grid-template-columns: 1fr;
+        gap: 12px;
         height: auto;
-        padding: 16px;
+        min-height: 100dvh;
+        padding: 12px;
       }
 
-      #app.has-details {
+      #app.has-details,
+      #app.has-advanced-results {
         grid-template-columns: 1fr;
       }
 
+      #mapArea,
+      #sidebar,
+      #rightpanel {
+        width: 100%;
+        min-width: 0;
+      }
+
+      #mapArea {
+        order: 1;
+        min-height: 0;
+        overflow: visible;
+      }
+
       #sidebar {
+        order: 2;
         overflow: visible;
         resize: none;
         width: auto;
+        min-width: 0;
         max-width: none;
+      }
+
+      .sidebar-scroll {
+        gap: 12px;
+        overflow: visible;
+        padding-right: 0;
       }
 
       .sidebar-resize-handle {
@@ -1619,15 +1660,110 @@
       }
 
       #rightpanel {
-        overflow: visible;
+        order: 3;
+        display: none;
+        position: fixed;
+        left: 8px;
+        right: 8px;
+        bottom: 8px;
+        z-index: 35;
+        max-height: min(52vh, 460px);
+        overflow: hidden;
+        pointer-events: none;
       }
 
-      #mapArea {
-        overflow: visible;
+      #app.has-details #rightpanel {
+        display: block;
+        pointer-events: auto;
+      }
+
+      #rightpanel #advancedResultsPanel {
+        display: none !important;
+      }
+
+      #rightpanel .info-panel {
+        margin: 0;
+        max-height: min(52vh, 460px);
+        overflow-y: auto;
+        border-radius: 16px;
+      }
+
+      #mapContainer {
+        border-radius: 16px;
+        min-height: 55vh;
+        height: 55vh;
       }
 
       #map {
-        min-height: 420px;
+        min-height: 55vh;
+      }
+
+      .brand-title {
+        font-size: 20px;
+      }
+
+      .brand-actions {
+        flex-wrap: wrap;
+      }
+
+      .global-controls,
+      .module,
+      .info-panel {
+        border-radius: 14px;
+      }
+
+      .module summary {
+        padding: 12px 14px;
+      }
+
+      .module-body {
+        gap: 12px;
+        padding: 12px 14px 14px;
+      }
+
+      .module-section,
+      .field {
+        min-width: 0;
+      }
+
+      .button-row {
+        flex-wrap: wrap;
+      }
+
+      .button-row .ghost-button.compact {
+        flex: 1 1 calc(50% - 4px);
+        min-width: 140px;
+      }
+
+      .field-row {
+        flex-direction: column;
+      }
+
+      .field-row input,
+      .field-row .select-field {
+        width: 100%;
+      }
+
+      .select-field,
+      input[type="search"],
+      input[type="number"],
+      input[type="text"] {
+        width: 100%;
+        min-width: 0;
+        max-width: 100%;
+        font-size: 16px;
+      }
+
+      .tag-input input[type="search"] {
+        min-width: 0;
+      }
+
+      .select-field[multiple] {
+        min-height: 104px;
+      }
+
+      .info-title {
+        font-size: 18px;
       }
 
       .omni-launch {
@@ -1638,11 +1774,70 @@
       }
 
       .omni-modal {
-        padding: 60px 16px;
+        align-items: flex-start;
+        justify-content: center;
+        padding: max(10px, env(safe-area-inset-top)) 8px 12px;
+      }
+
+      .omni-card {
+        width: 100%;
+        max-width: 100%;
+        border-radius: 16px;
+      }
+
+      .omni-input-row {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 8px;
+        padding: 10px 12px;
+      }
+
+      .omni-title {
+        grid-column: 1 / -1;
+      }
+
+      .omni-input-row input {
+        grid-column: 1 / 2;
+        width: 100%;
+        min-width: 0;
       }
 
       .omni-result-type {
         min-width: 64px;
+      }
+    }
+
+    @media (max-width: 600px) {
+      #app {
+        gap: 10px;
+        padding: 8px;
+      }
+
+      #mapContainer {
+        min-height: 50vh;
+        height: 50vh;
+        border-radius: 14px;
+      }
+
+      #map {
+        min-height: 50vh;
+      }
+
+      .button-row .ghost-button.compact {
+        flex: 1 1 100%;
+      }
+
+      .omni-title,
+      .omni-hint {
+        display: none;
+      }
+
+      .module-title {
+        font-size: 14px;
+      }
+
+      .module-note {
+        font-size: 11px;
       }
     }
   </style>
