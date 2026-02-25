@@ -714,6 +714,20 @@
     if (els.hasOvernight?.checked) {
       flags.has_overnight = true;
     }
+    const uniqueStopsMinRaw = parseNumberInput(els.uniqueStopsMin);
+    const uniqueStopsMaxRaw = parseNumberInput(els.uniqueStopsMax);
+    const uniqueStopsMin = Number.isFinite(uniqueStopsMinRaw) ? Math.round(uniqueStopsMinRaw) : null;
+    const uniqueStopsMax = Number.isFinite(uniqueStopsMaxRaw) ? Math.round(uniqueStopsMaxRaw) : null;
+    const uniqueStops = uniqueStopsMin !== null || uniqueStopsMax !== null
+      ? { min: uniqueStopsMin ?? undefined, max: uniqueStopsMax ?? undefined }
+      : undefined;
+    const uniqueStopsRankMode = String(els.uniqueStopsRankMode?.value || "").trim().toLowerCase();
+    const uniqueStopsRankCountRaw = parseNumberInput(els.uniqueStopsRankCount);
+    const uniqueStopsRankCount = Number.isFinite(uniqueStopsRankCountRaw) ? Math.round(uniqueStopsRankCountRaw) : null;
+    const uniqueStopsRank = (uniqueStopsRankMode === "least" || uniqueStopsRankMode === "most") && uniqueStopsRankCount !== null
+      && uniqueStopsRankCount >= 1 && uniqueStopsRankCount <= 25
+      ? { mode: uniqueStopsRankMode, count: uniqueStopsRankCount }
+      : undefined;
     const lengthMin = parseNumberInput(els.lengthMin);
     const lengthMax = parseNumberInput(els.lengthMax);
     const length = lengthMin !== null || lengthMax !== null
@@ -745,6 +759,8 @@
       vehicle_types: getSelectedValues(els.vehicles),
       freq: Object.keys(freq).length > 0 ? freq : undefined,
       flags: Object.keys(flags).length > 0 ? flags : undefined,
+      unique_stops: uniqueStops,
+      unique_stops_rank: uniqueStopsRank,
       length_miles: length,
       length_rank: lengthRank,
       extreme: extreme || undefined
@@ -834,6 +850,18 @@
     if (els.hasOvernight) {
       els.hasOvernight.checked = normalized.flags?.has_overnight === true;
     }
+    if (els.uniqueStopsMin) {
+      els.uniqueStopsMin.value = Number.isFinite(normalized.unique_stops?.min) ? normalized.unique_stops.min : "";
+    }
+    if (els.uniqueStopsMax) {
+      els.uniqueStopsMax.value = Number.isFinite(normalized.unique_stops?.max) ? normalized.unique_stops.max : "";
+    }
+    if (els.uniqueStopsRankMode) {
+      els.uniqueStopsRankMode.value = normalized.unique_stops_rank?.mode || "";
+    }
+    if (els.uniqueStopsRankCount) {
+      els.uniqueStopsRankCount.value = Number.isFinite(normalized.unique_stops_rank?.count) ? normalized.unique_stops_rank.count : "";
+    }
     if (els.lengthMin) {
       els.lengthMin.value = Number.isFinite(normalized.length_miles?.min) ? normalized.length_miles.min : "";
     }
@@ -912,7 +940,13 @@
     if (normalized.length_miles && (Number.isFinite(normalized.length_miles.min) || Number.isFinite(normalized.length_miles.max))) {
       return true;
     }
+    if (normalized.unique_stops && (Number.isFinite(normalized.unique_stops.min) || Number.isFinite(normalized.unique_stops.max))) {
+      return true;
+    }
     if (normalized.length_rank && Number.isFinite(normalized.length_rank.count)) {
+      return true;
+    }
+    if (normalized.unique_stops_rank && Number.isFinite(normalized.unique_stops_rank.count)) {
       return true;
     }
     if (normalized.extreme) {
@@ -967,11 +1001,17 @@
       const overnight = formatNumber(row.frequency_overnight);
       const showFrequencies = !isSchoolRoute(row.route_type);
       const hasOvernight = row.has_overnight ? "Yes" : "No";
+      const uniqueStops = Number.isFinite(row.unique_stops) ? formatNumber(row.unique_stops, 0) : "";
+      const totalStops = Number.isFinite(row.total_stops) ? formatNumber(row.total_stops, 0) : "";
+      const uniqueStopsPct = Number.isFinite(row.unique_stops_pct) ? formatNumber(row.unique_stops_pct * 100, 0) : "";
       const lengthMiles = Number.isFinite(row.length_miles) ? formatNumber(row.length_miles, 2) : "";
       const isVisible = state.visibleRoutes.has(routeId);
       const metaParts = [routeType, operator, garage, cleanMetaValue(vehicle)]
         .filter(Boolean)
         .join(" · ");
+      const uniqueStopsText = uniqueStops
+        ? `${uniqueStops} route-only${totalStops ? ` / ${totalStops} total${uniqueStopsPct ? ` (${uniqueStopsPct}%)` : ""}` : ""}`
+        : "–";
       const lengthText = lengthMiles ? `${lengthMiles} mi` : "–";
       return `
         <div class="route-card" data-route="${escapeHtml(routeId)}">
@@ -983,7 +1023,7 @@
           </div>
           <div class="route-card__meta">${escapeHtml(metaParts)}</div>
           ${showFrequencies ? `<div class="route-card__freq">Frequency (BPH): Peak AM: ${peakAm || "–"} · Peak PM: ${peakPm || "–"} · Offpeak: ${offpeak || "–"} · Weekend: ${weekend || "–"} · Overnight: ${overnight || "–"}</div>` : ""}
-          <div class="route-card__kpi">Length: ${lengthText} · Overnight: ${hasOvernight}</div>
+          <div class="route-card__kpi">Unique stops: ${uniqueStopsText} · Length: ${lengthText} · Overnight: ${hasOvernight}</div>
         </div>
       `;
     }).join("");
@@ -1226,6 +1266,10 @@
         frequencyMin: container.querySelector("#advancedFrequencyMin"),
         frequencyMax: container.querySelector("#advancedFrequencyMax"),
         hasOvernight: container.querySelector("#advancedHasOvernight"),
+        uniqueStopsMin: container.querySelector("#advancedUniqueStopsMin"),
+        uniqueStopsMax: container.querySelector("#advancedUniqueStopsMax"),
+        uniqueStopsRankMode: container.querySelector("#advancedUniqueStopsRankMode"),
+        uniqueStopsRankCount: container.querySelector("#advancedUniqueStopsRankCount"),
         lengthMin: container.querySelector("#advancedLengthMin"),
         lengthMax: container.querySelector("#advancedLengthMax"),
         lengthRankMode: container.querySelector("#advancedLengthRankMode"),
@@ -1240,6 +1284,7 @@
         mapWarning: document.getElementById("advancedMapWarning"),
         resultsPanel: document.getElementById("advancedResultsPanel"),
         clearButton: container.querySelector("#advancedClearFilters"),
+        uniqueStopsWrap: container.querySelector("#advancedUniqueStopsWrap"),
         lengthWrap: container.querySelector("#advancedLengthWrap")
       };
       els.appState = appState;
@@ -1255,6 +1300,10 @@
       populateSelects(state.derivedRows, els);
 
       const hasLength = state.derivedRows.some((row) => Number.isFinite(row.length_miles));
+      const hasUniqueStops = state.derivedRows.some((row) => Number.isFinite(row.unique_stops));
+      if (els.uniqueStopsWrap) {
+        els.uniqueStopsWrap.style.display = hasUniqueStops ? "" : "none";
+      }
       if (els.lengthWrap) {
         els.lengthWrap.style.display = hasLength ? "" : "none";
       }
@@ -1300,8 +1349,11 @@
       els.routeSeries,
       els.frequencyMin,
       els.frequencyMax,
+      els.uniqueStopsMin,
+      els.uniqueStopsMax,
       els.lengthMin,
       els.lengthMax,
+      els.uniqueStopsRankCount,
       els.lengthRankCount
     ].forEach(bindEnterApply);
 
@@ -1363,6 +1415,10 @@
           "frequency_offpeak",
           "frequency_weekend",
           "frequency_overnight",
+          "unique_stops",
+          "total_stops",
+          "unique_stops_pct",
+          "length_miles"
         ];
         const csvRows = rows.map((row) => [
           row.route_id_norm || row.route_id,
@@ -1374,7 +1430,11 @@
           row.frequency_peak_pm,
           row.frequency_offpeak,
           row.frequency_weekend,
-          row.frequency_overnight
+          row.frequency_overnight,
+          row.unique_stops,
+          row.total_stops,
+          Number.isFinite(row.unique_stops_pct) ? row.unique_stops_pct : "",
+          row.length_miles
         ]);
         downloadCsv("filtered_routes.csv", columns, csvRows);
       });

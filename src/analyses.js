@@ -26,6 +26,25 @@
     return ["Unknown"];
   };
 
+  const isUnknownLike = (value) => {
+    const token = String(value || "").trim().toLowerCase();
+    if (!token) {
+      return true;
+    }
+    return token === "unknown"
+      || token === "unkown"
+      || token.startsWith("unknown ")
+      || token.startsWith("unkown ")
+      || token === "n/a"
+      || token === "na";
+  };
+
+  const getKnownOperators = (row) => getOperators(row)
+    .map((operator) => String(operator || "").trim())
+    .filter((operator) => !isUnknownLike(operator));
+
+  const getPrimaryKnownOperator = (row) => getKnownOperators(row)[0] || "";
+
   const getGarages = (row) => {
     const codes = Array.isArray(row.garage_codes_arr) ? row.garage_codes_arr : [];
     const names = Array.isArray(row.garage_names_arr) ? row.garage_names_arr : [];
@@ -51,6 +70,320 @@
     return combined.length > 0 ? combined : ["Unknown"];
   };
 
+  const routeOverlapCoverageCache = {
+    key: "",
+    promise: null,
+    result: null
+  };
+
+  const computeRouteOverlapCoverageScores = async (rows) => {
+    const api = window.RouteMapsterAPI;
+    if (!api || typeof api.loadRouteGeometry !== "function") {
+      return {
+        note: "Route geometry overlap analysis is unavailable in this build."
+      };
+    }
+
+    const SAMPLE_STEP_METERS = 40;
+    const OVERLAP_TOLERANCE_METERS = 45;
+    const ORIENTATION_DOT_MIN = 0.6;
+
+    const routeMap = new Map();
+    (Array.isArray(rows) ? rows : []).forEach((row) => {
+      const routeId = String(row?.route_id_norm || row?.route_id || "").trim().toUpperCase();
+      if (!routeId) {
+        return;
+      }
+      if (!routeMap.has(routeId)) {
+        routeMap.set(routeId, row);
+      }
+    });
+    const routeIds = Array.from(routeMap.keys());
+    if (routeIds.length < 2) {
+      return {
+        note: "Need at least two routes to compare geometry overlap."
+      };
+    }
+
+    const cacheKey = routeIds.slice().sort((a, b) => a.localeCompare(b, undefined, { numeric: true })).join("|");
+    if (routeOverlapCoverageCache.key === cacheKey && routeOverlapCoverageCache.result) {
+      return routeOverlapCoverageCache.result;
+    }
+    if (routeOverlapCoverageCache.key === cacheKey && routeOverlapCoverageCache.promise) {
+      return routeOverlapCoverageCache.promise;
+    }
+
+    const promise = (async () => {
+      const METERS_PER_MILE = 1609.344;
+      const toRad = (value) => (Number(value) * Math.PI) / 180;
+      const haversineMeters = (a, b) => {
+        if (!Array.isArray(a) || !Array.isArray(b) || a.length < 2 || b.length < 2) {
+          return Infinity;
+        }
+        const lat1 = Number(a[0]);
+        const lon1 = Number(a[1]);
+        const lat2 = Number(b[0]);
+        const lon2 = Number(b[1]);
+        if (![lat1, lon1, lat2, lon2].every(Number.isFinite)) {
+          return Infinity;
+        }
+        const dLat = toRad(lat2 - lat1);
+        const dLon = toRad(lon2 - lon1);
+        const rLat1 = toRad(lat1);
+        const rLat2 = toRad(lat2);
+        const sinLat = Math.sin(dLat / 2);
+        const sinLon = Math.sin(dLon / 2);
+        const h = sinLat * sinLat + Math.cos(rLat1) * Math.cos(rLat2) * sinLon * sinLon;
+        return 2 * 6371000 * Math.asin(Math.min(1, Math.sqrt(h)));
+      };
+
+      const buildWeightedSamples = (segments) => {
+        if (!Array.isArray(segments)) {
+          return { samples: [], totalMeters: 0 };
+        }
+        const samples = [];
+        let totalMeters = 0;
+        segments.forEach((segment) => {
+          if (!Array.isArray(segment) || segment.length < 2) {
+            return;
+          }
+          for (let i = 1; i < segment.length; i += 1) {
+            const a = segment[i - 1];
+            const b = segment[i];
+            if (!Array.isArray(a) || !Array.isArray(b) || a.length < 2 || b.length < 2) {
+              continue;
+            }
+            const lat1 = Number(a[0]);
+            const lon1 = Number(a[1]);
+            const lat2 = Number(b[0]);
+            const lon2 = Number(b[1]);
+            if (![lat1, lon1, lat2, lon2].every(Number.isFinite)) {
+              continue;
+            }
+            const edgeMeters = haversineMeters([lat1, lon1], [lat2, lon2]);
+            if (!Number.isFinite(edgeMeters) || edgeMeters <= 0.5) {
+              continue;
+            }
+            totalMeters += edgeMeters;
+            const parts = Math.max(1, Math.ceil(edgeMeters / SAMPLE_STEP_METERS));
+            const weight = edgeMeters / parts;
+            const dLat = lat2 - lat1;
+            const dLon = lon2 - lon1;
+            for (let part = 0; part < parts; part += 1) {
+              const t = (part + 0.5) / parts;
+              samples.push({
+                lat: lat1 + (dLat * t),
+                lon: lon1 + (dLon * t),
+                dLat,
+                dLon,
+                w: weight
+              });
+            }
+          }
+        });
+        return { samples, totalMeters };
+      };
+
+      if (typeof api.setLoadingModalVisible === "function") {
+        api.setLoadingModalVisible(true);
+      }
+      const segmentsByRoute = new Map();
+      try {
+        const concurrency = 6;
+        let index = 0;
+        const worker = async () => {
+          while (index < routeIds.length) {
+            const routeId = routeIds[index];
+            index += 1;
+            try {
+              const segments = await api.loadRouteGeometry(routeId);
+              segmentsByRoute.set(routeId, Array.isArray(segments) ? segments : []);
+            } catch (error) {
+              segmentsByRoute.set(routeId, []);
+            }
+          }
+        };
+        await Promise.all(Array.from({ length: concurrency }, () => worker()));
+      } finally {
+        if (typeof api.setLoadingModalVisible === "function") {
+          api.setLoadingModalVisible(false);
+        }
+      }
+
+      const sampleBundles = new Map();
+      let latSum = 0;
+      let latCount = 0;
+      routeIds.forEach((routeId) => {
+        const bundle = buildWeightedSamples(segmentsByRoute.get(routeId));
+        if (bundle.samples.length > 0 && bundle.totalMeters > 0) {
+          sampleBundles.set(routeId, bundle);
+          bundle.samples.forEach((point) => {
+            latSum += point.lat;
+            latCount += 1;
+          });
+        }
+      });
+
+      const routesWithGeometry = Array.from(sampleBundles.keys());
+      if (routesWithGeometry.length < 2) {
+        return {
+          note: "Insufficient route geometry data for overlap analysis."
+        };
+      }
+
+      const lat0 = latCount > 0 ? latSum / latCount : 51.5;
+      const cosLat0 = Math.max(0.2, Math.cos(toRad(lat0)));
+      const metersPerDegLat = 111320;
+      const metersPerDegLon = 111320 * cosLat0;
+      const thresholdSq = OVERLAP_TOLERANCE_METERS * OVERLAP_TOLERANCE_METERS;
+      const gridSize = OVERLAP_TOLERANCE_METERS;
+
+      const grid = new Map();
+      const projectedByRoute = new Map();
+      routesWithGeometry.forEach((routeId) => {
+        const source = sampleBundles.get(routeId);
+        const projected = (source?.samples || []).map((point) => {
+          const x = point.lon * metersPerDegLon;
+          const y = point.lat * metersPerDegLat;
+          const vx = point.dLon * metersPerDegLon;
+          const vy = point.dLat * metersPerDegLat;
+          const vLen = Math.hypot(vx, vy) || 1;
+          return {
+            routeId,
+            x,
+            y,
+            ux: vx / vLen,
+            uy: vy / vLen,
+            w: point.w
+          };
+        });
+        projectedByRoute.set(routeId, projected);
+        projected.forEach((point) => {
+          const key = `${Math.floor(point.x / gridSize)}:${Math.floor(point.y / gridSize)}`;
+          if (!grid.has(key)) {
+            grid.set(key, []);
+          }
+          grid.get(key).push(point);
+        });
+      });
+
+      const scores = [];
+      routesWithGeometry.forEach((routeId) => {
+        const points = projectedByRoute.get(routeId) || [];
+        const totalMeters = sampleBundles.get(routeId)?.totalMeters || 0;
+        if (points.length === 0 || !(totalMeters > 0)) {
+          return;
+        }
+        let sharedMeters = 0;
+        const peerRoutes = new Set();
+        const overlapMetersByPeer = new Map();
+
+        points.forEach((point) => {
+          const cellX = Math.floor(point.x / gridSize);
+          const cellY = Math.floor(point.y / gridSize);
+          let pointShared = false;
+          let matchedPeers = null;
+
+          for (let dx = -1; dx <= 1; dx += 1) {
+            for (let dy = -1; dy <= 1; dy += 1) {
+              const bucket = grid.get(`${cellX + dx}:${cellY + dy}`) || [];
+              for (let i = 0; i < bucket.length; i += 1) {
+                const candidate = bucket[i];
+                if (!candidate || candidate.routeId === routeId) {
+                  continue;
+                }
+                const ddx = candidate.x - point.x;
+                const ddy = candidate.y - point.y;
+                if ((ddx * ddx) + (ddy * ddy) > thresholdSq) {
+                  continue;
+                }
+                const dirDot = Math.abs((candidate.ux * point.ux) + (candidate.uy * point.uy));
+                if (!Number.isFinite(dirDot) || dirDot < ORIENTATION_DOT_MIN) {
+                  continue;
+                }
+                if (!pointShared) {
+                  pointShared = true;
+                  sharedMeters += point.w;
+                }
+                if (!matchedPeers) {
+                  matchedPeers = new Set();
+                }
+                if (matchedPeers.has(candidate.routeId)) {
+                  continue;
+                }
+                matchedPeers.add(candidate.routeId);
+                peerRoutes.add(candidate.routeId);
+                overlapMetersByPeer.set(
+                  candidate.routeId,
+                  (overlapMetersByPeer.get(candidate.routeId) || 0) + point.w
+                );
+              }
+            }
+          }
+        });
+
+        let bestPeerId = "";
+        let bestPeerOverlapMeters = 0;
+        overlapMetersByPeer.forEach((meters, peerId) => {
+          if (!Number.isFinite(meters) || meters <= bestPeerOverlapMeters) {
+            return;
+          }
+          bestPeerOverlapMeters = meters;
+          bestPeerId = peerId;
+        });
+
+        const sharedRatio = Math.max(0, Math.min(1, sharedMeters / totalMeters));
+        const exclusiveRatio = Math.max(0, 1 - sharedRatio);
+        const exclusiveMeters = Math.max(0, totalMeters - sharedMeters);
+        const bestPeerOverlapRatio = bestPeerOverlapMeters > 0
+          ? Math.max(0, Math.min(1, bestPeerOverlapMeters / totalMeters))
+          : 0;
+        const row = routeMap.get(routeId) || {};
+        scores.push({
+          routeId,
+          operator: getPrimaryKnownOperator(row),
+          peerCount: peerRoutes.size,
+          sharedRatio,
+          exclusiveRatio,
+          totalMeters,
+          totalMiles: totalMeters / METERS_PER_MILE,
+          exclusiveMeters,
+          exclusiveMiles: exclusiveMeters / METERS_PER_MILE,
+          bestPeerId,
+          bestPeerOverlapMeters,
+          bestPeerOverlapMiles: bestPeerOverlapMeters / METERS_PER_MILE,
+          bestPeerOverlapRatio
+        });
+      });
+
+      if (scores.length === 0) {
+        return {
+          note: "No routes with usable geometry points were available."
+        };
+      }
+
+      return { scores };
+    })();
+
+    routeOverlapCoverageCache.key = cacheKey;
+    routeOverlapCoverageCache.promise = promise;
+    routeOverlapCoverageCache.result = null;
+    try {
+      const result = await promise;
+      if (routeOverlapCoverageCache.key === cacheKey) {
+        routeOverlapCoverageCache.result = result;
+        routeOverlapCoverageCache.promise = null;
+      }
+      return result;
+    } catch (error) {
+      if (routeOverlapCoverageCache.key === cacheKey) {
+        routeOverlapCoverageCache.promise = null;
+        routeOverlapCoverageCache.result = null;
+      }
+      throw error;
+    }
+  };
+
   const analysisRegistry = {
     "routes-by-operator": {
       id: "routes-by-operator",
@@ -58,7 +391,7 @@
       run: (rows) => {
         const counts = new Map();
         rows.forEach((row) => {
-          getOperators(row).forEach((operator) => {
+          getKnownOperators(row).forEach((operator) => {
             counts.set(operator, (counts.get(operator) || 0) + 1);
           });
         });
@@ -93,18 +426,18 @@
       label: "Service type breakdown by operator",
       run: (rows) => {
         const summary = new Map();
+        const validTypes = new Set(["regular", "night", "school", "twentyfour"]);
         rows.forEach((row) => {
-          getOperators(row).forEach((operator) => {
+          const type = String(row.route_type || "").toLowerCase();
+          if (!validTypes.has(type)) {
+            return;
+          }
+          getKnownOperators(row).forEach((operator) => {
             if (!summary.has(operator)) {
-              summary.set(operator, { regular: 0, night: 0, school: 0, twentyfour: 0, unknown: 0 });
+              summary.set(operator, { regular: 0, night: 0, school: 0, twentyfour: 0 });
             }
             const entry = summary.get(operator);
-            const type = String(row.route_type || "unknown").toLowerCase();
-            if (entry[type] !== undefined) {
-              entry[type] += 1;
-            } else {
-              entry.unknown += 1;
-            }
+            entry[type] += 1;
           });
         });
         const rowsOut = Array.from(summary.entries())
@@ -121,13 +454,12 @@
               counts.night,
               counts.school,
               counts.twentyfour,
-              counts.unknown,
               total
             ];
           });
         return {
           type: "table",
-          columns: ["Operator", "Regular", "Night", "School", "24hr", "Unknown", "Total"],
+          columns: ["Operator", "Regular", "Night", "School", "24hr", "Total"],
           rows: rowsOut
         };
       }
@@ -138,14 +470,16 @@
       run: (rows) => {
         const summary = new Map();
         rows.forEach((row) => {
-          const vehicle = row.vehicle_type || "";
-          const bucket = vehicle === "SD" ? "SD" : vehicle === "DD" ? "DD" : "Other";
-          getOperators(row).forEach((operator) => {
+          const vehicle = String(row.vehicle_type || "").trim().toUpperCase();
+          if (vehicle !== "SD" && vehicle !== "DD") {
+            return;
+          }
+          getKnownOperators(row).forEach((operator) => {
             if (!summary.has(operator)) {
-              summary.set(operator, { SD: 0, DD: 0, Other: 0 });
+              summary.set(operator, { SD: 0, DD: 0 });
             }
             const entry = summary.get(operator);
-            entry[bucket] += 1;
+            entry[vehicle] += 1;
           });
         });
         const rowsOut = Array.from(summary.entries())
@@ -162,7 +496,6 @@
               operator,
               counts.SD,
               counts.DD,
-              counts.Other,
               total,
               `${formatNumber(sdShare, 0)}%`,
               `${formatNumber(ddShare, 0)}%`
@@ -170,7 +503,7 @@
           });
         return {
           type: "table",
-          columns: ["Operator", "SD", "DD", "Other", "Total", "SD share", "DD share"],
+          columns: ["Operator", "SD", "DD", "Total", "SD share", "DD share"],
           rows: rowsOut
         };
       }
@@ -181,7 +514,7 @@
       run: (rows) => {
         const summary = new Map();
         rows.forEach((row) => {
-          getOperators(row).forEach((operator) => {
+          getKnownOperators(row).forEach((operator) => {
             if (!summary.has(operator)) {
               summary.set(operator, { peakAm: [], peakPm: [], offpeak: [], weekend: [], overnight: [] });
             }
@@ -239,7 +572,7 @@
           rows: sorted.map((row, index) => [
             index + 1,
             row.route_id || row.route_id_norm,
-            getOperators(row)[0],
+            getPrimaryKnownOperator(row),
             formatNumber(row.frequency_peak_am),
             formatNumber(row.frequency_offpeak),
             formatNumber(row.frequency_weekend),
@@ -257,7 +590,7 @@
           if (!Number.isFinite(row.length_miles)) {
             return;
           }
-          getOperators(row).forEach((operator) => {
+          getKnownOperators(row).forEach((operator) => {
             if (!summary.has(operator)) {
               summary.set(operator, []);
             }
@@ -304,7 +637,7 @@
             index + 1,
             row.route_id || row.route_id_norm,
             formatNumber(row.length_miles, 2),
-            getOperators(row)[0],
+            getPrimaryKnownOperator(row),
             getGarages(row)[0]
           ])
         };
@@ -333,9 +666,77 @@
             index + 1,
             row.route_id || row.route_id_norm,
             formatNumber(row.length_miles, 2),
-            getOperators(row)[0],
+            getPrimaryKnownOperator(row),
             getGarages(row)[0]
           ])
+        };
+      }
+    },
+    "most-unique-stops-routes": {
+      id: "most-unique-stops-routes",
+      label: "Most exclusive stops",
+      run: (rows) => {
+        const sorted = rows
+          .filter((row) => Number.isFinite(row.unique_stops))
+          .slice()
+          .sort((a, b) => b.unique_stops - a.unique_stops)
+          .slice(0, 25);
+        if (sorted.length === 0) {
+          return {
+            type: "table",
+            columns: ["Rank", "Route", "Exclusive stops", "Total stops", "Unique %", "Operator", "Garage"],
+            rows: [["No unique_stops data available", "", "", "", "", "", ""]]
+          };
+        }
+        return {
+          type: "table",
+          columns: ["Rank", "Route", "Exclusive stops", "Total stops", "Unique %", "Operator", "Garage"],
+          rows: sorted.map((row, index) => [
+            index + 1,
+            row.route_id || row.route_id_norm,
+            formatNumber(row.unique_stops, 0),
+            Number.isFinite(row.total_stops) ? formatNumber(row.total_stops, 0) : "",
+            Number.isFinite(row.unique_stops_pct) ? `${formatNumber(row.unique_stops_pct * 100, 0)}%` : "",
+            getPrimaryKnownOperator(row),
+            getGarages(row)[0]
+          ])
+        };
+      }
+    },
+    "route-geometry-exclusivity": {
+      id: "route-geometry-exclusivity",
+      label: "Route exclusivity",
+      run: async (rows) => {
+        const TOP_COUNT = 25;
+        const computed = await computeRouteOverlapCoverageScores(rows);
+        if (computed?.note) {
+          return { type: "note", message: computed.note };
+        }
+        const scores = Array.isArray(computed?.scores) ? computed.scores.slice() : [];
+        scores.sort((a, b) => {
+          if (a.exclusiveRatio !== b.exclusiveRatio) {
+            return b.exclusiveRatio - a.exclusiveRatio;
+          }
+          if (a.exclusiveMeters !== b.exclusiveMeters) {
+            return b.exclusiveMeters - a.exclusiveMeters;
+          }
+          if (a.totalMeters !== b.totalMeters) {
+            return b.totalMeters - a.totalMeters;
+          }
+          return String(a.routeId).localeCompare(String(b.routeId), undefined, { numeric: true });
+        });
+        const top = scores.slice(0, Math.min(TOP_COUNT, scores.length));
+        return {
+          type: "table",
+          columns: ["Rank", "Route", "Operator", "Exclusive %", "Exclusive mi", "Route mi"],
+          rows: top.map((entry, index) => ([
+            index + 1,
+            entry.routeId,
+            entry.operator,
+            `${formatNumber(entry.exclusiveRatio * 100, 0)}%`,
+            formatNumber(entry.exclusiveMiles, 2),
+            formatNumber(entry.totalMiles, 2)
+          ]))
         };
       }
     },

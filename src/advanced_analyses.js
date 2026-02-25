@@ -6,19 +6,88 @@
   const renderTable = (result) => {
     const columns = result.columns || [];
     const rows = result.rows || [];
+    const firstColumn = String(columns[0] || "").trim().toLowerCase();
+    const secondColumn = String(columns[1] || "").trim().toLowerCase();
+    const tableClasses = ["analysis-table"];
+    if (firstColumn === "rank") {
+      tableClasses.push("analysis-table--ranked");
+    }
+    if (firstColumn === "rank" && secondColumn === "route") {
+      tableClasses.push("analysis-table--ranked-route");
+    }
+    const tableClass = tableClasses.join(" ");
     const header = columns.map((col) => `<th>${escapeHtml(col)}</th>`).join("");
     const body = rows.map((row) => {
       const cells = row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join("");
       return `<tr>${cells}</tr>`;
     }).join("");
     return `
-      <div class="analysis-table-wrap">
-        <table class="analysis-table">
-          <thead><tr>${header}</tr></thead>
-          <tbody>${body}</tbody>
-        </table>
+      <div class="analysis-table-shell">
+        <div class="analysis-scroll-cue" aria-hidden="true">▸</div>
+        <div class="analysis-table-wrap">
+          <table class="${tableClass}">
+            <thead><tr>${header}</tr></thead>
+            <tbody>${body}</tbody>
+          </table>
+        </div>
       </div>
     `;
+  };
+
+  const syncTableOverflowCue = (shell) => {
+    if (!shell) {
+      return;
+    }
+    const wrap = shell.querySelector(".analysis-table-wrap");
+    if (!wrap) {
+      return;
+    }
+    const wrapTop = wrap.offsetTop || 0;
+    const wrapBottom = Math.max(0, (shell.clientHeight || 0) - wrapTop - (wrap.offsetHeight || 0));
+    shell.style.setProperty("--analysis-wrap-top", `${wrapTop}px`);
+    shell.style.setProperty("--analysis-wrap-bottom", `${wrapBottom}px`);
+    const overflowSlack = Math.max(0, wrap.scrollWidth - wrap.clientWidth);
+    const hasOverflow = overflowSlack > 2;
+    const remainingRight = Math.max(0, wrap.scrollWidth - wrap.clientWidth - wrap.scrollLeft);
+    const isScrollEnd = !hasOverflow || remainingRight <= 2;
+    shell.classList.toggle("has-x-overflow", hasOverflow);
+    shell.classList.toggle("is-scroll-end", isScrollEnd);
+  };
+
+  const attachTableOverflowCues = (root) => {
+    if (!root) {
+      return;
+    }
+    root.querySelectorAll(".analysis-table-shell").forEach((shell) => {
+      const wrap = shell.querySelector(".analysis-table-wrap");
+      if (!wrap) {
+        return;
+      }
+      if (wrap.dataset.overflowCueBound !== "1") {
+        const sync = () => syncTableOverflowCue(shell);
+        wrap.addEventListener("scroll", sync, { passive: true });
+        if (typeof ResizeObserver === "function") {
+          const observer = new ResizeObserver(sync);
+          observer.observe(wrap);
+          const table = wrap.querySelector("table");
+          if (table) {
+            observer.observe(table);
+          }
+          wrap.__overflowCueObserver = observer;
+        }
+        wrap.__overflowCueSync = sync;
+        wrap.dataset.overflowCueBound = "1";
+      }
+      const syncFn = wrap.__overflowCueSync;
+      if (typeof syncFn === "function") {
+        syncFn();
+        if (typeof window.requestAnimationFrame === "function") {
+          window.requestAnimationFrame(syncFn);
+        }
+      } else {
+        syncTableOverflowCue(shell);
+      }
+    });
   };
 
   const getRoutePillClass = (routeId) => {
@@ -417,7 +486,7 @@
     return state.allRows;
   };
 
-  const runAnalyses = (analysisIds, baseRows, filterSpec) => {
+  const runAnalyses = async (analysisIds, baseRows, filterSpec) => {
     const engine = window.RouteMapsterQueryEngine;
     const registry = window.RouteMapsterAnalyses?.analysisRegistry || {};
     let rows = baseRows;
@@ -425,16 +494,23 @@
       rows = engine.computeDerivedFields(engine.applyFilters(baseRows, filterSpec));
     }
     const ids = Array.isArray(analysisIds) ? analysisIds : [analysisIds];
-    return ids
-      .map((analysisId) => {
+    const results = await Promise.all(ids.map(async (analysisId) => {
         const entry = registry[analysisId];
         if (!entry) {
           return null;
         }
-        const result = entry.run(rows);
-        return { id: analysisId, title: entry.label, result };
-      })
-      .filter(Boolean);
+        try {
+          const result = await entry.run(rows);
+          return { id: analysisId, title: entry.label, result };
+        } catch (error) {
+          return {
+            id: analysisId,
+            title: entry.label,
+            result: { type: "note", message: "Analysis failed." }
+          };
+        }
+      }));
+    return results.filter(Boolean);
   };
 
   const ensureSpatialForRows = async (rows) => {
@@ -515,6 +591,8 @@
       let content = '<div class="info-empty">Chart rendering not available yet.</div>';
       if (entry.result?.type === "table") {
         content = renderTable(entry.result);
+      } else if (entry.result?.type === "note") {
+        content = `<div class="module-note">${escapeHtml(entry.result.message || "No result.")}</div>`;
       } else if (entry.result?.type === "route-pills") {
         content = renderRoutePillList(entry.result, entry.id);
       }
@@ -529,6 +607,7 @@
       `;
     }).join("");
     container.innerHTML = blocks;
+    attachTableOverflowCues(container);
     if (api && typeof api.showAnalysisRoutes === "function") {
       const routeIds = new Set();
       results.forEach((entry) => {
@@ -585,7 +664,7 @@
       const base = resolveBaseRows(scope);
       const analysisId = els.analysisSelect?.value;
       await ensureSpatialForAnalyses(analysisId, base);
-      const results = runAnalyses(analysisId, base, null);
+      const results = await runAnalyses(analysisId, base, null);
       renderResults(els.output, results);
       if (els.scopeNote) {
         const count = base.length || 0;

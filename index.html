@@ -635,8 +635,8 @@
 
     .analysis-table th:nth-child(1),
     .analysis-table td:nth-child(1) {
-      width: 36px;
-      padding-right: 8px;
+      min-width: 140px;
+      padding-right: 10px;
       position: sticky;
       left: 0;
       background: #fffaf1;
@@ -647,19 +647,21 @@
       z-index: 3;
     }
 
-    .analysis-table th:nth-child(2),
-    .analysis-table td:nth-child(2) {
+    .analysis-table--ranked th:nth-child(1),
+    .analysis-table--ranked td:nth-child(1) {
+      width: 36px;
+      min-width: 36px;
+      padding-right: 8px;
+    }
+
+    .analysis-table--ranked th:nth-child(2),
+    .analysis-table--ranked td:nth-child(2) {
       min-width: 160px;
     }
 
-    .analysis-table th:nth-child(3),
-    .analysis-table td:nth-child(3) {
-      width: 74px;
-    }
-
-    .analysis-table th:nth-child(4),
-    .analysis-table td:nth-child(4) {
-      width: 70px;
+    .analysis-table--ranked-route th:nth-child(2),
+    .analysis-table--ranked-route td:nth-child(2) {
+      min-width: 64px;
     }
 
     .analysis-table th:last-child,
@@ -792,24 +794,31 @@
       position: relative;
     }
 
+    .analysis-table-shell::after {
+      content: "";
+      position: absolute;
+      top: var(--analysis-wrap-top, 0px);
+      right: 0;
+      bottom: var(--analysis-wrap-bottom, 0px);
+      width: 20px;
+      pointer-events: none;
+      background: linear-gradient(90deg, rgba(255, 250, 241, 0), #fffaf1 75%);
+      opacity: 0;
+      transition: opacity 120ms ease;
+      z-index: 4;
+    }
+
     .analysis-table-wrap {
       overflow-x: auto;
       position: relative;
     }
 
     .analysis-table-wrap::after {
-      content: "";
-      position: absolute;
-      top: 0;
-      right: 0;
-      width: 20px;
-      height: 100%;
-      pointer-events: none;
-      background: linear-gradient(90deg, rgba(255, 250, 241, 0), #fffaf1 75%);
+      content: none;
     }
 
     .analysis-scroll-cue {
-      display: block;
+      display: none;
       text-align: right;
       margin-bottom: 2px;
       margin-right: 2px;
@@ -820,6 +829,18 @@
       opacity: 0.65;
       user-select: none;
       pointer-events: none;
+    }
+
+    .analysis-table-shell.has-x-overflow .analysis-scroll-cue {
+      display: block;
+    }
+
+    .analysis-table-shell.has-x-overflow::after {
+      opacity: 1;
+    }
+
+    .analysis-table-shell.is-scroll-end::after {
+      opacity: 0;
     }
 
     .map-legend {
@@ -2202,6 +2223,26 @@
                 <span>Has overnight service</span>
                 <input type="checkbox" id="advancedHasOvernight" />
               </label>
+            </div>
+
+            <div class="module-section" id="advancedUniqueStopsWrap">
+              <div class="section-title">Unique stops (route-only)</div>
+              <div class="field-row">
+                <input id="advancedUniqueStopsMin" type="number" min="0" step="1" placeholder="Min" />
+                <input id="advancedUniqueStopsMax" type="number" min="0" step="1" placeholder="Max" />
+              </div>
+              <div class="field">
+                <label for="advancedUniqueStopsRankMode">Top routes by unique (route-only) stops</label>
+                <div class="field-row">
+                  <select id="advancedUniqueStopsRankMode" class="select-field">
+                    <option value="">None</option>
+                    <option value="least">Least</option>
+                    <option value="most">Most</option>
+                  </select>
+                  <input id="advancedUniqueStopsRankCount" type="number" min="1" max="25" step="1" placeholder="Count (1-25)" />
+                </div>
+                <div class="module-note">Counts stops served by this route and no other route (from the stops dataset). Filters to the N least/most after other filters.</div>
+              </div>
             </div>
 
             <div class="module-section" id="advancedLengthWrap">

@@ -1,8 +1,11 @@
 ﻿(() => {
   const ROUTE_SUMMARY_PATH = "/route_summary.csv";
+  const STOPS_GEOJSON_PATH = "/data/processed/stops.geojson";
   const KM_TO_MILES = 0.621371;
   let cachedRows = null;
   let loadPromise = null;
+  let routeStopStatsCache = null;
+  let routeStopStatsPromise = null;
 
   const parseCsv = (text) => {
     const rows = [];
@@ -80,6 +83,100 @@
     }
     const num = Number(cleaned);
     return Number.isFinite(num) ? num : null;
+  };
+
+  const isExcludedRoute = (routeId) => {
+    const value = String(routeId || "").trim().toUpperCase();
+    if (!value) {
+      return false;
+    }
+    return value === "SCS" || value.startsWith("UL") || value.startsWith("Y");
+  };
+
+  const extractRouteTokens = (value) => {
+    if (!value) {
+      return [];
+    }
+    return String(value)
+      .split(/[\s,;/]+/)
+      .map((token) => token.trim())
+      .filter(Boolean)
+      .map((token) => token.replace(/[^A-Za-z0-9]/g, ""))
+      .filter(Boolean)
+      .map((token) => token.toUpperCase())
+      .filter((token) => !isExcludedRoute(token));
+  };
+
+  const getStopKey = (props) => {
+    if (!props || typeof props !== "object") {
+      return "";
+    }
+    const raw = props.NAPTAN_ID ?? props.NaptanId ?? props.stop_id ?? props.stopId ?? props.ATCOCODE ?? props.ATCOCode;
+    return String(raw || "").trim();
+  };
+
+  const buildRouteStopStats = (geojson) => {
+    const features = Array.isArray(geojson?.features) ? geojson.features : [];
+    const stopRoutesByKey = new Map();
+    features.forEach((feature) => {
+      const props = feature?.properties || {};
+      const stopKey = getStopKey(props);
+      if (!stopKey) {
+        return;
+      }
+      const routes = extractRouteTokens(props.ROUTES ?? props.Routes ?? props.routes);
+      if (!stopRoutesByKey.has(stopKey)) {
+        stopRoutesByKey.set(stopKey, new Set());
+      }
+      const set = stopRoutesByKey.get(stopKey);
+      routes.forEach((routeId) => {
+        if (routeId) {
+          set.add(routeId);
+        }
+      });
+    });
+    const totalCounts = new Map();
+    const exclusiveCounts = new Map();
+    stopRoutesByKey.forEach((routes) => {
+      const onlyRoutes = Array.isArray(routes) ? routes : Array.from(routes || []);
+      onlyRoutes.forEach((routeIdRaw) => {
+        const routeId = String(routeIdRaw || "").trim().toUpperCase();
+        if (!routeId) {
+          return;
+        }
+        totalCounts.set(routeId, (totalCounts.get(routeId) || 0) + 1);
+      });
+      if (onlyRoutes.length === 1) {
+        const routeId = String(onlyRoutes[0] || "").trim().toUpperCase();
+        if (routeId) {
+          exclusiveCounts.set(routeId, (exclusiveCounts.get(routeId) || 0) + 1);
+        }
+      }
+    });
+    return { totalCounts, exclusiveCounts };
+  };
+
+  const loadRouteStopStats = async () => {
+    if (routeStopStatsCache) {
+      return routeStopStatsCache;
+    }
+    if (routeStopStatsPromise) {
+      return routeStopStatsPromise;
+    }
+    routeStopStatsPromise = fetch(STOPS_GEOJSON_PATH, { cache: "no-store" })
+      .then((response) => response.ok ? response.json() : null)
+      .then((geojson) => {
+        routeStopStatsCache = buildRouteStopStats(geojson);
+        return routeStopStatsCache;
+      })
+      .catch(() => {
+        routeStopStatsCache = { totalCounts: new Map(), exclusiveCounts: new Map() };
+        return routeStopStatsCache;
+      })
+      .finally(() => {
+        routeStopStatsPromise = null;
+      });
+    return routeStopStatsPromise;
   };
 
   const splitList = (value) => {
@@ -202,6 +299,9 @@
     const vehicleRaw = resolveField(row, ["vehicle_type", "vehicle", "vehicleType"]);
     const lengthKm = parseNumber(resolveField(row, ["length_km", "lengthKm", "length"]));
     const lengthMilesRaw = parseNumber(resolveField(row, ["length_miles", "lengthMiles", "length_mi", "lengthMi"]));
+    const uniqueStops = parseNumber(resolveField(row, ["unique_stops", "uniqueStops", "stop_count", "stopCount"]));
+    const totalStops = parseNumber(resolveField(row, ["total_stops", "totalStops", "route_stop_count", "routeStopCount"]));
+    const uniqueStopsPct = parseNumber(resolveField(row, ["unique_stops_pct", "uniqueStopsPct", "exclusive_stop_pct", "exclusiveStopPct"]));
     const lengthMiles = Number.isFinite(lengthMilesRaw)
       ? lengthMilesRaw
       : Number.isFinite(lengthKm)
@@ -247,6 +347,9 @@
       frequency_overnight: parseNumber(resolveField(row, ["frequency_overnight", "overnight"])),
       length_km: lengthKm,
       length_miles: lengthMiles,
+      unique_stops: uniqueStops,
+      total_stops: totalStops,
+      unique_stops_pct: uniqueStopsPct,
       northmost_lat: northmostLat,
       southmost_lat: southmostLat,
       eastmost_lon: eastmostLon,
@@ -266,9 +369,11 @@
     if (loadPromise) {
       return loadPromise;
     }
-    loadPromise = fetch(ROUTE_SUMMARY_PATH, { cache: "no-store" })
-      .then((response) => response.ok ? response.text() : "")
-      .then((text) => {
+    loadPromise = Promise.all([
+      fetch(ROUTE_SUMMARY_PATH, { cache: "no-store" }).then((response) => response.ok ? response.text() : ""),
+      loadRouteStopStats().catch(() => ({ totalCounts: new Map(), exclusiveCounts: new Map() }))
+    ])
+      .then(([text, routeStopStats]) => {
         if (!text) {
           cachedRows = [];
           return cachedRows;
@@ -276,6 +381,24 @@
         const parsed = parseCsv(text);
         const objects = toObjects(parsed);
         cachedRows = objects.map((row) => normaliseRow(row));
+        const totalCounts = routeStopStats?.totalCounts;
+        const exclusiveCounts = routeStopStats?.exclusiveCounts;
+        if (totalCounts && typeof totalCounts.get === "function" && exclusiveCounts && typeof exclusiveCounts.get === "function") {
+          cachedRows.forEach((row) => {
+            const routeId = String(row?.route_id_norm || "").trim().toUpperCase();
+            if (!routeId) {
+              row.unique_stops = null;
+              row.total_stops = null;
+              row.unique_stops_pct = null;
+              return;
+            }
+            const totalStops = totalCounts.get(routeId) ?? 0;
+            const uniqueStops = exclusiveCounts.get(routeId) ?? 0;
+            row.unique_stops = uniqueStops;
+            row.total_stops = totalStops;
+            row.unique_stops_pct = totalStops > 0 ? uniqueStops / totalStops : 0;
+          });
+        }
         return cachedRows;
       })
       .catch(() => {
@@ -320,10 +443,18 @@
         weightedSum += overnight * 0.05;
         weightTotal += 0.05;
       }
+      const totalStops = Number.isFinite(row.total_stops) ? row.total_stops : null;
+      const uniqueStops = Number.isFinite(row.unique_stops) ? row.unique_stops : null;
+      const uniqueStopsPct = Number.isFinite(uniqueStops) && Number.isFinite(totalStops) && totalStops > 0
+        ? uniqueStops / totalStops
+        : Number.isFinite(row.unique_stops_pct)
+          ? row.unique_stops_pct
+          : null;
       return {
         ...row,
         peakiness_index: Number.isFinite(peakAvg) && Number.isFinite(offpeak) ? peakAvg - offpeak : null,
-        has_overnight: Number.isFinite(overnight) ? overnight > 0 : false
+        has_overnight: Number.isFinite(overnight) ? overnight > 0 : false,
+        unique_stops_pct: uniqueStopsPct
       };
     });
   };
@@ -335,6 +466,13 @@
       : spec.length_km && typeof spec.length_km === "object"
         ? spec.length_km
         : undefined;
+    const uniqueStopsSpec = spec.unique_stops && typeof spec.unique_stops === "object"
+      ? spec.unique_stops
+      : spec.uniqueStops && typeof spec.uniqueStops === "object"
+        ? spec.uniqueStops
+        : spec.stop_count && typeof spec.stop_count === "object"
+          ? spec.stop_count
+          : undefined;
     const lengthRankRaw = spec.length_rank && typeof spec.length_rank === "object"
       ? spec.length_rank
       : spec.lengthRank && typeof spec.lengthRank === "object"
@@ -348,6 +486,22 @@
     const lengthRankCount = Number.isFinite(lengthRankCountRaw) ? Math.round(lengthRankCountRaw) : null;
     const lengthRank = lengthRankMode && Number.isFinite(lengthRankCount) && lengthRankCount >= 1 && lengthRankCount <= 25
       ? { mode: lengthRankMode, count: lengthRankCount }
+      : undefined;
+    const uniqueStopsRankRaw = spec.unique_stops_rank && typeof spec.unique_stops_rank === "object"
+      ? spec.unique_stops_rank
+      : spec.uniqueStopsRank && typeof spec.uniqueStopsRank === "object"
+        ? spec.uniqueStopsRank
+        : spec.stop_count_rank && typeof spec.stop_count_rank === "object"
+          ? spec.stop_count_rank
+          : undefined;
+    const uniqueStopsRankModeRaw = uniqueStopsRankRaw?.mode ?? uniqueStopsRankRaw?.direction ?? uniqueStopsRankRaw?.order;
+    const uniqueStopsRankMode = ["least", "most"].includes(String(uniqueStopsRankModeRaw || "").toLowerCase())
+      ? String(uniqueStopsRankModeRaw).toLowerCase()
+      : undefined;
+    const uniqueStopsRankCountRaw = parseNumber(uniqueStopsRankRaw?.count ?? uniqueStopsRankRaw?.n ?? uniqueStopsRankRaw?.limit);
+    const uniqueStopsRankCount = Number.isFinite(uniqueStopsRankCountRaw) ? Math.round(uniqueStopsRankCountRaw) : null;
+    const uniqueStopsRank = uniqueStopsRankMode && Number.isFinite(uniqueStopsRankCount) && uniqueStopsRankCount >= 1 && uniqueStopsRankCount <= 25
+      ? { mode: uniqueStopsRankMode, count: uniqueStopsRankCount }
       : undefined;
     const extreme = spec.extreme && ["north", "south", "east", "west"].includes(String(spec.extreme).toLowerCase())
       ? String(spec.extreme).toLowerCase()
@@ -373,7 +527,9 @@
       freq: spec.freq && typeof spec.freq === "object" ? spec.freq : undefined,
       flags: spec.flags && typeof spec.flags === "object" ? spec.flags : undefined,
       length_miles: lengthSpec,
+      unique_stops: uniqueStopsSpec,
       length_rank: lengthRank,
+      unique_stops_rank: uniqueStopsRank,
       extreme
     };
     return normalised;
@@ -512,6 +668,18 @@
           }
         }
       }
+      if (spec.unique_stops) {
+        const value = row.unique_stops;
+        if (!Number.isFinite(value)) {
+          return false;
+        }
+        if (spec.unique_stops.min !== undefined && Number.isFinite(spec.unique_stops.min) && value < spec.unique_stops.min) {
+          return false;
+        }
+        if (spec.unique_stops.max !== undefined && Number.isFinite(spec.unique_stops.max) && value > spec.unique_stops.max) {
+          return false;
+        }
+      }
       return true;
     });
     if (spec.extreme) {
@@ -538,16 +706,31 @@
       const direction = spec.length_rank.mode === "longest" ? "longest" : "shortest";
       const limit = Number.isFinite(spec.length_rank.count) ? Math.round(spec.length_rank.count) : 0;
       if (limit > 0) {
-        const ranked = filtered
+        filtered = filtered
           .filter((row) => Number.isFinite(row.length_miles))
           .slice()
           .sort((a, b) => direction === "longest"
             ? b.length_miles - a.length_miles
             : a.length_miles - b.length_miles)
           .slice(0, limit);
-        return ranked;
+      } else {
+        filtered = [];
       }
-      return [];
+    }
+    if (spec.unique_stops_rank) {
+      const direction = spec.unique_stops_rank.mode === "most" ? "most" : "least";
+      const limit = Number.isFinite(spec.unique_stops_rank.count) ? Math.round(spec.unique_stops_rank.count) : 0;
+      if (limit > 0) {
+        filtered = filtered
+          .filter((row) => Number.isFinite(row.unique_stops))
+          .slice()
+          .sort((a, b) => direction === "most"
+            ? b.unique_stops - a.unique_stops
+            : a.unique_stops - b.unique_stops)
+          .slice(0, limit);
+      } else {
+        filtered = [];
+      }
     }
     return filtered;
   };
@@ -620,11 +803,24 @@
         ...(Number.isFinite(spec.length_miles.max) ? { max: spec.length_miles.max } : {})
       };
     }
+    if (spec.unique_stops && (Number.isFinite(spec.unique_stops.min) || Number.isFinite(spec.unique_stops.max))) {
+      cleaned.unique_stops = {
+        ...(Number.isFinite(spec.unique_stops.min) ? { min: spec.unique_stops.min } : {}),
+        ...(Number.isFinite(spec.unique_stops.max) ? { max: spec.unique_stops.max } : {})
+      };
+    }
     if (spec.length_rank && typeof spec.length_rank === "object") {
       const mode = spec.length_rank.mode;
       const count = spec.length_rank.count;
       if ((mode === "shortest" || mode === "longest") && Number.isFinite(count)) {
         cleaned.length_rank = { mode, count };
+      }
+    }
+    if (spec.unique_stops_rank && typeof spec.unique_stops_rank === "object") {
+      const mode = spec.unique_stops_rank.mode;
+      const count = spec.unique_stops_rank.count;
+      if ((mode === "least" || mode === "most") && Number.isFinite(count)) {
+        cleaned.unique_stops_rank = { mode, count };
       }
     }
     if (spec.extreme) {

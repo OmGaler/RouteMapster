@@ -22,6 +22,7 @@ const sampleRows = [
     frequency_weekend: 5,
     frequency_overnight: 0,
     length_miles: 7.5,
+    unique_stops: 41,
     northmost_lat: 51.6,
     southmost_lat: 51.4,
     eastmost_lon: 0.1,
@@ -41,6 +42,7 @@ const sampleRows = [
     frequency_weekend: 4,
     frequency_overnight: 3,
     length_miles: 9.2,
+    unique_stops: 56,
     northmost_lat: 51.7,
     southmost_lat: 51.3,
     eastmost_lon: 0.2,
@@ -60,6 +62,7 @@ const sampleRows = [
     frequency_weekend: 8,
     frequency_overnight: 2,
     length_miles: 12.3,
+    unique_stops: 29,
     northmost_lat: 51.65,
     southmost_lat: 51.35,
     eastmost_lon: -0.05,
@@ -80,7 +83,9 @@ test("normalizeFilterSpec canonicalizes inputs", () => {
     borough_mode: "within",
     vehicle_types: ["dd", " sd "],
     length_miles: { min: 5, max: 10 },
+    unique_stops: { min: 20, max: 60 },
     length_rank: { mode: "longest", count: 3 },
+    unique_stops_rank: { mode: "most", count: 2 },
     extreme: "north",
     route_series: 12,
     include_prefix_routes: true
@@ -95,7 +100,9 @@ test("normalizeFilterSpec canonicalizes inputs", () => {
   assert.equal(spec.borough_mode, "within");
   assert.deepEqual(spec.vehicle_types, ["DD", "SD"]);
   assert.deepEqual(spec.length_miles, { min: 5, max: 10 });
+  assert.deepEqual(spec.unique_stops, { min: 20, max: 60 });
   assert.deepEqual(spec.length_rank, { mode: "longest", count: 3 });
+  assert.deepEqual(spec.unique_stops_rank, { mode: "most", count: 2 });
   assert.equal(spec.extreme, "north");
   assert.equal(spec.route_series, 12);
   assert.equal(spec.include_prefix_routes, true);
@@ -106,11 +113,13 @@ test("normalizeFilterSpec rejects invalid rank and series", () => {
 
   const spec = engine.normalizeFilterSpec({
     length_rank: { mode: "largest", count: 200 },
+    unique_stops_rank: { mode: "highest", count: 99 },
     route_series: 120,
     include_prefix_routes: true
   });
 
   assert.equal(spec.length_rank, undefined);
+  assert.equal(spec.unique_stops_rank, undefined);
   assert.equal(spec.route_series, undefined);
   assert.equal(spec.include_prefix_routes, undefined);
 });
@@ -196,6 +205,16 @@ test("applyFilters handles length range", () => {
   assert.deepEqual(result.map((row) => row.route_id_norm), ["N12", "SL1"]);
 });
 
+test("applyFilters handles unique stop range", () => {
+  const engine = loadEngine();
+
+  const result = engine.applyFilters(sampleRows, {
+    unique_stops: { min: 30, max: 50 }
+  });
+
+  assert.deepEqual(result.map((row) => row.route_id_norm), ["12"]);
+});
+
 test("applyFilters handles extreme and rank selectors", () => {
   const engine = loadEngine();
 
@@ -203,9 +222,17 @@ test("applyFilters handles extreme and rank selectors", () => {
   const shortestTwo = engine.applyFilters(sampleRows, {
     length_rank: { mode: "shortest", count: 2 }
   });
+  const mostStopsTwo = engine.applyFilters(sampleRows, {
+    unique_stops_rank: { mode: "most", count: 2 }
+  });
+  const leastStopsOne = engine.applyFilters(sampleRows, {
+    unique_stops_rank: { mode: "least", count: 1 }
+  });
 
   assert.deepEqual(north.map((row) => row.route_id_norm), ["N12"]);
   assert.deepEqual(shortestTwo.map((row) => row.route_id_norm), ["12", "N12"]);
+  assert.deepEqual(mostStopsTwo.map((row) => row.route_id_norm), ["N12", "12"]);
+  assert.deepEqual(leastStopsOne.map((row) => row.route_id_norm), ["SL1"]);
 });
 
 test("computeDerivedFields computes overnight and peakiness", () => {
@@ -222,6 +249,7 @@ test("serializeFilterSpec and parseFilterSpec round-trip", () => {
   const spec = {
     route_ids: ["12"],
     route_types: ["night"],
+    unique_stops: { min: 10 },
     freq: { peak_am: { min: 5 } },
     flags: { has_overnight: true }
   };
@@ -231,6 +259,7 @@ test("serializeFilterSpec and parseFilterSpec round-trip", () => {
 
   assert.deepEqual(decoded.route_ids, ["12"]);
   assert.deepEqual(decoded.route_types, ["night"]);
+  assert.deepEqual(decoded.unique_stops, { min: 10 });
   assert.deepEqual(decoded.freq, { peak_am: { min: 5 } });
   assert.deepEqual(decoded.flags, { has_overnight: true });
 });
@@ -253,13 +282,25 @@ test("getUniqueValues deduplicates from scalar and array selectors", () => {
 test("loadRouteSummary parses CSV and caches result", async () => {
   let fetchCalls = 0;
   const engine = loadEngine({
-    fetch: async () => {
+    fetch: async (url) => {
       fetchCalls += 1;
+      if (String(url).includes("/data/processed/stops.geojson")) {
+        return {
+          ok: true,
+          json: async () => ({
+            features: [
+              { properties: { NAPTAN_ID: "s1", ROUTES: "12" } },
+              { properties: { NAPTAN_ID: "s2", ROUTES: "12, 55" } },
+              { properties: { NAPTAN_ID: "s3", ROUTES: "12" } }
+            ]
+          })
+        };
+      }
       return {
         ok: true,
         text: async () => [
-          "route_id,route_type,operator_names,frequency_peak_am,length_km",
-          "12,regular,Operator A,8,10"
+          "route_id,route_type,operator_names,frequency_peak_am,length_km,unique_stops",
+          "12,regular,Operator A,8,10,44"
         ].join("\n")
       };
     }
@@ -268,11 +309,14 @@ test("loadRouteSummary parses CSV and caches result", async () => {
   const first = await engine.loadRouteSummary();
   const second = await engine.loadRouteSummary();
 
-  assert.equal(fetchCalls, 1);
+  assert.equal(fetchCalls, 2);
   assert.equal(first.length, 1);
   assert.equal(second.length, 1);
   assert.equal(first[0].route_id_norm, "12");
   assert.equal(first[0].length_miles.toFixed(3), (10 * 0.621371).toFixed(3));
+  assert.equal(first[0].unique_stops, 2);
+  assert.equal(first[0].total_stops, 3);
+  assert.equal(first[0].unique_stops_pct, 2 / 3);
 });
 
 test("loadRouteSummary returns empty list on fetch failure", async () => {

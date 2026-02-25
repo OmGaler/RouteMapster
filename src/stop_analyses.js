@@ -473,6 +473,16 @@
     const expandRouteIndex = Number.isInteger(result?.meta?.expandRouteIndex)
       ? result.meta.expandRouteIndex
       : null;
+    const firstColumn = String(columns[0] || "").trim().toLowerCase();
+    const secondColumn = String(columns[1] || "").trim().toLowerCase();
+    const tableClasses = ["analysis-table"];
+    if (firstColumn === "rank") {
+      tableClasses.push("analysis-table--ranked");
+    }
+    if (firstColumn === "rank" && secondColumn === "route") {
+      tableClasses.push("analysis-table--ranked-route");
+    }
+    const tableClass = tableClasses.join(" ");
     const header = columns.map((col) => `<th>${escapeHtml(col)}</th>`).join("");
     const body = rows.map((row) => {
       const cells = row.map((cell, index) => {
@@ -487,13 +497,69 @@
       <div class="analysis-table-shell">
         <div class="analysis-scroll-cue" aria-hidden="true">▸</div>
         <div class="analysis-table-wrap">
-          <table class="analysis-table">
+          <table class="${tableClass}">
             <thead><tr>${header}</tr></thead>
             <tbody>${body}</tbody>
           </table>
         </div>
       </div>
     `;
+  };
+
+  const syncTableOverflowCue = (shell) => {
+    if (!shell) {
+      return;
+    }
+    const wrap = shell.querySelector(".analysis-table-wrap");
+    if (!wrap) {
+      return;
+    }
+    const wrapTop = wrap.offsetTop || 0;
+    const wrapBottom = Math.max(0, (shell.clientHeight || 0) - wrapTop - (wrap.offsetHeight || 0));
+    shell.style.setProperty("--analysis-wrap-top", `${wrapTop}px`);
+    shell.style.setProperty("--analysis-wrap-bottom", `${wrapBottom}px`);
+    const overflowSlack = Math.max(0, wrap.scrollWidth - wrap.clientWidth);
+    const hasOverflow = overflowSlack > 2;
+    const remainingRight = Math.max(0, wrap.scrollWidth - wrap.clientWidth - wrap.scrollLeft);
+    const isScrollEnd = !hasOverflow || remainingRight <= 2;
+    shell.classList.toggle("has-x-overflow", hasOverflow);
+    shell.classList.toggle("is-scroll-end", isScrollEnd);
+  };
+
+  const attachTableOverflowCues = (root) => {
+    if (!root) {
+      return;
+    }
+    root.querySelectorAll(".analysis-table-shell").forEach((shell) => {
+      const wrap = shell.querySelector(".analysis-table-wrap");
+      if (!wrap) {
+        return;
+      }
+      if (wrap.dataset.overflowCueBound !== "1") {
+        const sync = () => syncTableOverflowCue(shell);
+        wrap.addEventListener("scroll", sync, { passive: true });
+        if (typeof ResizeObserver === "function") {
+          const observer = new ResizeObserver(sync);
+          observer.observe(wrap);
+          const table = wrap.querySelector("table");
+          if (table) {
+            observer.observe(table);
+          }
+          wrap.__overflowCueObserver = observer;
+        }
+        wrap.__overflowCueSync = sync;
+        wrap.dataset.overflowCueBound = "1";
+      }
+      const syncFn = wrap.__overflowCueSync;
+      if (typeof syncFn === "function") {
+        syncFn();
+        if (typeof window.requestAnimationFrame === "function") {
+          window.requestAnimationFrame(syncFn);
+        }
+      } else {
+        syncTableOverflowCue(shell);
+      }
+    });
   };
 
   const buildDistribution = (rows) => {
@@ -822,6 +888,7 @@
       `;
     }).join("");
     container.innerHTML = blocks;
+    attachTableOverflowCues(container);
   };
 
   const renderPresetCards = (container) => {
