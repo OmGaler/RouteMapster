@@ -2,10 +2,13 @@
   const ROUTE_SUMMARY_PATH = "/route_summary.csv";
   const STOPS_GEOJSON_PATH = "/data/processed/stops.geojson";
   const KM_TO_MILES = 0.621371;
+  const ROUTE_ID_PARTS_RE = /^([A-Z]*)(\d+)([A-Z]*)$/;
+  const KNOWN_ROUTE_TYPES = new Set(["regular", "night", "school", "twentyfour", "unknown"]);
   let cachedRows = null;
   let loadPromise = null;
   let routeStopStatsCache = null;
   let routeStopStatsPromise = null;
+  const routeIdPartsCache = new Map();
 
   const parseCsv = (text) => {
     const rows = [];
@@ -125,10 +128,11 @@
         return;
       }
       const routes = extractRouteTokens(props.ROUTES ?? props.Routes ?? props.routes);
-      if (!stopRoutesByKey.has(stopKey)) {
-        stopRoutesByKey.set(stopKey, new Set());
+      let set = stopRoutesByKey.get(stopKey);
+      if (!set) {
+        set = new Set();
+        stopRoutesByKey.set(stopKey, set);
       }
-      const set = stopRoutesByKey.get(stopKey);
       routes.forEach((routeId) => {
         if (routeId) {
           set.add(routeId);
@@ -138,19 +142,19 @@
     const totalCounts = new Map();
     const exclusiveCounts = new Map();
     stopRoutesByKey.forEach((routes) => {
-      const onlyRoutes = Array.isArray(routes) ? routes : Array.from(routes || []);
-      onlyRoutes.forEach((routeIdRaw) => {
+      let onlyRoute = "";
+      let onlyCount = 0;
+      routes.forEach((routeIdRaw) => {
         const routeId = String(routeIdRaw || "").trim().toUpperCase();
         if (!routeId) {
           return;
         }
+        onlyRoute = routeId;
+        onlyCount += 1;
         totalCounts.set(routeId, (totalCounts.get(routeId) || 0) + 1);
       });
-      if (onlyRoutes.length === 1) {
-        const routeId = String(onlyRoutes[0] || "").trim().toUpperCase();
-        if (routeId) {
-          exclusiveCounts.set(routeId, (exclusiveCounts.get(routeId) || 0) + 1);
-        }
+      if (onlyCount === 1 && onlyRoute) {
+        exclusiveCounts.set(onlyRoute, (exclusiveCounts.get(onlyRoute) || 0) + 1);
       }
     });
     return { totalCounts, exclusiveCounts };
@@ -200,7 +204,7 @@
     if (token === "twentyfour" || token === "twenty-four") {
       return "twentyfour";
     }
-    if (["regular", "night", "school", "twentyfour", "unknown"].includes(token)) {
+    if (KNOWN_ROUTE_TYPES.has(token)) {
       return token;
     }
     return token;
@@ -234,15 +238,22 @@
     if (!token) {
       return null;
     }
-    const match = token.match(/^([A-Z]*)(\d+)([A-Z]*)$/);
+    if (routeIdPartsCache.has(token)) {
+      return routeIdPartsCache.get(token);
+    }
+    const match = token.match(ROUTE_ID_PARTS_RE);
     if (!match) {
+      routeIdPartsCache.set(token, null);
       return null;
     }
     const num = Number(match[2]);
     if (!Number.isFinite(num)) {
+      routeIdPartsCache.set(token, null);
       return null;
     }
-    return { prefix: match[1] || "", number: num, suffix: match[3] || "" };
+    const parts = { prefix: match[1] || "", number: num, suffix: match[3] || "" };
+    routeIdPartsCache.set(token, parts);
+    return parts;
   };
 
   const normaliseSeriesValue = (value) => {
@@ -412,11 +423,20 @@
   };
 
   const average = (values) => {
-    const nums = values.filter((value) => Number.isFinite(value));
-    if (nums.length === 0) {
+    let sum = 0;
+    let count = 0;
+    for (let i = 0; i < values.length; i += 1) {
+      const value = values[i];
+      if (!Number.isFinite(value)) {
+        continue;
+      }
+      sum += value;
+      count += 1;
+    }
+    if (count === 0) {
       return null;
     }
-    return nums.reduce((sum, value) => sum + value, 0) / nums.length;
+    return sum / count;
   };
 
   const computeDerivedFields = (rows) => {
@@ -425,24 +445,6 @@
       const peakAvg = average([row.frequency_peak_am, row.frequency_peak_pm]);
       const offpeak = row.frequency_offpeak;
       const overnight = row.frequency_overnight;
-      let weightedSum = 0;
-      let weightTotal = 0;
-      if (Number.isFinite(row.frequency_peak_am)) {
-        weightedSum += row.frequency_peak_am * 0.4;
-        weightTotal += 0.4;
-      }
-      if (Number.isFinite(row.frequency_peak_pm)) {
-        weightedSum += row.frequency_peak_pm * 0.35;
-        weightTotal += 0.35;
-      }
-      if (Number.isFinite(offpeak)) {
-        weightedSum += offpeak * 0.2;
-        weightTotal += 0.2;
-      }
-      if (Number.isFinite(overnight)) {
-        weightedSum += overnight * 0.05;
-        weightTotal += 0.05;
-      }
       const totalStops = Number.isFinite(row.total_stops) ? row.total_stops : null;
       const uniqueStops = Number.isFinite(row.unique_stops) ? row.unique_stops : null;
       const uniqueStopsPct = Number.isFinite(uniqueStops) && Number.isFinite(totalStops) && totalStops > 0
@@ -560,6 +562,28 @@
     const vehicleSet = spec.vehicle_types && spec.vehicle_types.length > 0
       ? new Set(spec.vehicle_types)
       : null;
+    const freqChecks = spec.freq
+      ? ["peak_am", "peak_pm", "offpeak", "weekend", "overnight"]
+        .map((key) => {
+          const range = spec.freq[key];
+          if (!range) {
+            return null;
+          }
+          return {
+            key,
+            min: Number.isFinite(range.min) ? range.min : null,
+            max: Number.isFinite(range.max) ? range.max : null
+          };
+        })
+        .filter(Boolean)
+      : null;
+    const requireHasOvernight = typeof spec.flags?.has_overnight === "boolean"
+      ? spec.flags.has_overnight
+      : null;
+    const highFrequencyThreshold = Number.isFinite(spec.flags?.high_frequency_any)
+      ? spec.flags.high_frequency_any
+      : null;
+    const hasBoroughMatchers = Array.isArray(boroughMatchers) && boroughMatchers.length > 0;
 
     let filtered = list.filter((row) => {
       if (!row || !row.route_id_norm) {
@@ -574,7 +598,7 @@
       if (!routeMatchesSeries(row.route_id_norm, seriesValue, includePrefixRoutes)) {
         return false;
       }
-      if (routeTypeSet && !routeTypeSet.has(String(row.route_type || "").toLowerCase())) {
+      if (routeTypeSet && !routeTypeSet.has(row.route_type)) {
         return false;
       }
       if (operatorSet) {
@@ -589,7 +613,7 @@
           return false;
         }
       }
-      if (boroughMatchers) {
+      if (hasBoroughMatchers) {
         const boroughs = Array.isArray(row.boroughs_norm) ? row.boroughs_norm : [];
         const matchesAnyBorough = (token) => boroughMatchers.some((matcher) => boroughTokenMatches(token, matcher));
         if (boroughMode === "within") {
@@ -610,51 +634,46 @@
       if (vehicleSet && !vehicleSet.has(row.vehicle_type)) {
         return false;
       }
-      if (spec.freq) {
-        const bands = [
-          { key: "peak_am", value: row.frequency_peak_am },
-          { key: "peak_pm", value: row.frequency_peak_pm },
-          { key: "offpeak", value: row.frequency_offpeak },
-          { key: "weekend", value: row.frequency_weekend },
-          { key: "overnight", value: row.frequency_overnight }
-        ];
-        for (const band of bands) {
-          const range = spec.freq[band.key];
-          if (!range) {
-            continue;
+      if (freqChecks) {
+        for (let i = 0; i < freqChecks.length; i += 1) {
+          const range = freqChecks[i];
+          let value = null;
+          if (range.key === "peak_am") {
+            value = row.frequency_peak_am;
+          } else if (range.key === "peak_pm") {
+            value = row.frequency_peak_pm;
+          } else if (range.key === "offpeak") {
+            value = row.frequency_offpeak;
+          } else if (range.key === "weekend") {
+            value = row.frequency_weekend;
+          } else {
+            value = row.frequency_overnight;
           }
-          const value = band.value;
           if (!Number.isFinite(value)) {
             return false;
           }
-          if (range.min !== undefined && Number.isFinite(range.min) && value < range.min) {
+          if (range.min !== null && value < range.min) {
             return false;
           }
-          if (range.max !== undefined && Number.isFinite(range.max) && value > range.max) {
+          if (range.max !== null && value > range.max) {
             return false;
           }
         }
       }
-      if (spec.flags) {
-        if (typeof spec.flags.has_overnight === "boolean") {
-          const hasOvernight = Number.isFinite(row.frequency_overnight) ? row.frequency_overnight > 0 : false;
-          if (spec.flags.has_overnight !== hasOvernight) {
-            return false;
-          }
+      if (requireHasOvernight !== null) {
+        const hasOvernight = Number.isFinite(row.frequency_overnight) ? row.frequency_overnight > 0 : false;
+        if (requireHasOvernight !== hasOvernight) {
+          return false;
         }
-        if (Number.isFinite(spec.flags.high_frequency_any)) {
-          const threshold = spec.flags.high_frequency_any;
-          const values = [
-            row.frequency_peak_am,
-            row.frequency_peak_pm,
-            row.frequency_offpeak,
-            row.frequency_weekend,
-            row.frequency_overnight
-          ];
-          const meets = values.some((value) => Number.isFinite(value) && value >= threshold);
-          if (!meets) {
-            return false;
-          }
+      }
+      if (highFrequencyThreshold !== null) {
+        const meets = (Number.isFinite(row.frequency_peak_am) && row.frequency_peak_am >= highFrequencyThreshold)
+          || (Number.isFinite(row.frequency_peak_pm) && row.frequency_peak_pm >= highFrequencyThreshold)
+          || (Number.isFinite(row.frequency_offpeak) && row.frequency_offpeak >= highFrequencyThreshold)
+          || (Number.isFinite(row.frequency_weekend) && row.frequency_weekend >= highFrequencyThreshold)
+          || (Number.isFinite(row.frequency_overnight) && row.frequency_overnight >= highFrequencyThreshold);
+        if (!meets) {
+          return false;
         }
       }
       if (spec.length_miles) {
@@ -690,15 +709,26 @@
         west: "westmost_lon"
       };
       const field = fieldByExtreme[spec.extreme];
-      const values = filtered
-        .map((row) => row?.[field])
-        .filter((value) => Number.isFinite(value));
-      if (values.length === 0) {
+      let target = null;
+      for (let i = 0; i < filtered.length; i += 1) {
+        const value = filtered[i]?.[field];
+        if (!Number.isFinite(value)) {
+          continue;
+        }
+        if (target === null) {
+          target = value;
+          continue;
+        }
+        if ((spec.extreme === "north" || spec.extreme === "east") && value > target) {
+          target = value;
+        }
+        if ((spec.extreme === "south" || spec.extreme === "west") && value < target) {
+          target = value;
+        }
+      }
+      if (!Number.isFinite(target)) {
         return [];
       }
-      const target = (spec.extreme === "north" || spec.extreme === "east")
-        ? Math.max(...values)
-        : Math.min(...values);
       const epsilon = 1e-6;
       filtered = filtered.filter((row) => Number.isFinite(row?.[field]) && Math.abs(row[field] - target) <= epsilon);
     }
@@ -855,12 +885,19 @@
       if (!values) {
         return;
       }
-      (Array.isArray(values) ? values : [values]).forEach((value) => {
-        const token = normaliser ? normaliser(value) : normaliseToken(value);
-        if (token) {
-          set.add(token);
-        }
-      });
+      if (Array.isArray(values)) {
+        values.forEach((value) => {
+          const token = normaliser ? normaliser(value) : normaliseToken(value);
+          if (token) {
+            set.add(token);
+          }
+        });
+        return;
+      }
+      const token = normaliser ? normaliser(values) : normaliseToken(values);
+      if (token) {
+        set.add(token);
+      }
     });
     return Array.from(set);
   };

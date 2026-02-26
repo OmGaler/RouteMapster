@@ -25,6 +25,7 @@ test("normaliseBoroughToken trims and lowercases", () => {
   const { normaliseBoroughToken } = windowRef.RouteMapsterUtils;
 
   assert.equal(normaliseBoroughToken("  City Of London  "), "city of london");
+  assert.equal(normaliseBoroughToken("Barking & Dagenham"), "barking and dagenham");
   assert.equal(normaliseBoroughToken(""), "");
   assert.equal(normaliseBoroughToken(undefined), "");
 });

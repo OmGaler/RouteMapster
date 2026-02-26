@@ -6,13 +6,15 @@
     SW: "South West London",
     SE: "South East London"
   };
+  const BOROUGH_GRID_CELL_DEGREES = 0.05;
+  const POINT_LOOKUP_CACHE_LIMIT = 50000;
 
   const REGION_BY_BOROUGH = new Map([
     ["city of london", "C"],
     ["westminster", "C"],
     ["camden", "C"],
     ["islington", "C"],
-    ["kensington and chelsea", "C"],
+    ["kensington & chelsea", "C"],
     ["lambeth", "C"],
     ["southwark", "C"],
     ["hackney", "NE"],
@@ -21,14 +23,14 @@
     ["waltham forest", "NE"],
     ["redbridge", "NE"],
     ["havering", "NE"],
-    ["barking and dagenham", "NE"],
+    ["barking & dagenham", "NE"],
     ["haringey", "NE"],
     ["enfield", "NE"],
     ["barnet", "NW"],
     ["harrow", "NW"],
     ["brent", "NW"],
     ["ealing", "NW"],
-    ["hammersmith and fulham", "NW"],
+    ["hammersmith & fulham", "NW"],
     ["hillingdon", "NW"],
     ["wandsworth", "SW"],
     ["hounslow", "SW"],
@@ -119,6 +121,54 @@
     return true;
   };
 
+  const gridCoord = (value) => Math.floor(value / BOROUGH_GRID_CELL_DEGREES);
+  const gridKey = (x, y) => `${x}:${y}`;
+
+  const addEntryToGrid = (grid, entry) => {
+    const bbox = entry?.bbox;
+    if (!Array.isArray(bbox) || bbox.length < 4) {
+      return;
+    }
+    const [minLon, minLat, maxLon, maxLat] = bbox;
+    if (![minLon, minLat, maxLon, maxLat].every(Number.isFinite)) {
+      return;
+    }
+    const minX = gridCoord(minLon);
+    const maxX = gridCoord(maxLon);
+    const minY = gridCoord(minLat);
+    const maxY = gridCoord(maxLat);
+    for (let x = minX; x <= maxX; x += 1) {
+      for (let y = minY; y <= maxY; y += 1) {
+        const key = gridKey(x, y);
+        const list = grid.get(key);
+        if (list) {
+          list.push(entry);
+        } else {
+          grid.set(key, [entry]);
+        }
+      }
+    }
+  };
+
+  const attachIndexCaches = (index) => {
+    if (!Array.isArray(index) || index.length === 0) {
+      return index;
+    }
+    const grid = new Map();
+    index.forEach((entry) => addEntryToGrid(grid, entry));
+    Object.defineProperty(index, "_boroughGrid", {
+      value: grid,
+      enumerable: false,
+      configurable: true
+    });
+    Object.defineProperty(index, "_pointLookupCache", {
+      value: new Map(),
+      enumerable: false,
+      configurable: true
+    });
+    return index;
+  };
+
   const buildBoroughIndex = (geojson) => {
     const features = Array.isArray(geojson?.features) ? geojson.features : [];
     const index = [];
@@ -152,19 +202,43 @@
         });
       }
     });
-    return index.filter((entry) => entry.name);
+    return attachIndexCaches(index.filter((entry) => entry.name));
   };
 
   const findBoroughForPoint = (lon, lat, index) => {
-    for (let i = 0; i < index.length; i += 1) {
-      const entry = index[i];
+    if (!Array.isArray(index) || index.length === 0) {
+      return "";
+    }
+    const cache = index._pointLookupCache instanceof Map ? index._pointLookupCache : null;
+    const cacheKey = cache ? `${lon},${lat}` : "";
+    if (cache && cache.has(cacheKey)) {
+      return cache.get(cacheKey);
+    }
+    const grid = index._boroughGrid instanceof Map ? index._boroughGrid : null;
+    const candidates = grid
+      ? (grid.get(gridKey(gridCoord(lon), gridCoord(lat))) || [])
+      : index;
+    for (let i = 0; i < candidates.length; i += 1) {
+      const entry = candidates[i];
       const [minLon, minLat, maxLon, maxLat] = entry.bbox;
       if (lon < minLon || lon > maxLon || lat < minLat || lat > maxLat) {
         continue;
       }
       if (pointInPolygon(lon, lat, entry.coords)) {
+        if (cache) {
+          if (cache.size >= POINT_LOOKUP_CACHE_LIMIT) {
+            cache.clear();
+          }
+          cache.set(cacheKey, entry.name);
+        }
         return entry.name;
       }
+    }
+    if (cache) {
+      if (cache.size >= POINT_LOOKUP_CACHE_LIMIT) {
+        cache.clear();
+      }
+      cache.set(cacheKey, "");
     }
     return "";
   };

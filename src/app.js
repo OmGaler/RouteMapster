@@ -25,6 +25,28 @@ const BUS_STOP_LOADING_TITLE = "Loading bus stops";
 const BUS_STOP_LOADING_SUBTITLE = "Please wait while bus stops load.";
 const BUS_STOP_LOADING_MODAL_DELAY_MS = 220;
 const BUS_STOP_PREWARM_DELAY_MS = 1200;
+const ROUTE_SORT_NUMERIC_RE = /^\d+$/;
+const ROUTE_SORT_PREFIX_RE = /^([A-Z]+)(\d+)?(.*)$/;
+const ROUTE_TOKEN_SPLIT_RE = /[\s,;/]+/;
+const ROUTE_TOKEN_STRIP_RE = /[^A-Za-z0-9]/g;
+const ROUTE_SORT_KEY_CACHE_LIMIT = 4096;
+const ROUTE_TOKEN_CACHE_LIMIT = 8192;
+const routeSortKeyCache = new Map();
+const routeTokenCache = new Map();
+const DATE_TOKEN_FORMATTER = new Intl.DateTimeFormat("en-GB", {
+	day: "2-digit",
+	month: "short",
+	year: "numeric",
+	timeZone: "UTC"
+});
+const ISO_UTC_FORMATTER = new Intl.DateTimeFormat("en-GB", {
+	day: "2-digit",
+	month: "short",
+	year: "numeric",
+	hour: "2-digit",
+	minute: "2-digit",
+	timeZone: "UTC"
+});
 
 const ROUTE_COLOURS = {
 	regular: "#ef4444",
@@ -61,7 +83,7 @@ const STOP_REGION_BY_BOROUGH = window.RouteMapsterGeo?.REGION_BY_BOROUGH || new 
 	["westminster", "C"],
 	["camden", "C"],
 	["islington", "C"],
-	["kensington and chelsea", "C"],
+	["kensington & chelsea", "C"],
 	["lambeth", "C"],
 	["southwark", "C"],
 	["hackney", "NE"],
@@ -70,14 +92,14 @@ const STOP_REGION_BY_BOROUGH = window.RouteMapsterGeo?.REGION_BY_BOROUGH || new 
 	["waltham forest", "NE"],
 	["redbridge", "NE"],
 	["havering", "NE"],
-	["barking and dagenham", "NE"],
+	["barking & dagenham", "NE"],
 	["haringey", "NE"],
 	["enfield", "NE"],
 	["barnet", "NW"],
 	["harrow", "NW"],
 	["brent", "NW"],
 	["ealing", "NW"],
-	["hammersmith and fulham", "NW"],
+	["hammersmith & fulham", "NW"],
 	["hillingdon", "NW"],
 	["wandsworth", "SW"],
 	["hounslow", "SW"],
@@ -288,7 +310,11 @@ function normaliseBoroughName(value) {
 	if (window.RouteMapsterUtils?.normaliseBoroughToken) {
 		return window.RouteMapsterUtils.normaliseBoroughToken(value);
 	}
-	return String(value || "").trim().toLowerCase();
+	return String(value || "")
+		.replace(/&/g, " and ")
+		.trim()
+		.toLowerCase()
+		.replace(/\s+/g, " ");
 }
 
 function getStopRegionTokenFromBorough(borough) {
@@ -533,6 +559,55 @@ function setAboutModalVisible(visible) {
 	}
 	modal.classList.toggle("is-visible", visible);
 	modal.setAttribute("aria-hidden", visible ? "false" : "true");
+}
+
+function setKeyboardShortcutsModalVisible(visible) {
+	const modal = document.getElementById("keyboardShortcutsModal");
+	if (!modal) {
+		return;
+	}
+	modal.classList.toggle("is-visible", visible);
+	modal.setAttribute("aria-hidden", visible ? "false" : "true");
+}
+
+function openKeyboardShortcutsModal() {
+	setKeyboardShortcutsModalVisible(true);
+}
+
+function closeKeyboardShortcutsModal() {
+	setKeyboardShortcutsModalVisible(false);
+}
+
+function setupKeyboardShortcutsModal() {
+	const modal = document.getElementById("keyboardShortcutsModal");
+	const closeButton = document.getElementById("closeKeyboardShortcuts");
+	const openButton = document.getElementById("openKeyboardShortcutsFromAbout");
+	if (openButton) {
+		openButton.addEventListener("click", () => {
+			closeAboutModal(false);
+			openKeyboardShortcutsModal();
+		});
+	}
+	if (closeButton) {
+		closeButton.addEventListener("click", () => {
+			closeKeyboardShortcutsModal();
+		});
+	}
+	if (modal) {
+		modal.addEventListener("click", (event) => {
+			if (event.target === modal) {
+				closeKeyboardShortcutsModal();
+			}
+		});
+	}
+	document.addEventListener("keydown", (event) => {
+		if (event.key !== "Escape") {
+			return;
+		}
+		if (modal && modal.classList.contains("is-visible")) {
+			closeKeyboardShortcutsModal();
+		}
+	});
 }
 
 async function loadRouteSummaryRows() {
@@ -2427,12 +2502,7 @@ function formatDateToken(token) {
 	if (Number.isNaN(date.getTime())) {
 		return text;
 	}
-	return date.toLocaleDateString("en-GB", {
-		day: "2-digit",
-		month: "short",
-		year: "numeric",
-		timeZone: "UTC"
-	});
+	return DATE_TOKEN_FORMATTER.format(date);
 }
 
 function formatIsoUtc(value) {
@@ -2443,14 +2513,7 @@ function formatIsoUtc(value) {
 	if (Number.isNaN(date.getTime())) {
 		return String(value);
 	}
-	return `${date.toLocaleString("en-GB", {
-		day: "2-digit",
-		month: "short",
-		year: "numeric",
-		hour: "2-digit",
-		minute: "2-digit",
-		timeZone: "UTC"
-	})} UTC`;
+	return `${ISO_UTC_FORMATTER.format(date)} UTC`;
 }
 
 function setAboutValue(id, value) {
@@ -2862,14 +2925,19 @@ function renderAdvancedStopsLayer(stops, options = {}) {
 	appState.advancedStopsLayer = layerGroup;
 }
 
-async function addBusStopsLayer(map) {
+async function addBusStopsLayer(map, options = {}) {
 	if (!map) {
 		return null;
 	}
-	setLoadingModalMessage(BUS_STOP_LOADING_TITLE, BUS_STOP_LOADING_SUBTITLE);
-	setLoadingModalVisible(true);
+	const showLoadingModal = options?.showLoadingModal !== false;
+	if (showLoadingModal) {
+		setLoadingModalMessage(BUS_STOP_LOADING_TITLE, BUS_STOP_LOADING_SUBTITLE);
+		setLoadingModalVisible(true);
+	}
 	try {
-		await waitForNextUiPaint();
+		if (showLoadingModal) {
+			await waitForNextUiPaint();
+		}
 		const loadToken = appState.busStopLoadToken;
 		const geojson = await loadBusStopsGeojson();
 		if (loadToken !== appState.busStopLoadToken) {
@@ -2931,7 +2999,9 @@ async function addBusStopsLayer(map) {
 		updateBusStopFilterStatus(result.count, result.district, result.borough, appState.busStopFilterRouteCount);
 		return layerGroup;
 	} finally {
-		setLoadingModalVisible(false);
+		if (showLoadingModal) {
+			setLoadingModalVisible(false);
+		}
 	}
 }
 
@@ -3046,7 +3116,11 @@ function normaliseBoroughToken(value) {
 	if (!value) {
 		return "";
 	}
-	return String(value).trim().toLowerCase();
+	return String(value)
+		.replace(/&/g, " and ")
+		.trim()
+		.toLowerCase()
+		.replace(/\s+/g, " ");
 }
 
 function buildRingBBox(ring) {
@@ -3326,7 +3400,7 @@ function formatRouteList(routes) {
 
 function sortRouteIds(routes) {
 	const list = Array.isArray(routes) ? routes : Array.from(routes || []);
-	return list.slice().sort((a, b) => compareRouteIds(a, b));
+	return list.slice().sort(compareRouteIds);
 }
 
 function compareRouteIds(a, b) {
@@ -3348,38 +3422,69 @@ function buildRouteSortKey(routeId) {
 	if (!raw) {
 		return [9, "", 0, ""];
 	}
-	if (/^\d+$/.test(raw)) {
+	if (routeSortKeyCache.has(raw)) {
+		return routeSortKeyCache.get(raw);
+	}
+	let key;
+	if (ROUTE_SORT_NUMERIC_RE.test(raw)) {
 		const value = Number(raw);
 		if (value >= 1 && value <= 599) {
-			return [0, "", value, raw];
+			key = [0, "", value, raw];
+		} else if (value >= 600 && value <= 699) {
+			key = [1, "", value, raw];
+		} else {
+			key = [2, "", value, raw];
 		}
-		if (value >= 600 && value <= 699) {
-			return [1, "", value, raw];
+	} else if (raw.startsWith("SL")) {
+		key = [4, "SL", parsePrefixNumber(raw.slice(2)), raw];
+	} else if (raw.startsWith("N")) {
+		key = [5, "N", parsePrefixNumber(raw.slice(1)), raw];
+	} else {
+		const match = raw.match(ROUTE_SORT_PREFIX_RE);
+		if (match) {
+			const prefix = match[1];
+			const number = match[2] ? Number(match[2]) : 0;
+			const suffix = match[3] || "";
+			key = [3, prefix, number, suffix];
+		} else {
+			key = [9, raw, 0, ""];
 		}
-		return [2, "", value, raw];
 	}
-	if (raw.startsWith("SL")) {
-		return [4, "SL", parsePrefixNumber(raw.slice(2)), raw];
+	if (routeSortKeyCache.size >= ROUTE_SORT_KEY_CACHE_LIMIT) {
+		routeSortKeyCache.clear();
 	}
-	if (raw.startsWith("N")) {
-		return [5, "N", parsePrefixNumber(raw.slice(1)), raw];
-	}
-	const match = raw.match(/^([A-Z]+)(\d+)?(.*)$/);
-	if (match) {
-		const prefix = match[1];
-		const number = match[2] ? Number(match[2]) : 0;
-		const suffix = match[3] || "";
-		return [3, prefix, number, suffix];
-	}
-	return [9, raw, 0, ""];
+	routeSortKeyCache.set(raw, key);
+	return key;
 }
 
 function parsePrefixNumber(value) {
 	if (!value) {
 		return 0;
 	}
-	const match = String(value).match(/^\d+/);
-	return match ? Number(match[0]) : 0;
+	const text = String(value);
+	let end = 0;
+	while (end < text.length) {
+		const code = text.charCodeAt(end);
+		if (code < 48 || code > 57) {
+			break;
+		}
+		end += 1;
+	}
+	if (end === 0) {
+		return 0;
+	}
+	return Number(text.slice(0, end));
+}
+
+function setBoundedCacheValue(cache, key, value, limit) {
+	if (!cache) {
+		return value;
+	}
+	if (cache.size >= limit) {
+		cache.clear();
+	}
+	cache.set(key, value);
+	return value;
 }
 
 function getRoutePillClass(routeId, routeSets) {
@@ -3557,7 +3662,7 @@ function addRouteToStopCache(stopId, routeId) {
 }
 
 function getStopRouteTokens(props) {
-	const tokens = new Set(extractRouteTokens(props?.ROUTES).filter((routeId) => !isExcludedRoute(routeId)));
+	const tokens = new Set(extractRouteTokens(props?.ROUTES));
 	const stopId = getStopPointIdFromProps(props);
 	if (stopId && appState.stopRoutesFromLines.has(stopId)) {
 		appState.stopRoutesFromLines.get(stopId).forEach((routeId) => {
@@ -4190,35 +4295,35 @@ function addRouteTokens(set, value) {
 	if (!value) {
 		return;
 	}
-	String(value)
-		.split(/[\s,;/]+/)
-		.map((token) => token.trim())
-		.filter(Boolean)
-		.forEach((token) => {
-			const cleaned = token.replace(/[^A-Za-z0-9]/g, '');
-			if (!cleaned) {
-				return;
-			}
-			const normalised = cleaned.toUpperCase();
-			if (isExcludedRoute(normalised)) {
-				return;
-			}
-			set.add(normalised);
-		});
+	extractRouteTokens(value).forEach((token) => set.add(token));
 }
 
 function extractRouteTokens(value) {
 	if (!value) {
 		return [];
 	}
-	return String(value)
-		.split(/[\s,;/]+/)
-		.map((token) => token.trim())
-		.filter(Boolean)
-		.map((token) => token.replace(/[^A-Za-z0-9]/g, ''))
-		.filter(Boolean)
-		.map((token) => token.toUpperCase())
-		.filter((token) => !isExcludedRoute(token));
+	const raw = String(value);
+	if (routeTokenCache.has(raw)) {
+		return routeTokenCache.get(raw);
+	}
+	const parts = raw.split(ROUTE_TOKEN_SPLIT_RE);
+	const tokens = [];
+	for (let i = 0; i < parts.length; i += 1) {
+		const part = parts[i];
+		if (!part) {
+			continue;
+		}
+		const cleaned = part.trim().replace(ROUTE_TOKEN_STRIP_RE, '');
+		if (!cleaned) {
+			continue;
+		}
+		const token = cleaned.toUpperCase();
+		if (isExcludedRoute(token)) {
+			continue;
+		}
+		tokens.push(token);
+	}
+	return setBoundedCacheValue(routeTokenCache, raw, tokens, ROUTE_TOKEN_CACHE_LIMIT);
 }
 
 function buildRouteFilterTokens(query) {
@@ -6618,6 +6723,7 @@ function setupUI() {
 	setupBusStationSelect();
 	setupGarageSelect();
 	setupNetworkFilterDrag();
+	setupKeyboardShortcutsModal();
 	setupKeyboardShortcuts();
 	setupAboutModal();
 	setupOmniSearch();
@@ -7365,7 +7471,9 @@ function setupBusStopFilterInput() {
 		const showStops = document.getElementById("showBusStops");
 		if (showStops && showStops.checked) {
 			appState.busStopLoadToken += 1;
-			addBusStopsLayer(appState.map).catch(() => {});
+			addBusStopsLayer(appState.map, {
+				showLoadingModal: !appState.busStopsGeojson
+			}).catch(() => {});
 		}
 	};
 
@@ -7747,6 +7855,10 @@ function setupKeyboardShortcuts() {
 		if (about && about.classList.contains("is-visible")) {
 			return true;
 		}
+		const shortcuts = document.getElementById("keyboardShortcutsModal");
+		if (shortcuts && shortcuts.classList.contains("is-visible")) {
+			return true;
+		}
 		const loading = document.getElementById("loadingModal");
 		if (loading && loading.classList.contains("is-visible")) {
 			return true;
@@ -7961,6 +8073,10 @@ function setupKeyboardShortcuts() {
 			case "c":
 				event.preventDefault();
 				clearAll();
+				break;
+			case "?":
+				event.preventDefault();
+				openKeyboardShortcutsModal();
 				break;
 			default:
 				break;

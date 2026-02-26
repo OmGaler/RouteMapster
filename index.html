@@ -1503,6 +1503,49 @@
       font-weight: 600;
     }
 
+    .shortcuts-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .shortcut-row {
+      display: grid;
+      grid-template-columns: minmax(110px, auto) 1fr;
+      gap: 10px;
+      align-items: center;
+      padding: 8px 10px;
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.72);
+      border: 1px solid rgba(230, 222, 210, 0.9);
+    }
+
+    .shortcut-keys {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .kbd-key {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 28px;
+      padding: 3px 8px;
+      border-radius: 8px;
+      border: 1px solid #d8ccba;
+      background: #fff;
+      color: var(--ink);
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1;
+      box-shadow: inset 0 -1px 0 rgba(15, 23, 42, 0.06);
+    }
+
+    .shortcut-desc {
+      font-size: 13px;
+      color: var(--ink);
+    }
+
     .leaflet-container {
       font-family: "Space Grotesk", "Segoe UI", sans-serif;
     }
@@ -2413,6 +2456,9 @@
         <div class="about-section">
           <h3>Notes</h3>
           <div>Not affiliated with TfL.</div>
+          <div>
+            <button id="openKeyboardShortcutsFromAbout" class="ghost-button tiny" type="button">Keyboard shortcuts (?)</button>
+          </div>
         </div>
 
         <div class="about-section">
@@ -2437,6 +2483,39 @@
     </div>
   </div>
 
+  <div id="keyboardShortcutsModal" class="about-modal" aria-hidden="true">
+    <div class="about-card" role="dialog" aria-modal="true" aria-labelledby="keyboardShortcutsTitle">
+      <div class="about-header">
+        <h2 id="keyboardShortcutsTitle" class="about-title">Keyboard Shortcuts</h2>
+        <button id="closeKeyboardShortcuts" class="ghost-button tiny" type="button">Close</button>
+      </div>
+      <div class="about-body">
+        <div class="about-section">
+          <h3>Quick actions</h3>
+          <div class="shortcuts-list">
+            <div class="shortcut-row"><div class="shortcut-keys"><span class="kbd-key">?</span></div><div class="shortcut-desc">Open this shortcuts modal</div></div>
+            <div class="shortcut-row"><div class="shortcut-keys"><span class="kbd-key">Ctrl</span><span class="kbd-key">F</span></div><div class="shortcut-desc">Open Omni search</div></div>
+            <div class="shortcut-row"><div class="shortcut-keys"><span class="kbd-key">G</span></div><div class="shortcut-desc">Toggle garages</div></div>
+            <div class="shortcut-row"><div class="shortcut-keys"><span class="kbd-key">B</span></div><div class="shortcut-desc">Toggle bus stops</div></div>
+            <div class="shortcut-row"><div class="shortcut-keys"><span class="kbd-key">S</span></div><div class="shortcut-desc">Toggle bus stations</div></div>
+            <div class="shortcut-row"><div class="shortcut-keys"><span class="kbd-key">F</span></div><div class="shortcut-desc">Toggle frequency overlay</div></div>
+            <div class="shortcut-row"><div class="shortcut-keys"><span class="kbd-key">R</span></div><div class="shortcut-desc">Show routes / open Routes module</div></div>
+            <div class="shortcut-row"><div class="shortcut-keys"><span class="kbd-key">A</span></div><div class="shortcut-desc">Show all route categories</div></div>
+            <div class="shortcut-row"><div class="shortcut-keys"><span class="kbd-key">N</span></div><div class="shortcut-desc">Night routes only</div></div>
+            <div class="shortcut-row"><div class="shortcut-keys"><span class="kbd-key">P</span></div><div class="shortcut-desc">Prefix routes only</div></div>
+            <div class="shortcut-row"><div class="shortcut-keys"><span class="kbd-key">0</span></div><div class="shortcut-desc">24-hour routes only</div></div>
+            <div class="shortcut-row"><div class="shortcut-keys"><span class="kbd-key">H</span></div><div class="shortcut-desc">School routes only</div></div>
+            <div class="shortcut-row"><div class="shortcut-keys"><span class="kbd-key">X</span></div><div class="shortcut-desc">Open Advanced filters</div></div>
+            <div class="shortcut-row"><div class="shortcut-keys"><span class="kbd-key">Y</span></div><div class="shortcut-desc">Open Advanced analyses</div></div>
+            <div class="shortcut-row"><div class="shortcut-keys"><span class="kbd-key">Z</span></div><div class="shortcut-desc">Open Stop analyses</div></div>
+            <div class="shortcut-row"><div class="shortcut-keys"><span class="kbd-key">C</span></div><div class="shortcut-desc">Clear layers and route focus</div></div>
+            <div class="shortcut-row"><div class="shortcut-keys"><span class="kbd-key">Esc</span></div><div class="shortcut-desc">Close open modal</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script
     src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js">
   </script>
@@ -2448,6 +2527,7 @@
   <script src="src/advanced_filters.js"></script>
   <script src="src/advanced_analyses.js"></script>
   <script src="src/stop_analyses.js"></script>
+  <script defer src="/_vercel/insights/script.js"></script>
   <script src="src/app.js"></script>
 
 </body>

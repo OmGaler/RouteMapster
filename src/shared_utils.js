@@ -48,7 +48,11 @@
     if (!value) {
       return "";
     }
-    return String(value).trim().toLowerCase();
+    return String(value)
+      .replace(/&/g, " and ")
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, " ");
   };
 
   const normaliseRegionToken = (value) => String(value || "").trim().toUpperCase();

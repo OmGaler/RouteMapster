@@ -5,6 +5,7 @@
   const MAP_HIGHLIGHT_OPACITY = 0.9;
   const SHOW_ALL_CAP = Number.POSITIVE_INFINITY;
   const LIST_CAP = Number.POSITIVE_INFINITY;
+  const SHOW_ALL_MAP_CONCURRENCY = 4;
   const BUS_STOPS_GEOJSON_PATH = "/data/processed/stops.geojson";
   const BOROUGHS_GEOJSON_PATH = "/data/boroughs.geojson";
 
@@ -487,8 +488,17 @@
       }
     }
     const toShow = Number.isFinite(SHOW_ALL_CAP) ? sorted.slice(0, SHOW_ALL_CAP) : sorted.slice();
-    for (const routeId of toShow) {
-      await showRouteOnMap(appState, routeId);
+    if (toShow.length > 0) {
+      let index = 0;
+      const concurrency = Math.max(1, Math.min(SHOW_ALL_MAP_CONCURRENCY, toShow.length));
+      const worker = async () => {
+        while (index < toShow.length) {
+          const routeId = toShow[index];
+          index += 1;
+          await showRouteOnMap(appState, routeId);
+        }
+      };
+      await Promise.all(Array.from({ length: concurrency }, () => worker()));
     }
     renderRouteList(state.filteredRows, els);
   };
