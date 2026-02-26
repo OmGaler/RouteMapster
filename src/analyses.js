@@ -674,7 +674,7 @@
     },
     "most-unique-stops-routes": {
       id: "most-unique-stops-routes",
-      label: "Most exclusive stops",
+      label: "Most route-only stops",
       run: (rows) => {
         const sorted = rows
           .filter((row) => Number.isFinite(row.unique_stops))
@@ -684,13 +684,13 @@
         if (sorted.length === 0) {
           return {
             type: "table",
-            columns: ["Rank", "Route", "Exclusive stops", "Total stops", "Unique %", "Operator", "Garage"],
-            rows: [["No unique_stops data available", "", "", "", "", "", ""]]
+            columns: ["Rank", "Route", "Route-only stops", "Total stops", "Route-only %", "Operator", "Garage"],
+            rows: [["No route-only stop data available", "", "", "", "", "", ""]]
           };
         }
         return {
           type: "table",
-          columns: ["Rank", "Route", "Exclusive stops", "Total stops", "Unique %", "Operator", "Garage"],
+          columns: ["Rank", "Route", "Route-only stops", "Total stops", "Route-only %", "Operator", "Garage"],
           rows: sorted.map((row, index) => [
             index + 1,
             row.route_id || row.route_id_norm,

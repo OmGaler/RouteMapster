@@ -1286,6 +1286,8 @@
         lengthRankCount: container.querySelector("#advancedLengthRankCount"),
         extremeSelect: container.querySelector("#advancedExtremeSelect"),
         applyButton: container.querySelector("#advancedApplyFilters"),
+        expandAllSubsections: container.querySelector("#advancedExpandAllSubsections"),
+        collapseAllSubsections: container.querySelector("#advancedCollapseAllSubsections"),
         routeCount: document.getElementById("advancedRouteCount"),
         routeList: document.getElementById("advancedRouteList"),
         showAllOnMap: document.getElementById("advancedShowAllOnMap"),
@@ -1329,6 +1331,13 @@
         state.moduleOpen = Boolean(container.open);
         updateResultsVisibility(els, hasActiveFilters(state.filterSpec), state.moduleOpen);
       });
+
+    const setSubsectionsOpen = (open) => {
+      const subsections = Array.from(container.querySelectorAll("details.submodule"));
+      subsections.forEach((section) => {
+        section.open = Boolean(open);
+      });
+    };
 
     const selectAll = (selectEl) => {
       if (!selectEl) {
@@ -1386,6 +1395,16 @@
     if (els.applyButton) {
       els.applyButton.addEventListener("click", () => {
         applyFromUI(appState, els).catch(() => {});
+      });
+    }
+    if (els.expandAllSubsections) {
+      els.expandAllSubsections.addEventListener("click", () => {
+        setSubsectionsOpen(true);
+      });
+    }
+    if (els.collapseAllSubsections) {
+      els.collapseAllSubsections.addEventListener("click", () => {
+        setSubsectionsOpen(false);
       });
     }
     if (els.clearButton) {

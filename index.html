@@ -506,17 +506,89 @@
     }
 
     .submodule {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
       border: 1px dashed var(--panel-border);
       border-radius: 14px;
-      padding: 10px;
+      padding: 12px 14px;
       background: #fffaf1;
     }
 
     .submodule summary {
       cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      list-style: none;
+      margin: 0;
+      padding: 2px 0;
+      background: transparent;
       font-weight: 600;
       font-size: 13px;
-      margin-bottom: 8px;
+      color: var(--ink);
+      user-select: none;
+      margin-bottom: 0;
+    }
+
+    .submodule:not([open]) summary {
+      margin-bottom: 0;
+    }
+
+    .submodule summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .submodule summary::marker {
+      content: "";
+    }
+
+    .submodule summary::after {
+      content: "+";
+      width: 24px;
+      height: 24px;
+      border-radius: 999px;
+      border: 1px solid rgba(15, 118, 110, 0.16);
+      background: rgba(15, 118, 110, 0.08);
+      color: var(--accent);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      line-height: 1;
+      flex: 0 0 auto;
+    }
+
+    .submodule[open] summary::after {
+      content: "-";
+    }
+
+    .submodule > summary > .section-title {
+      color: #667085;
+    }
+
+    .submodule .field {
+      gap: 8px;
+    }
+
+    .submodule .field-row {
+      gap: 12px;
+    }
+
+    .submodule .field > label {
+      line-height: 1.35;
+    }
+
+    .submodule .module-note {
+      line-height: 1.4;
+    }
+
+    .submodule-tools {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: -2px;
     }
 
     .route-count {
@@ -2170,12 +2242,27 @@
           </summary>
           <div class="module-body">
             <div class="module-note">Fine-grained filters for routes, allocations, and service patterns.</div>
-            <div class="module-section">
-              <div class="section-title">Core filters</div>
+            <div class="submodule-tools">
+              <button id="advancedExpandAllSubsections" class="ghost-button compact" type="button">Expand all sections</button>
+              <button id="advancedCollapseAllSubsections" class="ghost-button compact" type="button">Collapse all sections</button>
+            </div>
+            <details class="submodule" open>
+              <summary><span class="section-title">Routes</span></summary>
               <div class="field">
-                <label for="advancedRouteSearch">Route ID search</label>
+                <label for="advancedRouteSearch">Route number search</label>
                 <input id="advancedRouteSearch" type="search" placeholder="e.g. 12, N205, SL7" autocomplete="off" />
                 <div class="module-note">Use spaces or commas to add multiple routes.</div>
+              </div>
+              <div class="field">
+                <label for="advancedRouteTypes">Route types</label>
+                <select id="advancedRouteTypes" class="select-field" multiple size="4"></select>
+                <button id="advancedRouteTypesSelectAll" class="ghost-button compact" type="button">Select all</button>
+              </div>
+              <div class="field">
+                <label for="advancedRoutePrefix">Route prefix</label>
+                <div class="field-row">
+                  <select id="advancedRoutePrefix" class="select-field"></select>
+                </div>
               </div>
               <div class="field">
                 <label for="advancedRouteSeries">Route number series (00-99)</label>
@@ -2186,16 +2273,14 @@
                 </label>
                 <div class="module-note">Matches 40, 140, 240... plus night routes (N140). Prefix routes optional.</div>
               </div>
+            </details>
+
+            <details class="submodule" open>
+              <summary><span class="section-title">Operators &amp; allocations</span></summary>
               <div class="field">
-                <label for="advancedRoutePrefix">Route prefix</label>
-                <div class="field-row">
-                  <select id="advancedRoutePrefix" class="select-field"></select>
-                </div>
-              </div>
-              <div class="field">
-                <label for="advancedRouteTypes">Route types</label>
-                <select id="advancedRouteTypes" class="select-field" multiple size="4"></select>
-                <button id="advancedRouteTypesSelectAll" class="ghost-button compact" type="button">Select all</button>
+                <label for="advancedOperators">Operators</label>
+                <select id="advancedOperators" class="select-field" multiple size="5"></select>
+                <button id="advancedOperatorsSelectAll" class="ghost-button compact" type="button">Select all</button>
               </div>
               <div class="field">
                 <label for="advancedGarages">Garages</label>
@@ -2203,10 +2288,14 @@
                 <button id="advancedGaragesSelectAll" class="ghost-button compact" type="button">Select all</button>
               </div>
               <div class="field">
-                <label for="advancedOperators">Operators</label>
-                <select id="advancedOperators" class="select-field" multiple size="5"></select>
-                <button id="advancedOperatorsSelectAll" class="ghost-button compact" type="button">Select all</button>
+                <label for="advancedVehicles">Vehicles</label>
+                <select id="advancedVehicles" class="select-field" multiple size="4"></select>
+                <button id="advancedVehiclesSelectAll" class="ghost-button compact" type="button">Select all</button>
               </div>
+            </details>
+
+            <details class="submodule" open>
+              <summary><span class="section-title">Geography</span></summary>
               <div class="field">
                 <label for="advancedBoroughs">Boroughs</label>
                 <select id="advancedBoroughs" class="select-field" multiple size="5"></select>
@@ -2222,11 +2311,6 @@
                 <div class="module-note">"Enter" matches any route with at least one stop in the selected boroughs.</div>
               </div>
               <div class="field">
-                <label for="advancedVehicles">Vehicles</label>
-                <select id="advancedVehicles" class="select-field" multiple size="4"></select>
-                <button id="advancedVehiclesSelectAll" class="ghost-button compact" type="button">Select all</button>
-              </div>
-              <div class="field">
                 <label for="advancedExtremeSelect">Spatial extremities</label>
                 <select id="advancedExtremeSelect" class="select-field">
                   <option value="">None</option>
@@ -2237,9 +2321,29 @@
                 </select>
                 <div class="module-note">Uses route geometry. Loads on first apply.</div>
               </div>
-            </div>
-            <div class="module-section">
-              <div class="section-title">Frequency range (bph)</div>
+              <div id="advancedLengthWrap" class="field">
+                <label>Length (miles)</label>
+                <div class="field-row">
+                  <input id="advancedLengthMin" type="number" min="0" step="0.1" placeholder="Min" />
+                  <input id="advancedLengthMax" type="number" min="0" step="0.1" placeholder="Max" />
+                </div>
+                <div class="field">
+                  <label for="advancedLengthRankMode">Top routes by length</label>
+                  <div class="field-row">
+                    <select id="advancedLengthRankMode" class="select-field">
+                      <option value="">None</option>
+                      <option value="shortest">Shortest</option>
+                      <option value="longest">Longest</option>
+                    </select>
+                    <input id="advancedLengthRankCount" type="number" min="1" max="25" step="1" placeholder="Count (1-25)" />
+                  </div>
+                  <div class="module-note">Filters to the N shortest/longest routes after other filters.</div>
+                </div>
+              </div>
+            </details>
+
+            <details class="submodule" open>
+              <summary><span class="section-title">Frequencies</span></summary>
               <div class="field">
                 <label for="advancedFrequencyBand">Band</label>
                 <select id="advancedFrequencyBand" class="select-field">
@@ -2258,55 +2362,11 @@
                   <input id="advancedFrequencyMax" type="number" min="0" step="0.1" placeholder="Max" />
                 </div>
               </div>
-            </div>
-
-            <div class="module-section">
-              <div class="section-title">Flags</div>
               <label class="toggle">
                 <span>Has overnight service</span>
                 <input type="checkbox" id="advancedHasOvernight" />
               </label>
-            </div>
-
-            <div class="module-section" id="advancedUniqueStopsWrap">
-              <div class="section-title">Unique stops (route-only)</div>
-              <div class="field-row">
-                <input id="advancedUniqueStopsMin" type="number" min="0" step="1" placeholder="Min" />
-                <input id="advancedUniqueStopsMax" type="number" min="0" step="1" placeholder="Max" />
-              </div>
-              <div class="field">
-                <label for="advancedUniqueStopsRankMode">Top routes by unique (route-only) stops</label>
-                <div class="field-row">
-                  <select id="advancedUniqueStopsRankMode" class="select-field">
-                    <option value="">None</option>
-                    <option value="least">Least</option>
-                    <option value="most">Most</option>
-                  </select>
-                  <input id="advancedUniqueStopsRankCount" type="number" min="1" max="25" step="1" placeholder="Count (1-25)" />
-                </div>
-                <div class="module-note">Counts stops served by this route and no other route (from the stops dataset). Filters to the N least/most after other filters.</div>
-              </div>
-            </div>
-
-            <div class="module-section" id="advancedLengthWrap">
-              <div class="section-title">Length (miles)</div>
-              <div class="field-row">
-                <input id="advancedLengthMin" type="number" min="0" step="0.1" placeholder="Min" />
-                <input id="advancedLengthMax" type="number" min="0" step="0.1" placeholder="Max" />
-              </div>
-              <div class="field">
-                <label for="advancedLengthRankMode">Top routes by length</label>
-                <div class="field-row">
-                  <select id="advancedLengthRankMode" class="select-field">
-                    <option value="">None</option>
-                    <option value="shortest">Shortest</option>
-                    <option value="longest">Longest</option>
-                  </select>
-                  <input id="advancedLengthRankCount" type="number" min="1" max="25" step="1" placeholder="Count (1-25)" />
-                </div>
-                <div class="module-note">Filters to the N shortest/longest routes after other filters.</div>
-              </div>
-            </div>
+            </details>
 
             <div class="module-section">
               <button id="advancedApplyFilters" class="ghost-button" type="button">Apply filters</button>
@@ -2493,23 +2553,22 @@
         <div class="about-section">
           <h3>Quick actions</h3>
           <div class="shortcuts-list">
-            <div class="shortcut-row"><div class="shortcut-keys"><span class="kbd-key">?</span></div><div class="shortcut-desc">Open this shortcuts modal</div></div>
-            <div class="shortcut-row"><div class="shortcut-keys"><span class="kbd-key">Ctrl</span><span class="kbd-key">F</span></div><div class="shortcut-desc">Open Omni search</div></div>
+            <div class="shortcut-row"><div class="shortcut-keys"><span class="kbd-key">?</span></div><div class="shortcut-desc">Show keyboard shortcut</div></div>
+            <div class="shortcut-row"><div class="shortcut-keys"><span class="kbd-key">Ctrl</span><span class="kbd-key">F</span></div><div class="shortcut-desc">Open Explorer</div></div>
             <div class="shortcut-row"><div class="shortcut-keys"><span class="kbd-key">G</span></div><div class="shortcut-desc">Toggle garages</div></div>
             <div class="shortcut-row"><div class="shortcut-keys"><span class="kbd-key">B</span></div><div class="shortcut-desc">Toggle bus stops</div></div>
             <div class="shortcut-row"><div class="shortcut-keys"><span class="kbd-key">S</span></div><div class="shortcut-desc">Toggle bus stations</div></div>
             <div class="shortcut-row"><div class="shortcut-keys"><span class="kbd-key">F</span></div><div class="shortcut-desc">Toggle frequency overlay</div></div>
             <div class="shortcut-row"><div class="shortcut-keys"><span class="kbd-key">R</span></div><div class="shortcut-desc">Show routes / open Routes module</div></div>
-            <div class="shortcut-row"><div class="shortcut-keys"><span class="kbd-key">A</span></div><div class="shortcut-desc">Show all route categories</div></div>
-            <div class="shortcut-row"><div class="shortcut-keys"><span class="kbd-key">N</span></div><div class="shortcut-desc">Night routes only</div></div>
-            <div class="shortcut-row"><div class="shortcut-keys"><span class="kbd-key">P</span></div><div class="shortcut-desc">Prefix routes only</div></div>
-            <div class="shortcut-row"><div class="shortcut-keys"><span class="kbd-key">0</span></div><div class="shortcut-desc">24-hour routes only</div></div>
-            <div class="shortcut-row"><div class="shortcut-keys"><span class="kbd-key">H</span></div><div class="shortcut-desc">School routes only</div></div>
-            <div class="shortcut-row"><div class="shortcut-keys"><span class="kbd-key">X</span></div><div class="shortcut-desc">Open Advanced filters</div></div>
-            <div class="shortcut-row"><div class="shortcut-keys"><span class="kbd-key">Y</span></div><div class="shortcut-desc">Open Advanced analyses</div></div>
-            <div class="shortcut-row"><div class="shortcut-keys"><span class="kbd-key">Z</span></div><div class="shortcut-desc">Open Stop analyses</div></div>
-            <div class="shortcut-row"><div class="shortcut-keys"><span class="kbd-key">C</span></div><div class="shortcut-desc">Clear layers and route focus</div></div>
-            <div class="shortcut-row"><div class="shortcut-keys"><span class="kbd-key">Esc</span></div><div class="shortcut-desc">Close open modal</div></div>
+            <div class="shortcut-row"><div class="shortcut-keys"><span class="kbd-key">A</span></div><div class="shortcut-desc">Show all route types</div></div>
+            <div class="shortcut-row"><div class="shortcut-keys"><span class="kbd-key">N</span></div><div class="shortcut-desc">Show night routes only</div></div>
+            <div class="shortcut-row"><div class="shortcut-keys"><span class="kbd-key">P</span></div><div class="shortcut-desc">Show prefix routes only</div></div>
+            <div class="shortcut-row"><div class="shortcut-keys"><span class="kbd-key">0</span></div><div class="shortcut-desc">Show 24-hour routes only</div></div>
+            <div class="shortcut-row"><div class="shortcut-keys"><span class="kbd-key">H</span></div><div class="shortcut-desc">Show school routes only</div></div>
+            <div class="shortcut-row"><div class="shortcut-keys"><span class="kbd-key">X</span></div><div class="shortcut-desc">Open route filters</div></div>
+            <div class="shortcut-row"><div class="shortcut-keys"><span class="kbd-key">Y</span></div><div class="shortcut-desc">Open route analyses</div></div>
+            <div class="shortcut-row"><div class="shortcut-keys"><span class="kbd-key">Z</span></div><div class="shortcut-desc">Open stop analyses</div></div>
+            <div class="shortcut-row"><div class="shortcut-keys"><span class="kbd-key">C</span></div><div class="shortcut-desc">Clear layers and routes</div></div>
           </div>
         </div>
       </div>
