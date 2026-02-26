@@ -263,6 +263,8 @@ const appState = {
 	routeHoverPopup: null,
 	routeHoverFrame: null,
 	routeHoverLastKey: "",
+	infoPanelKind: null,
+	infoPanelBackStack: [],
 	loadingModalCount: 0,
 	loadingModalTitle: "",
 	loadingModalSubtitle: "",
@@ -498,6 +500,8 @@ function resetInfoPanel() {
 		`
 	});
 	setInfoPanelVisible(false);
+	appState.infoPanelKind = null;
+	appState.infoPanelBackStack = [];
 	clearSelectedFeature();
 }
 
@@ -822,6 +826,159 @@ function getRouteMetaFromRow(row) {
 		overnight: Number.isFinite(row.frequency_overnight) ? row.frequency_overnight : null
 	};
 	return { operator, garage, routeType, vehicleType, lengthMiles, freqs };
+}
+
+function buildRouteGarageLabelsFromRow(row) {
+	const codes = Array.isArray(row?.garage_codes_arr) ? row.garage_codes_arr.filter(Boolean) : [];
+	const names = Array.isArray(row?.garage_names_arr) ? row.garage_names_arr.filter(Boolean) : [];
+	const max = Math.max(codes.length, names.length);
+	const labels = [];
+	const seen = new Set();
+	for (let index = 0; index < max; index += 1) {
+		const code = String(codes[index] || "").trim();
+		const name = String(names[index] || "").trim();
+		const label = name && code
+			? `${name} (${code})`
+			: (name || code);
+		if (label && !seen.has(label)) {
+			seen.add(label);
+			labels.push(label);
+		}
+	}
+	if (labels.length > 0) {
+		return labels;
+	}
+	const fallback = [row?.garage_codes, row?.garage_names]
+		.map((value) => String(value || "").trim())
+		.filter(Boolean);
+	return Array.from(new Set(fallback));
+}
+
+function buildRouteDetailsBodyHtml(routeId, row, routeSets, options = {}) {
+	const meta = getRouteMetaFromRow(row);
+	const operators = Array.isArray(row?.operator_names_arr)
+		? Array.from(new Set(row.operator_names_arr.map((value) => String(value || "").trim()).filter(Boolean)))
+		: (meta.operator ? [meta.operator] : []);
+	const garages = buildRouteGarageLabelsFromRow(row);
+	const roadNames = Array.isArray(options.roadNames)
+		? Array.from(new Set(options.roadNames.map((value) => String(value || "").trim()).filter(Boolean)))
+		: [];
+	const detailLines = [
+		meta.routeType ? `Type: ${escapeHtml(formatRouteTypeLabel(meta.routeType))}` : "",
+		operators.length > 0 ? `Operator${operators.length > 1 ? "s" : ""}: ${escapeHtml(operators.join(" | "))}` : "",
+		garages.length > 0 ? `Garage${garages.length > 1 ? "s" : ""}: ${escapeHtml(garages.join(" | "))}` : "",
+		meta.vehicleType ? `Vehicle: ${escapeHtml(meta.vehicleType)}` : "",
+		Number.isFinite(meta.lengthMiles) ? `Length: ${escapeHtml(meta.lengthMiles.toFixed(2))} mi` : "",
+		typeof row?.has_overnight === "boolean" ? `Overnight: ${row.has_overnight ? "Yes" : "No"}` : ""
+	].filter(Boolean);
+
+	const uniqueStops = Number.isFinite(row?.unique_stops) ? Math.round(row.unique_stops) : null;
+	const totalStops = Number.isFinite(row?.total_stops) ? Math.round(row.total_stops) : null;
+	const uniquePct = Number.isFinite(row?.unique_stops_pct) ? Math.round(row.unique_stops_pct * 100) : null;
+	const metricLines = [
+		Number.isFinite(uniqueStops) ? `Route-only stops: ${escapeHtml(uniqueStops)}` : "",
+		Number.isFinite(totalStops) ? `Total stops: ${escapeHtml(totalStops)}` : "",
+		Number.isFinite(uniquePct) ? `Route-only stop share: ${escapeHtml(uniquePct)}%` : ""
+	].filter(Boolean);
+
+	const frequencyLines = [
+		["Peak AM", row?.frequency_peak_am],
+		["Peak PM", row?.frequency_peak_pm],
+		["Offpeak", row?.frequency_offpeak],
+		["Weekend", row?.frequency_weekend],
+		["Overnight", row?.frequency_overnight]
+	]
+		.map(([label, value]) => {
+			const formatted = formatBphValue(value);
+			return formatted ? `${label}: ${formatted}` : "";
+		})
+		.filter(Boolean);
+
+	const roadSection = options.includeRoadNames
+		? `
+			<div class="info-section">
+				<div class="info-label">${roadNames.length > 1 ? "Road names" : "Road name"}</div>
+				${roadNames.length > 0
+					? roadNames.map((name) => `<div>${escapeHtml(name)}</div>`).join("")
+					: '<div class="info-empty">Road name unavailable in route geometry data.</div>'}
+			</div>
+		`
+		: "";
+
+	return `
+		<div class="info-section">
+			<div class="info-label">Route</div>
+			${renderRoutePills([routeId], routeSets)}
+		</div>
+		${roadSection}
+		<div class="info-section">
+			<div class="info-label">Details</div>
+			${detailLines.length > 0
+				? detailLines.map((line) => `<div>${line}</div>`).join("")
+				: '<div class="info-empty">No route summary details found.</div>'}
+		</div>
+		${frequencyLines.length > 0 && !isSchoolRoute(meta.routeType)
+			? `
+				<div class="info-section">
+					<div class="info-label">Frequency (BPH)</div>
+					${frequencyLines.map((line) => `<div>${escapeHtml(line)}</div>`).join("")}
+				</div>
+			`
+			: ""}
+		${metricLines.length > 0
+			? `
+				<div class="info-section">
+					<div class="info-label">Metrics</div>
+					${metricLines.map((line) => `<div>${line}</div>`).join("")}
+				</div>
+			`
+			: ""}
+	`;
+}
+
+async function setRouteInfoPanel(routeId, options = {}) {
+	const normalised = String(routeId || "").trim().toUpperCase();
+	if (!normalised || isExcludedRoute(normalised)) {
+		return;
+	}
+	const [summaryIndex, routeSets] = await Promise.all([
+		ensureRouteSummaryIndex(),
+		appState.useRouteTypeColours ? loadNetworkRouteSets().catch(() => null) : Promise.resolve(null)
+	]);
+	const row = summaryIndex?.get(normalised) || null;
+	const title = `Route ${normalised}`;
+	const subtitleParts = [];
+	if (row) {
+		const meta = getRouteMetaFromRow(row);
+		const typeLabel = formatRouteTypeLabel(meta.routeType);
+		if (typeLabel) {
+			subtitleParts.push(typeLabel);
+		}
+		if (meta.operator) {
+			subtitleParts.push(meta.operator);
+		}
+	}
+	setInfoPanel({
+		title,
+		subtitle: subtitleParts.length > 0 ? subtitleParts.join(" | ") : "Route",
+		bodyHtml: buildRouteDetailsBodyHtml(normalised, row, routeSets, options)
+	});
+	appState.infoPanelKind = "route";
+}
+
+async function showRouteDetailsAndFocus(routeId, options = {}) {
+	const normalised = String(routeId || "").trim().toUpperCase();
+	if (!normalised || isExcludedRoute(normalised)) {
+		return;
+	}
+	if (appState.infoPanelKind !== "route") {
+		pushInfoPanelBackSnapshot();
+	}
+	clearSelectedFeature();
+	await setRouteInfoPanel(normalised, options);
+	if (options.focusMap !== false) {
+		await focusRoute(normalised);
+	}
 }
 
 function collectGarageGroupRoutes(group) {
@@ -2162,7 +2319,7 @@ async function applyOmniRouteSelection(item) {
 	clearOmniSearchLayers({ restoreNetwork: false });
 	clearAdvancedStopsLayer();
 	clearOmniStopsLayer();
-	await focusRoute(routeId);
+	await showRouteDetailsAndFocus(routeId);
 }
 
 function applyOmniStationSelection(item) {
@@ -4708,10 +4865,35 @@ async function loadRouteGeometryRouteIds() {
 		}
 		const data = await res.json();
 		const routes = Array.isArray(data?.routes) ? data.routes : [];
+		let summaryIndex = null;
+		try {
+			summaryIndex = await ensureRouteSummaryIndex();
+		} catch (error) {
+			summaryIndex = null;
+		}
+		const isTwentyFourSummaryRoute = (row) => {
+			const token = String(row?.route_type || "").trim().toLowerCase();
+			return token === "twentyfour" || token === "24hr" || token === "24hour" || token === "24-hour";
+		};
+		const isGhostNightVariantOfTwentyFour = (routeId) => {
+			if (!summaryIndex || !(summaryIndex instanceof Map) || !routeId || !routeId.startsWith("N")) {
+				return false;
+			}
+			if (summaryIndex.has(routeId)) {
+				return false;
+			}
+			const baseRouteId = routeId.slice(1);
+			if (!baseRouteId) {
+				return false;
+			}
+			const baseRow = summaryIndex.get(baseRouteId);
+			return isTwentyFourSummaryRoute(baseRow);
+		};
 		const routeIds = new Set(
 			routes
 				.map((routeId) => String(routeId).trim().toUpperCase())
 				.filter((routeId) => routeId && !isExcludedRoute(routeId))
+				.filter((routeId) => !isGhostNightVariantOfTwentyFour(routeId))
 		);
 		appState.geometryRouteIds = routeIds.size > 0 ? routeIds : null;
 		return appState.geometryRouteIds;
@@ -5470,6 +5652,29 @@ function getFrequencyTotalForRoutes(routes, band) {
 	return total > 0 ? total : null;
 }
 
+function getRouteGeometrySelection(line, layerGroup, latlng) {
+	const tolerance = appState.showFrequencyLayer ? 16 : 8;
+	let routes = collectRoutesNearLatLng(layerGroup, latlng, line?._routeId, tolerance);
+	if ((!routes || routes.length === 0) && line?._routeId) {
+		routes = [line._routeId];
+	}
+	const routeSets = appState.useRouteTypeColours ? appState.networkRouteSets : null;
+	let displayRoutes = routes;
+	let frequencyTotal = null;
+	if (appState.showFrequencyLayer) {
+		const band = appState.frequencyBand || "peak_am";
+		displayRoutes = filterRoutesByFrequency(routes, band);
+		frequencyTotal = getFrequencyTotalForRoutes(displayRoutes, band);
+	}
+	return {
+		tolerance,
+		routes,
+		displayRoutes,
+		frequencyTotal,
+		routeSets
+	};
+}
+
 function buildRouteGeometryHoverHtml(routes, routeSets, frequencyTotal) {
 	const frequencyLine = Number.isFinite(frequencyTotal) && frequencyTotal > 0
 		? `<div class="hover-popup__meta">Combined frequency: ${formatFrequencyValue(frequencyTotal)}</div>`
@@ -5486,25 +5691,113 @@ function buildRouteGeometryHoverHtml(routes, routeSets, frequencyTotal) {
 	`;
 }
 
+function setRouteGeometryInfoPanel({ routes, routeSets, frequencyTotal }) {
+	const safeRoutes = Array.isArray(routes) ? routes : [];
+	const title = safeRoutes.length === 1 ? `Route ${safeRoutes[0]}` : "Routes here";
+	setInfoPanel({
+		title,
+		subtitle: "Route geometry",
+		bodyHtml: `
+			${Number.isFinite(frequencyTotal) && frequencyTotal > 0
+				? `
+					<div class="info-section">
+						<div class="info-label">Combined frequency</div>
+						<div>${escapeHtml(formatFrequencyValue(frequencyTotal))}</div>
+					</div>
+				`
+				: ""}
+			<div class="info-section">
+				<div class="info-label">Routes here</div>
+				${renderRoutePills(safeRoutes, routeSets)}
+			</div>
+		`
+	});
+	setInfoPanelVisible(true);
+	appState.infoPanelKind = "route-geometry";
+}
+
+function captureInfoPanelSnapshot() {
+	const appRoot = document.getElementById("app");
+	const titleEl = document.getElementById("infoTitle");
+	const subtitleEl = document.getElementById("infoSubtitle");
+	const bodyEl = document.getElementById("infoBody");
+	return {
+		title: titleEl?.textContent || "Details",
+		subtitle: subtitleEl && subtitleEl.style.display !== "none" ? (subtitleEl.textContent || "") : "",
+		bodyHtml: bodyEl?.innerHTML || "",
+		visible: Boolean(appRoot?.classList.contains("has-details")),
+		kind: appState.infoPanelKind || null,
+		selectedFeature: appState.selectedFeature || null
+	};
+}
+
+function restoreInfoPanelSnapshot(snapshot) {
+	if (!snapshot) {
+		return;
+	}
+	setInfoPanel({
+		title: snapshot.title || "Details",
+		subtitle: snapshot.subtitle || "",
+		bodyHtml: snapshot.bodyHtml || ""
+	});
+	setInfoPanelVisible(snapshot.visible !== false);
+	appState.infoPanelKind = snapshot.kind || null;
+	appState.selectedFeature = snapshot.selectedFeature || null;
+}
+
+function pushInfoPanelBackSnapshot() {
+	const snapshot = captureInfoPanelSnapshot();
+	if (!snapshot.visible) {
+		return;
+	}
+	if (!Array.isArray(appState.infoPanelBackStack)) {
+		appState.infoPanelBackStack = [];
+	}
+	appState.infoPanelBackStack.push(snapshot);
+	if (appState.infoPanelBackStack.length > 12) {
+		appState.infoPanelBackStack = appState.infoPanelBackStack.slice(-12);
+	}
+}
+
+function popInfoPanelBackSnapshot() {
+	if (!Array.isArray(appState.infoPanelBackStack) || appState.infoPanelBackStack.length === 0) {
+		return null;
+	}
+	return appState.infoPanelBackStack.pop() || null;
+}
+
+async function openRouteGeometryInfoPanel(line, layerGroup, event) {
+	const selection = getRouteGeometrySelection(line, layerGroup, event?.latlng);
+	const routesForPanel = Array.isArray(selection.displayRoutes) && selection.displayRoutes.length > 0
+		? selection.displayRoutes
+		: selection.routes;
+	if (!Array.isArray(routesForPanel) || routesForPanel.length === 0) {
+		return;
+	}
+	const routeSets = appState.useRouteTypeColours
+		? (appState.networkRouteSets || await loadNetworkRouteSets().catch(() => null))
+		: null;
+	clearSelectedFeature();
+	setRouteGeometryInfoPanel({
+		routes: routesForPanel,
+		routeSets,
+		frequencyTotal: selection.frequencyTotal
+	});
+}
+
 function bindRouteHoverPopup(line, layerGroup) {
 	if (!line) {
 		return;
 	}
 	bindHoverPopup(line, (event) => {
-		const tolerance = appState.showFrequencyLayer ? 16 : 8;
-		let routes = collectRoutesNearLatLng(layerGroup, event?.latlng, line._routeId, tolerance);
-		if ((!routes || routes.length === 0) && line._routeId) {
-			routes = [line._routeId];
-		}
-		const routeSets = appState.useRouteTypeColours ? appState.networkRouteSets : null;
-		let displayRoutes = routes;
-		let frequencyTotal = null;
-		if (appState.showFrequencyLayer) {
-			const band = appState.frequencyBand || "peak_am";
-			displayRoutes = filterRoutesByFrequency(routes, band);
-			frequencyTotal = getFrequencyTotalForRoutes(displayRoutes, band);
-		}
+		const { displayRoutes, routeSets, frequencyTotal } = getRouteGeometrySelection(line, layerGroup, event?.latlng);
 		return buildRouteGeometryHoverHtml(displayRoutes, routeSets, frequencyTotal);
+	});
+	line.on("click", (event) => {
+		if (event?.originalEvent && window.L?.DomEvent?.stop) {
+			window.L.DomEvent.stop(event.originalEvent);
+		}
+		openRouteGeometryInfoPanel(line, layerGroup, event).catch(() => {});
 	});
 }
 
@@ -6747,12 +7040,39 @@ function setupUI() {
 	);
 
 	const closeInfoPanel = document.getElementById("closeInfoPanel");
+	const closeInfoPanelAction = () => {
+		clearDetailsRouteHighlights();
+		resetInfoPanel();
+	};
 	if (closeInfoPanel) {
-		closeInfoPanel.addEventListener("click", () => {
-			clearDetailsRouteHighlights();
-			resetInfoPanel();
-		});
+		closeInfoPanel.addEventListener("click", closeInfoPanelAction);
 	}
+	document.addEventListener("keydown", (event) => {
+		if (event.key !== "Escape" || event.defaultPrevented) {
+			return;
+		}
+		const appRoot = document.getElementById("app");
+		if (!appRoot || !appRoot.classList.contains("has-details")) {
+			return;
+		}
+		const modalIds = ["omniSearchModal", "aboutModal", "keyboardShortcutsModal", "loadingModal"];
+		const hasVisibleModal = modalIds.some((id) => {
+			const modal = document.getElementById(id);
+			return Boolean(modal && modal.classList.contains("is-visible"));
+		});
+		if (hasVisibleModal) {
+			return;
+		}
+		event.preventDefault();
+		if (appState.infoPanelKind === "route") {
+			const previous = popInfoPanelBackSnapshot();
+			if (previous) {
+				restoreInfoPanelSnapshot(previous);
+				return;
+			}
+		}
+		closeInfoPanelAction();
+	});
 
 	const advancedFiltersModule = document.querySelector('[data-module="advanced-filters"]');
 	if (advancedFiltersModule && window.RouteMapsterAdvancedFilters?.initAdvancedFilters) {
@@ -7268,7 +7588,7 @@ function setupUI() {
 				return;
 			}
 			event.preventDefault();
-			focusRoute(routeId);
+			showRouteDetailsAndFocus(routeId).catch(() => {});
 		});
 	}
 
@@ -7286,7 +7606,7 @@ function setupUI() {
 				}
 				event.preventDefault();
 				event.stopPropagation();
-				focusRoute(routeId);
+				showRouteDetailsAndFocus(routeId).catch(() => {});
 			});
 		}
 	}
