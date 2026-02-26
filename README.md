@@ -1,7 +1,6 @@
 ﻿
 To submit a bug report or  feature request, open a github issue
 
-allow brough filter to ignore spaces e.g. borough:cityoflondon / perhaps fuzzy too
 
 
 

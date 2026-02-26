@@ -748,7 +748,10 @@
         const PRIMARY_PRECISION = 3;
         const FALLBACK_PRECISION = 2;
         const MIN_ENDPOINT_DISTANCE_KM = 0.3;
-        const MAX_FALLBACK_SPREAD_KM = 0.4;
+        // Fallback groups (2dp rounding) are only to catch near-identical termini.
+        // A tighter spread avoids false positives where only one endpoint is shared
+        // and the other terminal is merely nearby (e.g. 231/329).
+        const MAX_FALLBACK_SPREAD_KM = 0.25;
 
         const roundCoord = (value, decimals) => {
           if (!Number.isFinite(value)) {
