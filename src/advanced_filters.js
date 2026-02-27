@@ -145,12 +145,20 @@
     return list;
   };
 
-  const buildOptionHtml = (values) => {
-    return values
-      .slice()
-      .sort((a, b) => String(a).localeCompare(String(b)))
-      .map((value) => `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`)
-      .join("");
+  const setSelectOptions = (selectEl, options) => {
+    if (!selectEl) {
+      return;
+    }
+    const fragment = document.createDocumentFragment();
+    (Array.isArray(options) ? options : []).forEach((entry) => {
+      const value = entry && entry.value !== undefined ? entry.value : "";
+      const label = entry && entry.label !== undefined ? entry.label : value;
+      const option = document.createElement("option");
+      option.value = String(value ?? "");
+      option.textContent = String(label ?? "");
+      fragment.appendChild(option);
+    });
+    selectEl.replaceChildren(fragment);
   };
 
   const buildGarageLabels = (row) => {
@@ -1152,26 +1160,32 @@
     const routeTypes = engine.getUniqueValues(rows, (row) => row.route_type, (value) => String(value || "").toLowerCase())
       .filter((value) => !isUnknown(value));
     if (els.routeTypes) {
-      els.routeTypes.innerHTML = buildOptionHtml(routeTypes);
+      setSelectOptions(
+        els.routeTypes,
+        routeTypes.map((value) => ({ value, label: value }))
+      );
     }
     const operators = engine.getUniqueValues(rows, (row) => row.operator_names_arr || [], (value) => String(value || ""));
     if (els.operators) {
-      els.operators.innerHTML = buildOptionHtml(operators.filter((value) => !isUnknown(value)));
+      const operatorValues = operators.filter((value) => !isUnknown(value));
+      setSelectOptions(
+        els.operators,
+        operatorValues
+          .slice()
+          .sort((a, b) => String(a).localeCompare(String(b)))
+          .map((value) => ({ value, label: value }))
+      );
     }
     if (els.garages) {
       const garages = buildGarageOptions(rows)
         .filter((option) => option.label && !isUnknown(option.label));
-      els.garages.innerHTML = garages
-        .map((option) => `<option value="${escapeHtml(option.value)}">${escapeHtml(option.label)}</option>`)
-        .join("");
+      setSelectOptions(els.garages, garages);
     }
     if (els.boroughs) {
       if (state.boroughsReady) {
-        els.boroughs.innerHTML = state.boroughOptions
-          .map((option) => `<option value="${escapeHtml(option.value)}">${escapeHtml(option.label)}</option>`)
-          .join("");
+        setSelectOptions(els.boroughs, state.boroughOptions);
       } else {
-        els.boroughs.innerHTML = "";
+        setSelectOptions(els.boroughs, []);
       }
       els.boroughs.disabled = !state.boroughsReady;
     }
@@ -1188,7 +1202,14 @@
     }
     const vehicles = engine.getUniqueValues(rows, (row) => row.vehicle_type, (value) => String(value || "").toUpperCase());
     if (els.vehicles) {
-      els.vehicles.innerHTML = buildOptionHtml(vehicles.filter((value) => !isUnknown(value)));
+      const vehicleValues = vehicles.filter((value) => !isUnknown(value));
+      setSelectOptions(
+        els.vehicles,
+        vehicleValues
+          .slice()
+          .sort((a, b) => String(a).localeCompare(String(b)))
+          .map((value) => ({ value, label: value }))
+      );
     }
     if (els.routePrefix) {
       const prefixes = buildPrefixOptions(rows);
@@ -1196,9 +1217,7 @@
         { value: "any", label: "Any" },
         ...prefixes.map((prefix) => ({ value: prefix, label: prefix }))
       ];
-      els.routePrefix.innerHTML = options
-        .map((option) => `<option value="${escapeHtml(option.value)}">${escapeHtml(option.label)}</option>`)
-        .join("");
+      setSelectOptions(els.routePrefix, options);
     }
   };
 
@@ -1329,6 +1348,11 @@
 
       container.addEventListener("toggle", () => {
         state.moduleOpen = Boolean(container.open);
+        if (state.moduleOpen) {
+          // Rebuild option nodes when shown to avoid mobile WebKit listbox rendering glitches.
+          populateSelects(state.derivedRows, els);
+          applyFilterSpecToUI(state.filterSpec, els);
+        }
         updateResultsVisibility(els, hasActiveFilters(state.filterSpec), state.moduleOpen);
       });
 
