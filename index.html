@@ -1868,8 +1868,21 @@
         pointer-events: auto;
       }
 
+      #app.has-advanced-results #rightpanel {
+        display: block;
+        pointer-events: auto;
+      }
+
       #rightpanel #advancedResultsPanel {
         display: none !important;
+      }
+
+      #app.has-advanced-results #rightpanel #advancedResultsPanel {
+        display: flex !important;
+      }
+
+      #app.has-advanced-results #rightpanel .info-panel:not(#advancedResultsPanel) {
+        display: none;
       }
 
       #rightpanel .info-panel {

@@ -1,6 +1,6 @@
-﻿
-To submit a bug report or  feature request, open a github issue
+﻿Remove unused data/ files from gh
 
+To submit a bug report or  feature request, open a github issue
 
 
 
@@ -108,7 +108,7 @@ Examples:
 
 ## Advanced route filters (module)
 
-The **Advanced route filters** module is designed for “show me all routes that look like X”. Filters don’t apply live — you build up a spec and then click **Apply filters**.
+The **Advanced route filters** module is designed for "show me all routes that satisfy all these conditions". Filters don’t apply live — you build up a compound query by combining conditions and then click **Apply filters**.
 
  
 

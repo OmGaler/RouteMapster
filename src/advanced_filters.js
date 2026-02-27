@@ -226,6 +226,12 @@
       return;
     }
     let entry = state.mobileMultiFallback.get(selectEl.id);
+    const parentField = selectEl.closest(".field");
+    if (parentField) {
+      Array.from(parentField.querySelectorAll(".mobile-multi"))
+        .filter((host) => host !== entry?.host)
+        .forEach((host) => host.remove());
+    }
     if (state.container) {
       Array.from(state.container.querySelectorAll(".mobile-multi"))
         .filter((host) => host.dataset.for === selectEl.id && host !== entry?.host)
@@ -1532,6 +1538,8 @@
       Array.from(selectEl.options).forEach((option) => {
         option.selected = true;
       });
+      refreshMobileMultiFallbacks(els);
+      selectEl.dispatchEvent(new Event("change", { bubbles: true }));
     };
 
     const handleEnterApply = (event) => {
