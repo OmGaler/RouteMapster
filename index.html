@@ -1871,6 +1871,17 @@
       #app.has-advanced-results #rightpanel {
         display: block;
         pointer-events: auto;
+        position: static;
+        left: auto;
+        right: auto;
+        bottom: auto;
+        z-index: auto;
+        max-height: none;
+        overflow: visible;
+      }
+
+      #app.has-advanced-results #sidebar {
+        display: none;
       }
 
       #rightpanel #advancedResultsPanel {
@@ -1890,6 +1901,11 @@
         max-height: min(52vh, 460px);
         overflow-y: auto;
         border-radius: 16px;
+      }
+
+      #app.has-advanced-results #rightpanel .info-panel {
+        max-height: none;
+        overflow: visible;
       }
 
       #mapContainer {
