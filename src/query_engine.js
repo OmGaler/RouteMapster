@@ -1,5 +1,9 @@
 ﻿(() => {
-  const ROUTE_SUMMARY_PATH = "/route_summary.csv";
+  const ROUTE_SUMMARY_PATHS = [
+    "/data/processed/route_summary.csv",
+    "/route_summary.csv",
+    "/routesummary.csv"
+  ];
   const STOPS_GEOJSON_PATH = "/data/processed/stops.geojson";
   const KM_TO_MILES = 0.621371;
   const ROUTE_ID_PARTS_RE = /^([A-Z]*)(\d+)([A-Z]*)$/;
@@ -380,8 +384,25 @@
     if (loadPromise) {
       return loadPromise;
     }
+    const loadSummaryText = async () => {
+      for (const path of ROUTE_SUMMARY_PATHS) {
+        try {
+          const response = await fetch(path, { cache: "no-store" });
+          if (!response.ok) {
+            continue;
+          }
+          const text = await response.text();
+          if (text && text.trim()) {
+            return text;
+          }
+        } catch (_) {
+          // try next path
+        }
+      }
+      return "";
+    };
     loadPromise = Promise.all([
-      fetch(ROUTE_SUMMARY_PATH, { cache: "no-store" }).then((response) => response.ok ? response.text() : ""),
+      loadSummaryText(),
       loadRouteStopStats().catch(() => ({ totalCounts: new Map(), exclusiveCounts: new Map() }))
     ])
       .then(([text, routeStopStats]) => {

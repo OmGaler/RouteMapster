@@ -8,7 +8,7 @@ Sources:
 - data/processed/routes/*.geojson (route geometry for length)
 
 Output:
-- Optional CSV/JSON if --out is provided (format via extension).
+- CSV/JSON at --out path (format via extension, defaults to data/processed/route_summary.csv).
 """
 
 from __future__ import annotations
@@ -28,7 +28,7 @@ def main() -> int:
     parser.add_argument("--frequencies", default="data/processed/frequencies.json", help="Frequencies JSON.")
     parser.add_argument("--routes-dir", default="data/processed/routes", help="Route geometries directory.")
     parser.add_argument("--routes-index", default="data/processed/routes/index.json", help="Routes index JSON.")
-    parser.add_argument("--out", default="", help="Optional output CSV/JSON path.")
+    parser.add_argument("--out", default="data/processed/route_summary.csv", help="Output CSV/JSON path.")
     parser.add_argument("--include-excluded", action="store_true", help="Include excluded/700-series routes.")
     parser.add_argument("--skip-length", action="store_true", help="Skip route length calculation.")
     args = parser.parse_args()
@@ -41,10 +41,6 @@ def main() -> int:
         include_excluded=args.include_excluded,
         include_length=not args.skip_length,
     )
-
-    if not args.out:
-        print(f"Built route summary DataFrame with {len(df)} rows.")
-        return 0
 
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)

@@ -13,5 +13,6 @@ __pycache__/
 .env.*
 .vscode/settings.json
 route_summary.csv
+!data/processed/route_summary.csv
 scratch.md
 todo.md

@@ -37,25 +37,25 @@ npm start
 - **Bus stops:** all stops (with hover/click inspection and information on what routes serve them)
 - **Bus stations:** bus stations (as far as I can tell there isn't an official or publicaly accessible TfL defintion of what counts as a bus station, so this is up to my personal discretion - you're welcome to tell me why you think I'm wrong..)
 - **Garages:** garage locations with information on operators and route allocations
-- **Frequency:** an overlay that highlights high-frequency corridors for the selected frequency band
+- **Frequency:** an overlay that visualises combined frequencies along corridors (that is, additive frequencies of all bus routes operating that trunk) 
 
 ### Explorer
-Omnisearch
-The floating search button opens a quick-search UI that helps you jump to routes, stops, stations, and garages without hunting around the map.
 
-You can also build Advanced route filters directly in Explorer with `key:value` tokens.
+The search button (also accessible through Ctrl+F) opens a quick-search UI that helps you jump to routes, stops, stations, and garages without hunting around the map.
+
+You can also build Advanced route filters directly in Explorer with `key:value` syntax.
 
 ### Explorer advanced filter syntax
 
 Format:
 - Separate tokens with spaces.
 - Use quotes for values with spaces, e.g. `operator:"London United"`.
-- Multi-value fields can use commas, e.g. `vehicle:DD,SD`.
+- Use commas to separate multiple values, e.g. `vehicle:DD,SD`.
 
 When Explorer applies Advanced filters:
 - It applies when you enter multiple `key:value` tokens.
 - It also applies for a single advanced-only token like `vehicle:DD`, `length:10+`, `freq:peak_am:8+`, `spatial:east`.
-- For single tokens that are also normal search categories (`route`, `garage`, `operator`), force Advanced mode with `type:any`.
+- For single tokens that are also normal search categories (`route`, `garage`, `operator`), you can force Advanced mode with `type:any`.
 - Optional force prefixes are also supported: `filter:`, `filters:`, `advanced:`, `adv:`.
 
 Accepted keys and values:
@@ -97,10 +97,14 @@ Examples: `peak_pm:>=10`, `offpeak:6-9`
 
 Examples:
 - `garage:PD spatial:east vehicle:DD`
-- `route:12 type:any`
+    - returns the double-decker route that runs furthest east, and is allocated to Plumstead bus garage
+- `route:12 type:any` - delete
 - `operator:"London United" borough:camden borough_mode:within`
+    - returns all bus routes that are operated by London United and fully within the borough of Camden
 - `freq:peak_am:8-12 length:10+`
+    - returns all bus routes that have a morning peak frequency of between 8 and 12 bph, and have a length greater than 10 miles
 - `type:any garage:X`
+    - returns all routes allocated to Westbourne Park bus garage
 
 ## Advanced route filters (module)
 
