@@ -11,14 +11,14 @@ RouteMapster is an interactive explorer for the London bus network. It's primary
 The app includes:
 
 - A web app providing an interactive map-based interface
-- A data pipeline that obtains up-to-date geographic data
+- A data pipeline that obtains up-to-date geographic datasets 
 - Analysis modules for routes and bus stops, and export tools
 
 ## Quick start
 
-RouteMapster loads datasets via `fetch()`, so you’ll get the smoothest results by serving the folder locally.
+To run locally: 
 
-1) Install Node.js (any recent LTS is fine).
+1) Install Node.js 
 2) Run:
 
 ```bash
@@ -28,17 +28,16 @@ npm start
 
 3) Open `http://localhost:3000`.
 
-If you truly want “no tooling”, you can also open `index.html` directly, but browser security settings may block data loads depending on your environment.
 
 ## What you can explore
 
 ### Layers & interactions
 
-- **Routes:** view route geometries, optionally coloured by route type (regular / 24hr / night / school / prefix).
-- **Bus stops:** all stops (with hover/click inspection and route-serving highlights).
-- **Bus stations:** major hubs loaded from `data/processed/bus_stations.geojson`.
-- **Garages:** garage locations with operator metadata and route allocation views.
-- **Frequency trunks overlay:** an optional overlay that highlights high-frequency corridors for the selected frequency band.
+- **Routes:** view route geometries, optionally differentiated by colour by route type (regular / 24hr / night / school / prefix)
+- **Bus stops:** all stops (with hover/click inspection and information on what routes serve them)
+- **Bus stations:** bus stations (as far as I can tell there isn't an official or publicaly accessible TfL defintion of what counts as a bus station, so this is up to my personal discretion - you're welcome to tell me why you think I'm wrong..)
+- **Garages:** garage locations with information on operators and route allocations
+- **Frequency:** an overlay that highlights high-frequency corridors for the selected frequency band
 
 ### Explorer
 Omnisearch

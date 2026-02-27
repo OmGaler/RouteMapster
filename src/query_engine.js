@@ -374,7 +374,7 @@
   };
 
   const loadRouteSummary = async () => {
-    if (cachedRows) {
+    if (Array.isArray(cachedRows) && cachedRows.length > 0) {
       return cachedRows;
     }
     if (loadPromise) {
@@ -386,16 +386,15 @@
     ])
       .then(([text, routeStopStats]) => {
         if (!text) {
-          cachedRows = [];
-          return cachedRows;
+          return [];
         }
         const parsed = parseCsv(text);
         const objects = toObjects(parsed);
-        cachedRows = objects.map((row) => normaliseRow(row));
+        const rows = objects.map((row) => normaliseRow(row));
         const totalCounts = routeStopStats?.totalCounts;
         const exclusiveCounts = routeStopStats?.exclusiveCounts;
         if (totalCounts && typeof totalCounts.get === "function" && exclusiveCounts && typeof exclusiveCounts.get === "function") {
-          cachedRows.forEach((row) => {
+          rows.forEach((row) => {
             const routeId = String(row?.route_id_norm || "").trim().toUpperCase();
             if (!routeId) {
               row.unique_stops = null;
@@ -410,11 +409,13 @@
             row.unique_stops_pct = totalStops > 0 ? uniqueStops / totalStops : 0;
           });
         }
-        return cachedRows;
+        if (rows.length > 0) {
+          cachedRows = rows;
+        }
+        return rows;
       })
       .catch(() => {
-        cachedRows = [];
-        return cachedRows;
+        return Array.isArray(cachedRows) ? cachedRows : [];
       })
       .finally(() => {
         loadPromise = null;

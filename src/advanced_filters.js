@@ -155,31 +155,17 @@
         .map((option) => String(option?.value ?? ""))
         .filter(Boolean)
     );
-    const parent = selectEl.parentNode;
-    if (!parent) {
-      while (selectEl.firstChild) {
-        selectEl.removeChild(selectEl.firstChild);
-      }
-      optionList.forEach((entry) => {
-        const value = entry && entry.value !== undefined ? entry.value : "";
-        const label = entry && entry.label !== undefined ? entry.label : value;
-        const valueText = String(value ?? "");
-        const option = new Option(String(label ?? ""), valueText, false, selected.has(valueText));
-        selectEl.add(option);
-      });
-      return selectEl;
+    while (selectEl.options.length > 0) {
+      selectEl.remove(0);
     }
-    // Use node replacement so iOS Safari refreshes listbox options reliably.
-    const replacement = selectEl.cloneNode(false);
     optionList.forEach((entry) => {
       const value = entry && entry.value !== undefined ? entry.value : "";
       const label = entry && entry.label !== undefined ? entry.label : value;
       const valueText = String(value ?? "");
       const option = new Option(String(label ?? ""), valueText, false, selected.has(valueText));
-      replacement.add(option);
+      selectEl.add(option);
     });
-    parent.replaceChild(replacement, selectEl);
-    return replacement;
+    return selectEl;
   };
 
   const isIosWebKit = () => {
@@ -203,6 +189,23 @@
     return String(label?.textContent || "Options").trim() || "Options";
   };
 
+  const updateMobileFallbackSummary = (entry, selectEl) => {
+    if (!entry || !selectEl) {
+      return;
+    }
+    const options = Array.from(selectEl.options || []);
+    const totalCount = options.length;
+    const selectedCount = options.filter((option) => option.selected).length;
+    const label = getFallbackLabel(selectEl);
+    if (totalCount === 0) {
+      entry.summary.textContent = `${label} (0 options)`;
+      return;
+    }
+    entry.summary.textContent = selectedCount > 0
+      ? `${label} (${selectedCount}/${totalCount} selected)`
+      : `${label} (${totalCount} options)`;
+  };
+
   const ensureMobileMultiFallback = (selectEl) => {
     if (!selectEl || !selectEl.multiple || !selectEl.id) {
       return;
@@ -212,15 +215,31 @@
       if (existing?.host?.isConnected) {
         existing.host.remove();
       }
+      if (state.container) {
+        Array.from(state.container.querySelectorAll(".mobile-multi"))
+          .filter((host) => host.dataset.for === selectEl.id)
+          .forEach((host) => host.remove());
+      }
       state.mobileMultiFallback.delete(selectEl.id);
       selectEl.style.display = "";
       selectEl.removeAttribute("aria-hidden");
       return;
     }
     let entry = state.mobileMultiFallback.get(selectEl.id);
+    if (state.container) {
+      Array.from(state.container.querySelectorAll(".mobile-multi"))
+        .filter((host) => host.dataset.for === selectEl.id && host !== entry?.host)
+        .forEach((host) => host.remove());
+    }
+    if (entry?.host?.isConnected && entry.select !== selectEl) {
+      entry.host.remove();
+      state.mobileMultiFallback.delete(selectEl.id);
+      entry = null;
+    }
     if (!entry || !entry.host || !entry.host.isConnected || entry.select !== selectEl) {
       const host = document.createElement("details");
       host.className = "mobile-multi";
+      host.dataset.for = selectEl.id;
       const summary = document.createElement("summary");
       summary.className = "mobile-multi-summary";
       const list = document.createElement("div");
@@ -241,7 +260,7 @@
       empty.className = "mobile-multi-empty";
       empty.textContent = "No options available";
       entry.list.appendChild(empty);
-      entry.summary.textContent = `${getFallbackLabel(selectEl)} (0)`;
+      updateMobileFallbackSummary(entry, selectEl);
       return;
     }
     const selectedValues = new Set(
@@ -261,15 +280,14 @@
         if (target) {
           target.selected = checkbox.checked;
         }
-        const count = Array.from(selectEl.options || []).filter((candidate) => candidate.selected).length;
-        entry.summary.textContent = `${getFallbackLabel(selectEl)} (${count})`;
+        updateMobileFallbackSummary(entry, selectEl);
       });
       const text = document.createElement("span");
       text.textContent = option.textContent || option.label || value;
       item.append(checkbox, text);
       entry.list.appendChild(item);
     });
-    entry.summary.textContent = `${getFallbackLabel(selectEl)} (${selectedValues.size})`;
+    updateMobileFallbackSummary(entry, selectEl);
   };
 
   const refreshMobileMultiFallbacks = (els) => {
@@ -805,6 +823,21 @@
         state.spatialPromise = null;
       });
     return state.spatialPromise;
+  };
+
+  const ensureRowsLoaded = async (engine) => {
+    if (Array.isArray(state.rows) && state.rows.length > 0) {
+      return;
+    }
+    const loaded = await engine.loadRouteSummary();
+    if (!Array.isArray(loaded) || loaded.length === 0) {
+      state.rows = [];
+      state.derivedRows = [];
+      return;
+    }
+    state.rows = loaded;
+    await hydrateRouteBoroughs().catch(() => {});
+    state.derivedRows = engine.computeDerivedFields(state.rows);
   };
 
   const hydrateRouteBoroughs = async () => {
@@ -1448,9 +1481,7 @@
       state.moduleOpen = Boolean(container.open);
       updateResultsVisibility(els, false, state.moduleOpen);
 
-      state.rows = await engine.loadRouteSummary();
-      await hydrateRouteBoroughs().catch(() => {});
-      state.derivedRows = engine.computeDerivedFields(state.rows);
+      await ensureRowsLoaded(engine);
 
       populateSelects(state.derivedRows, els);
 
@@ -1472,12 +1503,19 @@
 
       container.addEventListener("toggle", () => {
         state.moduleOpen = Boolean(container.open);
-        if (state.moduleOpen) {
-          // Rebuild option nodes when shown to avoid mobile WebKit listbox rendering glitches.
-          populateSelects(state.derivedRows, els);
-          applyFilterSpecToUI(state.filterSpec, els);
+        if (!state.moduleOpen) {
+          updateResultsVisibility(els, hasActiveFilters(state.filterSpec), state.moduleOpen);
+          return;
         }
-        updateResultsVisibility(els, hasActiveFilters(state.filterSpec), state.moduleOpen);
+        ensureRowsLoaded(engine)
+          .then(() => {
+            populateSelects(state.derivedRows, els);
+            applyFilterSpecToUI(state.filterSpec, els);
+          })
+          .catch(() => {})
+          .finally(() => {
+            updateResultsVisibility(els, hasActiveFilters(state.filterSpec), state.moduleOpen);
+          });
       });
 
     const setSubsectionsOpen = (open) => {
