@@ -147,18 +147,139 @@
 
   const setSelectOptions = (selectEl, options) => {
     if (!selectEl) {
-      return;
+      return selectEl;
     }
-    const fragment = document.createDocumentFragment();
-    (Array.isArray(options) ? options : []).forEach((entry) => {
+    const optionList = Array.isArray(options) ? options : [];
+    const selected = new Set(
+      Array.from(selectEl.selectedOptions || [])
+        .map((option) => String(option?.value ?? ""))
+        .filter(Boolean)
+    );
+    const parent = selectEl.parentNode;
+    if (!parent) {
+      while (selectEl.firstChild) {
+        selectEl.removeChild(selectEl.firstChild);
+      }
+      optionList.forEach((entry) => {
+        const value = entry && entry.value !== undefined ? entry.value : "";
+        const label = entry && entry.label !== undefined ? entry.label : value;
+        const valueText = String(value ?? "");
+        const option = new Option(String(label ?? ""), valueText, false, selected.has(valueText));
+        selectEl.add(option);
+      });
+      return selectEl;
+    }
+    // Use node replacement so iOS Safari refreshes listbox options reliably.
+    const replacement = selectEl.cloneNode(false);
+    optionList.forEach((entry) => {
       const value = entry && entry.value !== undefined ? entry.value : "";
       const label = entry && entry.label !== undefined ? entry.label : value;
-      const option = document.createElement("option");
-      option.value = String(value ?? "");
-      option.textContent = String(label ?? "");
-      fragment.appendChild(option);
+      const valueText = String(value ?? "");
+      const option = new Option(String(label ?? ""), valueText, false, selected.has(valueText));
+      replacement.add(option);
     });
-    selectEl.replaceChildren(fragment);
+    parent.replaceChild(replacement, selectEl);
+    return replacement;
+  };
+
+  const isIosWebKit = () => {
+    if (typeof navigator === "undefined") {
+      return false;
+    }
+    const ua = String(navigator.userAgent || "");
+    const platform = String(navigator.platform || "");
+    const maxTouchPoints = Number(navigator.maxTouchPoints || 0);
+    const isIOS = /iPad|iPhone|iPod/.test(ua) || (platform === "MacIntel" && maxTouchPoints > 1);
+    return isIOS && /AppleWebKit/i.test(ua);
+  };
+
+  const shouldUseMobileMultiFallback = () => isIosWebKit();
+
+  const getFallbackLabel = (selectEl) => {
+    if (!selectEl || !state.container) {
+      return "Options";
+    }
+    const label = state.container.querySelector(`label[for="${selectEl.id}"]`);
+    return String(label?.textContent || "Options").trim() || "Options";
+  };
+
+  const ensureMobileMultiFallback = (selectEl) => {
+    if (!selectEl || !selectEl.multiple || !selectEl.id) {
+      return;
+    }
+    if (!shouldUseMobileMultiFallback()) {
+      const existing = state.mobileMultiFallback.get(selectEl.id);
+      if (existing?.host?.isConnected) {
+        existing.host.remove();
+      }
+      state.mobileMultiFallback.delete(selectEl.id);
+      selectEl.style.display = "";
+      selectEl.removeAttribute("aria-hidden");
+      return;
+    }
+    let entry = state.mobileMultiFallback.get(selectEl.id);
+    if (!entry || !entry.host || !entry.host.isConnected || entry.select !== selectEl) {
+      const host = document.createElement("details");
+      host.className = "mobile-multi";
+      const summary = document.createElement("summary");
+      summary.className = "mobile-multi-summary";
+      const list = document.createElement("div");
+      list.className = "mobile-multi-list";
+      host.append(summary, list);
+      selectEl.insertAdjacentElement("afterend", host);
+      entry = { select: selectEl, host, summary, list };
+      state.mobileMultiFallback.set(selectEl.id, entry);
+    } else {
+      entry.select = selectEl;
+    }
+    selectEl.style.display = "none";
+    selectEl.setAttribute("aria-hidden", "true");
+    entry.list.innerHTML = "";
+    const options = Array.from(selectEl.options || []);
+    if (options.length === 0) {
+      const empty = document.createElement("div");
+      empty.className = "mobile-multi-empty";
+      empty.textContent = "No options available";
+      entry.list.appendChild(empty);
+      entry.summary.textContent = `${getFallbackLabel(selectEl)} (0)`;
+      return;
+    }
+    const selectedValues = new Set(
+      options.filter((option) => option.selected).map((option) => String(option.value ?? ""))
+    );
+    options.forEach((option) => {
+      const value = String(option.value ?? "");
+      const item = document.createElement("label");
+      item.className = "mobile-multi-item";
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.value = value;
+      checkbox.checked = selectedValues.has(value);
+      checkbox.disabled = Boolean(selectEl.disabled);
+      checkbox.addEventListener("change", () => {
+        const target = Array.from(selectEl.options || []).find((candidate) => String(candidate.value ?? "") === value);
+        if (target) {
+          target.selected = checkbox.checked;
+        }
+        const count = Array.from(selectEl.options || []).filter((candidate) => candidate.selected).length;
+        entry.summary.textContent = `${getFallbackLabel(selectEl)} (${count})`;
+      });
+      const text = document.createElement("span");
+      text.textContent = option.textContent || option.label || value;
+      item.append(checkbox, text);
+      entry.list.appendChild(item);
+    });
+    entry.summary.textContent = `${getFallbackLabel(selectEl)} (${selectedValues.size})`;
+  };
+
+  const refreshMobileMultiFallbacks = (els) => {
+    [
+      els?.routeTypes,
+      els?.operators,
+      els?.garages,
+      els?.boroughs,
+      els?.vehicles
+    ].forEach((selectEl) => ensureMobileMultiFallback(selectEl));
   };
 
   const buildGarageLabels = (row) => {
@@ -364,7 +485,8 @@
     boroughOptions: [],
     boroughsReady: false,
     boroughIndex: null,
-    geometryBoroughCache: new Map()
+    geometryBoroughCache: new Map(),
+    mobileMultiFallback: new Map()
   };
 
   const loadBoroughIndex = async () => {
@@ -895,6 +1017,7 @@
     if (els.extremeSelect) {
       els.extremeSelect.value = normalized.extreme || "";
     }
+    refreshMobileMultiFallbacks(els);
   };
 
   const clearFilterHash = () => {
@@ -1160,7 +1283,7 @@
     const routeTypes = engine.getUniqueValues(rows, (row) => row.route_type, (value) => String(value || "").toLowerCase())
       .filter((value) => !isUnknown(value));
     if (els.routeTypes) {
-      setSelectOptions(
+      els.routeTypes = setSelectOptions(
         els.routeTypes,
         routeTypes.map((value) => ({ value, label: value }))
       );
@@ -1168,7 +1291,7 @@
     const operators = engine.getUniqueValues(rows, (row) => row.operator_names_arr || [], (value) => String(value || ""));
     if (els.operators) {
       const operatorValues = operators.filter((value) => !isUnknown(value));
-      setSelectOptions(
+      els.operators = setSelectOptions(
         els.operators,
         operatorValues
           .slice()
@@ -1179,13 +1302,13 @@
     if (els.garages) {
       const garages = buildGarageOptions(rows)
         .filter((option) => option.label && !isUnknown(option.label));
-      setSelectOptions(els.garages, garages);
+      els.garages = setSelectOptions(els.garages, garages);
     }
     if (els.boroughs) {
       if (state.boroughsReady) {
-        setSelectOptions(els.boroughs, state.boroughOptions);
+        els.boroughs = setSelectOptions(els.boroughs, state.boroughOptions);
       } else {
-        setSelectOptions(els.boroughs, []);
+        els.boroughs = setSelectOptions(els.boroughs, []);
       }
       els.boroughs.disabled = !state.boroughsReady;
     }
@@ -1203,7 +1326,7 @@
     const vehicles = engine.getUniqueValues(rows, (row) => row.vehicle_type, (value) => String(value || "").toUpperCase());
     if (els.vehicles) {
       const vehicleValues = vehicles.filter((value) => !isUnknown(value));
-      setSelectOptions(
+      els.vehicles = setSelectOptions(
         els.vehicles,
         vehicleValues
           .slice()
@@ -1217,8 +1340,9 @@
         { value: "any", label: "Any" },
         ...prefixes.map((prefix) => ({ value: prefix, label: prefix }))
       ];
-      setSelectOptions(els.routePrefix, options);
+      els.routePrefix = setSelectOptions(els.routePrefix, options);
     }
+    refreshMobileMultiFallbacks(els);
   };
 
   const applyFilterSpec = async (filterSpec, appState, options = {}) => {

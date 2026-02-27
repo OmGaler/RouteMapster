@@ -6,12 +6,13 @@ To submit a bug report or  feature request, open a github issue
 
 # RouteMapster
 
-RouteMapster is an interactive, map-first explorer for the London bus network. It’s built to make it easy to visualise how routes, stops, stations, garages, operators, and service patterns fit together across London — and to support “explore → filter → analyse → export” workflows without needing a backend.
+RouteMapster is an interactive explorer for the London bus network. It's primary purpose is to make it easy to visualise how routes, stops, stations, garages, operators, and service patterns fit together across London and to provide the ability to explore and combine advanced complex filters and analyses.
 
-This repository includes:
-- A static web app (Leaflet + vanilla JS) served from `index.html`.
-- A data pipeline that produces versioned, browser-ready GeoJSON/JSON under `data/processed/`.
-- Analysis modules for routes and bus stops, plus export tools.
+The app includes:
+
+- A web app providing an interactive map-based interface
+- A data pipeline that obtains up-to-date geographic data
+- Analysis modules for routes and bus stops, and export tools
 
 ## Quick start
 
