@@ -265,6 +265,7 @@ const appState = {
 	routeHoverLastKey: "",
 	infoPanelKind: null,
 	infoPanelBackStack: [],
+	advancedResultsRouteReturnPending: false,
 	loadingModalCount: 0,
 	loadingModalTitle: "",
 	loadingModalSubtitle: "",
@@ -502,6 +503,7 @@ function resetInfoPanel() {
 	setInfoPanelVisible(false);
 	appState.infoPanelKind = null;
 	appState.infoPanelBackStack = [];
+	appState.advancedResultsRouteReturnPending = false;
 	clearSelectedFeature();
 }
 
@@ -7041,6 +7043,13 @@ function setupUI() {
 
 	const closeInfoPanel = document.getElementById("closeInfoPanel");
 	const closeInfoPanelAction = () => {
+		if (appState.advancedResultsRouteReturnPending && window.RouteMapsterAdvancedFilters?.showResults) {
+			clearDetailsRouteHighlights();
+			resetInfoPanel();
+			appState.advancedResultsRouteReturnPending = false;
+			window.RouteMapsterAdvancedFilters.showResults();
+			return;
+		}
 		clearDetailsRouteHighlights();
 		resetInfoPanel();
 	};
@@ -7052,7 +7061,12 @@ function setupUI() {
 			return;
 		}
 		const appRoot = document.getElementById("app");
-		if (!appRoot || !appRoot.classList.contains("has-details")) {
+		if (!appRoot) {
+			return;
+		}
+		const hasDetails = appRoot.classList.contains("has-details");
+		const hasAdvancedResults = appRoot.classList.contains("has-advanced-results");
+		if (!hasDetails && !hasAdvancedResults) {
 			return;
 		}
 		const modalIds = ["omniSearchModal", "aboutModal", "keyboardShortcutsModal", "loadingModal"];
@@ -7064,14 +7078,24 @@ function setupUI() {
 			return;
 		}
 		event.preventDefault();
-		if (appState.infoPanelKind === "route") {
-			const previous = popInfoPanelBackSnapshot();
-			if (previous) {
-				restoreInfoPanelSnapshot(previous);
-				return;
+		if (hasDetails) {
+			if (appState.infoPanelKind === "route") {
+				if (appState.advancedResultsRouteReturnPending && window.RouteMapsterAdvancedFilters?.showResults) {
+					closeInfoPanelAction();
+					return;
+				}
+				const previous = popInfoPanelBackSnapshot();
+				if (previous) {
+					restoreInfoPanelSnapshot(previous);
+					return;
+				}
 			}
+			closeInfoPanelAction();
+			return;
 		}
-		closeInfoPanelAction();
+		if (hasAdvancedResults && window.RouteMapsterAdvancedFilters?.dismissResults) {
+			window.RouteMapsterAdvancedFilters.dismissResults({ restoreMap: true });
+		}
 	});
 
 	const advancedFiltersModule = document.querySelector('[data-module="advanced-filters"]');

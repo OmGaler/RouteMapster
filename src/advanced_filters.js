@@ -120,7 +120,7 @@
 
   const renderRoutePill = (routeId, appState) => {
     const className = getRoutePillClass(routeId, appState);
-    return `<span class="route-pill route-pill--${escapeHtml(className)}">${escapeHtml(routeId)}</span>`;
+    return `<span class="route-pill route-pill--${escapeHtml(className)}" data-route="${escapeHtml(routeId)}">${escapeHtml(routeId)}</span>`;
   };
 
   const buildPrefixOptions = (rows) => {
@@ -510,7 +510,8 @@
     boroughsReady: false,
     boroughIndex: null,
     geometryBoroughCache: new Map(),
-    mobileMultiFallback: new Map()
+    mobileMultiFallback: new Map(),
+    resultsDismissed: false
   };
 
   const loadBoroughIndex = async () => {
@@ -1143,12 +1144,33 @@
   const updateResultsVisibility = (els, isActive, isOpen) => {
     const panel = els?.resultsPanel;
     const appRoot = document.getElementById("app");
-    const shouldShow = Boolean(panel && isActive && isOpen);
+    const shouldShow = Boolean(panel && isActive && isOpen && !state.resultsDismissed);
     if (panel) {
       panel.classList.toggle("is-visible", shouldShow);
     }
     if (appRoot) {
       appRoot.classList.toggle("has-advanced-results", shouldShow);
+    }
+  };
+
+  const dismissResults = (options = {}) => {
+    const restoreMap = options && options.restoreMap === true;
+    state.resultsDismissed = true;
+    const appState = state.elements?.appState || null;
+    if (appState && restoreMap) {
+      clearMapHighlights(appState);
+      appState.advancedResultsRouteReturnPending = false;
+      document.dispatchEvent(new CustomEvent("routeFiltersUpdated", { detail: { rows: [], filterSpec: {} } }));
+    }
+    if (state.elements) {
+      updateResultsVisibility(state.elements, hasActiveFilters(state.filterSpec), state.moduleOpen);
+    }
+  };
+
+  const showResults = () => {
+    state.resultsDismissed = false;
+    if (state.elements) {
+      updateResultsVisibility(state.elements, hasActiveFilters(state.filterSpec), state.moduleOpen);
     }
   };
 
@@ -1247,6 +1269,7 @@
     const baseRows = Array.isArray(options.baseRows) ? options.baseRows : state.rows;
     const isActive = hasActiveFilters(normalizedSpec);
     if (!isActive) {
+      state.resultsDismissed = false;
       state.filteredRows = [];
       state.filterSpec = {};
       refreshRouteLookup([]);
@@ -1266,6 +1289,7 @@
     }
     const filtered = window.RouteMapsterQueryEngine.applyFilters(baseRows, applySpec);
     const derived = window.RouteMapsterQueryEngine.computeDerivedFields(filtered);
+    state.resultsDismissed = false;
     state.filteredRows = derived;
     state.filterSpec = normalizedSpec;
     refreshRouteLookup(derived);
@@ -1477,6 +1501,7 @@
         exportCsv: document.getElementById("advancedExportCsv"),
         mapWarning: document.getElementById("advancedMapWarning"),
         resultsPanel: document.getElementById("advancedResultsPanel"),
+        closeResults: document.getElementById("advancedCloseResults"),
         clearButton: container.querySelector("#advancedClearFilters"),
         uniqueStopsWrap: container.querySelector("#advancedUniqueStopsWrap"),
         lengthWrap: container.querySelector("#advancedLengthWrap")
@@ -1614,6 +1639,12 @@
       });
     }
 
+    if (els.closeResults) {
+      els.closeResults.addEventListener("click", () => {
+        dismissResults({ restoreMap: true });
+      });
+    }
+
     if (els.clearMap) {
       els.clearMap.addEventListener("click", () => {
         clearMapHighlights(appState);
@@ -1665,6 +1696,22 @@
 
     if (els.routeList) {
       els.routeList.addEventListener("click", (event) => {
+        const pill = event.target.closest(".route-pill");
+        if (pill) {
+          const routeId = String(pill.dataset.route || "").trim().toUpperCase();
+          if (!routeId) {
+            return;
+          }
+          event.preventDefault();
+          if (appState) {
+            appState.advancedResultsRouteReturnPending = true;
+          }
+          dismissResults({ restoreMap: false });
+          if (typeof window.showRouteDetailsAndFocus === "function") {
+            window.showRouteDetailsAndFocus(routeId).catch(() => {});
+          }
+          return;
+        }
         const toggle = event.target.closest(".route-map-toggle");
         if (!toggle) {
           return;
@@ -1718,7 +1765,9 @@
     clearMapHighlights: (appState) => clearMapHighlights(appState),
     getCurrentFilterSpec: () => state.filterSpec,
     getCurrentRows: () => state.filteredRows,
-    applyFilterSpec
+    applyFilterSpec,
+    dismissResults,
+    showResults
   };
 })();
 

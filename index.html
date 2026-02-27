@@ -1159,6 +1159,10 @@
       padding: 4px 10px;
     }
 
+    .advanced-results-close {
+      display: inline-flex;
+    }
+
     .info-subtitle {
       font-size: 13px;
       color: var(--muted);
@@ -1863,11 +1867,7 @@
         pointer-events: none;
       }
 
-      #app.has-details #rightpanel {
-        display: block;
-        pointer-events: auto;
-      }
-
+      #app.has-details #rightpanel,
       #app.has-advanced-results #rightpanel {
         display: block;
         pointer-events: auto;
@@ -1880,6 +1880,7 @@
         overflow: visible;
       }
 
+      #app.has-details #sidebar,
       #app.has-advanced-results #sidebar {
         display: none;
       }
@@ -1903,6 +1904,7 @@
         border-radius: 16px;
       }
 
+      #app.has-details #rightpanel .info-panel,
       #app.has-advanced-results #rightpanel .info-panel {
         max-height: none;
         overflow: visible;
@@ -2519,7 +2521,10 @@
 
     <aside id="rightpanel">
       <div class="info-panel" id="advancedResultsPanel">
-        <h2 class="info-title">Filtered routes</h2>
+        <div class="info-header">
+          <h2 class="info-title">Filtered routes</h2>
+          <button id="advancedCloseResults" class="ghost-button tiny info-close advanced-results-close" type="button" aria-label="Close filtered routes panel">x</button>
+        </div>
         <p class="info-subtitle">Advanced filters results</p>
         <div class="info-body">
           <div id="advancedRouteCount" class="route-count">0 routes found</div>
