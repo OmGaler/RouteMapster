@@ -647,14 +647,11 @@
         rows.forEach((row) => {
           const district = row.district || "Unknown";
           if (!summary.has(district)) {
-            summary.set(district, { count: 0, withRoutes: 0, routeTotal: 0, freqTotal: 0, freqCount: 0 });
+            summary.set(district, { count: 0, routeTotal: 0, freqTotal: 0, freqCount: 0 });
           }
           const entry = summary.get(district);
           entry.count += 1;
           entry.routeTotal += row.route_count;
-          if (row.route_count > 0) {
-            entry.withRoutes += 1;
-          }
           if (row.frequency && Number.isFinite(row.frequency[band])) {
             entry.freqTotal += row.frequency[band];
             entry.freqCount += 1;
@@ -667,7 +664,6 @@
             return [
               district,
               entry.count,
-              entry.withRoutes,
               formatNumber(avgRoutes, 2),
               avgFreq === null ? "" : formatNumber(avgFreq, 1)
             ];
@@ -675,7 +671,7 @@
           .sort((a, b) => (b[1] || 0) - (a[1] || 0));
         return {
           type: "table",
-          columns: ["District", "Bus stops", "Bus stops w/ routes", "Avg routes", `Avg ${label}`],
+          columns: ["District", "Bus stops", "Avg routes", `Avg ${label}`],
           rows: rowsOut
         };
       }

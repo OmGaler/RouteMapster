@@ -70,13 +70,17 @@
     return combined.length > 0 ? combined : ["Unknown"];
   };
 
+  const getKnownGarages = (row) => getGarages(row)
+    .map((garage) => String(garage || "").trim())
+    .filter((garage) => !isUnknownLike(garage));
+
   const routeOverlapCoverageCache = {
     key: "",
     promise: null,
     result: null
   };
 
-  const computeRouteOverlapCoverageScores = async (rows) => {
+  const computeRouteOverlapCoverageScores = async (rows, context = {}) => {
     const api = window.RouteMapsterAPI;
     if (!api || typeof api.loadRouteGeometry !== "function") {
       return {
@@ -88,29 +92,69 @@
     const OVERLAP_TOLERANCE_METERS = 45;
     const ORIENTATION_DOT_MIN = 0.6;
 
-    const routeMap = new Map();
-    (Array.isArray(rows) ? rows : []).forEach((row) => {
-      const routeId = String(row?.route_id_norm || row?.route_id || "").trim().toUpperCase();
-      if (!routeId) {
-        return;
-      }
-      if (!routeMap.has(routeId)) {
-        routeMap.set(routeId, row);
+    const toRouteMap = (sourceRows) => {
+      const map = new Map();
+      (Array.isArray(sourceRows) ? sourceRows : []).forEach((row) => {
+        const routeId = String(row?.route_id_norm || row?.route_id || "").trim().toUpperCase();
+        if (!routeId) {
+          return;
+        }
+        if (!map.has(routeId)) {
+          map.set(routeId, row);
+        }
+      });
+      return map;
+    };
+
+    const focusRouteMap = toRouteMap(rows);
+    const focusRouteIds = Array.from(focusRouteMap.keys());
+    if (focusRouteIds.length === 0) {
+      return {
+        note: "No routes available for exclusivity analysis."
+      };
+    }
+
+    const comparisonRows = Array.isArray(context?.allRows) && context.allRows.length > 0
+      ? context.allRows
+      : rows;
+    const comparisonRouteMap = toRouteMap(comparisonRows);
+    focusRouteMap.forEach((row, routeId) => {
+      if (!comparisonRouteMap.has(routeId)) {
+        comparisonRouteMap.set(routeId, row);
       }
     });
-    const routeIds = Array.from(routeMap.keys());
-    if (routeIds.length < 2) {
+
+    const comparisonRouteIds = Array.from(comparisonRouteMap.keys());
+    if (comparisonRouteIds.length < 2) {
       return {
         note: "Need at least two routes to compare geometry overlap."
       };
     }
 
-    const cacheKey = routeIds.slice().sort((a, b) => a.localeCompare(b, undefined, { numeric: true })).join("|");
+    const focusRouteSet = new Set(focusRouteIds);
+    const selectScoresForFocus = (payload) => {
+      if (payload?.note) {
+        return payload;
+      }
+      const allScores = Array.isArray(payload?.scores) ? payload.scores : [];
+      const selectedScores = allScores.filter((entry) => focusRouteSet.has(entry.routeId));
+      if (selectedScores.length === 0) {
+        return {
+          note: "No routes with usable geometry points were available for the selected routes."
+        };
+      }
+      return { scores: selectedScores };
+    };
+
+    const cacheKey = comparisonRouteIds
+      .slice()
+      .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+      .join("|");
     if (routeOverlapCoverageCache.key === cacheKey && routeOverlapCoverageCache.result) {
-      return routeOverlapCoverageCache.result;
+      return selectScoresForFocus(routeOverlapCoverageCache.result);
     }
     if (routeOverlapCoverageCache.key === cacheKey && routeOverlapCoverageCache.promise) {
-      return routeOverlapCoverageCache.promise;
+      return routeOverlapCoverageCache.promise.then((result) => selectScoresForFocus(result));
     }
 
     const promise = (async () => {
@@ -192,8 +236,8 @@
         const concurrency = 6;
         let index = 0;
         const worker = async () => {
-          while (index < routeIds.length) {
-            const routeId = routeIds[index];
+          while (index < comparisonRouteIds.length) {
+            const routeId = comparisonRouteIds[index];
             index += 1;
             try {
               const segments = await api.loadRouteGeometry(routeId);
@@ -213,7 +257,7 @@
       const sampleBundles = new Map();
       let latSum = 0;
       let latCount = 0;
-      routeIds.forEach((routeId) => {
+      comparisonRouteIds.forEach((routeId) => {
         const bundle = buildWeightedSamples(segmentsByRoute.get(routeId));
         if (bundle.samples.length > 0 && bundle.totalMeters > 0) {
           sampleBundles.set(routeId, bundle);
@@ -338,7 +382,7 @@
         const bestPeerOverlapRatio = bestPeerOverlapMeters > 0
           ? Math.max(0, Math.min(1, bestPeerOverlapMeters / totalMeters))
           : 0;
-        const row = routeMap.get(routeId) || {};
+        const row = focusRouteMap.get(routeId) || comparisonRouteMap.get(routeId) || {};
         scores.push({
           routeId,
           operator: getPrimaryKnownOperator(row),
@@ -374,7 +418,7 @@
         routeOverlapCoverageCache.result = result;
         routeOverlapCoverageCache.promise = null;
       }
-      return result;
+      return selectScoresForFocus(result);
     } catch (error) {
       if (routeOverlapCoverageCache.key === cacheKey) {
         routeOverlapCoverageCache.promise = null;
@@ -418,6 +462,45 @@
           type: "table",
           columns: ["Garage", "Routes"],
           rows: sorted.map(([garage, count]) => [garage, count])
+        };
+      }
+    },
+    "routes-multi-garage": {
+      id: "routes-multi-garage",
+      label: "Routes allocated to multiple garages",
+      run: (rows) => {
+        const matches = rows
+          .map((row) => {
+            const garages = getKnownGarages(row);
+            return {
+              routeId: row.route_id || row.route_id_norm,
+              operator: getPrimaryKnownOperator(row),
+              garages
+            };
+          })
+          .filter((entry) => entry.routeId && entry.garages.length > 1)
+          .sort((a, b) => {
+            if (b.garages.length !== a.garages.length) {
+              return b.garages.length - a.garages.length;
+            }
+            return String(a.routeId).localeCompare(String(b.routeId), undefined, { numeric: true });
+          });
+        if (matches.length === 0) {
+          return {
+            type: "table",
+            columns: ["Route", "Operator", "Garage count", "Garages"],
+            rows: [["No routes with multiple known garages found", "", "", ""]]
+          };
+        }
+        return {
+          type: "table",
+          columns: ["Route", "Operator", "Garage count", "Garages"],
+          rows: matches.map((entry) => ([
+            entry.routeId,
+            entry.operator,
+            entry.garages.length,
+            entry.garages.join(", ")
+          ]))
         };
       }
     },
@@ -706,9 +789,9 @@
     "route-geometry-exclusivity": {
       id: "route-geometry-exclusivity",
       label: "Route exclusivity",
-      run: async (rows) => {
+      run: async (rows, context) => {
         const TOP_COUNT = 25;
-        const computed = await computeRouteOverlapCoverageScores(rows);
+        const computed = await computeRouteOverlapCoverageScores(rows, context);
         if (computed?.note) {
           return { type: "note", message: computed.note };
         }
@@ -1881,12 +1964,12 @@
     }
   };
 
-  const runAnalysis = (analysisId, rows) => {
+  const runAnalysis = (analysisId, rows, context) => {
     const entry = analysisRegistry[analysisId];
     if (!entry) {
       return null;
     }
-    return entry.run(rows || []);
+    return entry.run(rows || [], context || {});
   };
 
   const getAnalyses = () => Object.values(analysisRegistry);

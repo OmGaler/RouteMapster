@@ -486,7 +486,7 @@
     return state.allRows;
   };
 
-  const runAnalyses = async (analysisIds, baseRows, filterSpec) => {
+  const runAnalyses = async (analysisIds, baseRows, filterSpec, context = {}) => {
     const engine = window.RouteMapsterQueryEngine;
     const registry = window.RouteMapsterAnalyses?.analysisRegistry || {};
     let rows = baseRows;
@@ -500,7 +500,7 @@
           return null;
         }
         try {
-          const result = await entry.run(rows);
+          const result = await entry.run(rows, context);
           return { id: analysisId, title: entry.label, result };
         } catch (error) {
           return {
@@ -664,7 +664,7 @@
       const base = resolveBaseRows(scope);
       const analysisId = els.analysisSelect?.value;
       await ensureSpatialForAnalyses(analysisId, base);
-      const results = await runAnalyses(analysisId, base, null);
+      const results = await runAnalyses(analysisId, base, null, { allRows: state.allRows });
       renderResults(els.output, results);
       if (els.scopeNote) {
         const count = base.length || 0;

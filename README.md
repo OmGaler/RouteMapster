@@ -108,48 +108,42 @@ Examples:
 
 ## Advanced route filters (module)
 
-The **Advanced route filters** module is designed for "show me all routes that satisfy all these conditions". Filters don’t apply live — you build up a compound query by combining conditions and then click **Apply filters**.
-
- 
+The **Advanced route filters** module is designed for "show all routes that satisfy all these conditions". Filters don’t apply live — you build up a compound query by combining conditions and then click **Apply filters**.
 
 ### Core filters
 
-- **Route ID search:** type multiple route IDs (comma/space separated), e.g. `12, N205, SL7`.
-- **Route prefix:** choose a common prefix (e.g. `N`, `SL`).
+- **Route number series ranking (00–99)** (optional “series” view)
+
+
+- **Route number search:** type multiple route numbers (comma/space separated), e.g. `12, N205, SL7`.
+- **Route prefix:** choose a prefix (e.g. `N` for night routes, `SL` for superloop routes).
 - **Route types:** filter by service type (regular / 24hr / night / school / prefix).
 - **Garages:** allocated garage(s) for the route.
 - **Operators:** operator name(s).
-- **Boroughs:** routes associated with selected borough(s).
-- **Vehicles:** filter by vehicle type labels where available (e.g. `SD`, `DD`).
-- **Most extreme route:** find the single most northerly / southerly / easterly / westerly route in the current subset (uses route geometry; loaded on first apply).
+- **Boroughs:** routes associated with selected borough(s). Can be set to filter by routes wholly within, or routes that enter a borough.
+- **Vehicles:** filter by single-decker or double-decker vehicle type.
+- **Spatial extremities:** find the single most northerly / southerly / easterly / westerly route in the current subset.
 
 ### Frequency ranges (buses/hour)
 
 Set min/max ranges per band:
 - **Peak AM**, **Peak PM**, **Off-peak**, **Overnight**.
-
-### Flags (service patterns)
-
-- **Has overnight service:** include only routes with non-zero overnight service.
-- **High frequency (>= threshold):** include routes that meet/exceed a buses/hour threshold in any band.
+- **Has overnight service:** include only routes with an overnight service (night buses or 24hr routes).
 
 ### Length
-
-- **Length (miles):** min/max range from derived route geometry stats.
+- **Length (miles):** min/max range from derived route geometry stats (due to nature of the route geometries, there is likely to be some discrepency in these lengths and should be taken as indicative only, rather than absolute truth).
 
 ### Results & export
 
 Filtered routes appear in the right-hand “Filtered routes” panel:
 - **Show all on map** highlights the filtered set.
-- **Export CSV** downloads the filtered table for offline work.
+- **Export CSV** downloads the filtered table in a spreadsheet-compatible format.
 
-Advanced filter state is serialised into the URL hash so you can bookmark/share a filter setup.
+## Advanced route analyses
 
-## Advanced route analyses (module)
-
-The **Advanced route analyses** module runs diagnostics/summaries either over:
-- **Current filtered subset** (from Advanced route filters), or
-- **All routes**.
+The **Advanced route analyses** module runs analytic summaries either over:
+- **All routes** or
+- **Current filtered subset** (from Advanced route filters)
 
 Available analyses include:
 - **Routes by operator**
@@ -159,23 +153,23 @@ Available analyses include:
 - **Average frequency by operator**
 - **Top routes by Peak AM frequency**
 - **Average length by operator**
-- **Routes sharing the same endpoints** (click results to highlight endpoints/routes on the map)
-- **Route families (heuristic)** (grouping/ranking helpers)
-- **Route number series ranking (00–99)** (optional “series” view)
+- **Longest and shortest routes** 
+- **Most route-only stops** (routes with the greatest number of stops which are served by only that route)
+- **Route exclusivity**: (routes with the greatest proportion of their route not being shared with other routes)
+- **Routes sharing the same endpoints** (routes that run between the same exact two endpoints)
+- **Route families (heuristic)** (group routes into "route families" based on numbering series, shared routings and destinations)
 
 Most table outputs support CSV export.
 
 ## Bus stop analyses (module)
 
-The **Bus stop analyses** module runs analyses over bus stops (a stop-level dataset enriched with route counts, districts/boroughs, and frequency fields).
-
- 
+The **Bus stop analyses** module runs analyses over bus stops (a stop-level dataset enriched with route counts, postcodes and boroughs).
 
 ### Filters (bus stops)
 
 - **Scope:** all bus stops.
-- **Postcode district filter** (multi-token entry).
-- **Borough filter** (multi-token entry).
+- **Postcode district filter** (can select multiple postcode districts (e.g. W1, EC1, SW1)).
+- **Borough filter** (can be set to one or multiple borough(s)).
 - **Region filter:** Central / NE / NW / SW / SE.
 - **Min/Max route count** thresholds.
 
@@ -190,14 +184,14 @@ Built-in analyses include:
 - Top bus stops by **route count**
 - Top bus stops by **combined frequency** (selected band)
 - Bus stop summary by **postcode district**
-- **Coverage gaps** by district (low average routes, with minimum sample size)
+- **Coverage gaps** by postcode district (show postcode districts with fewest average routes per stop)
 - **Routes-per-stop distribution**
-  
+
 Outputs can be exported as CSV.
 
 ## Data pipeline (Python)
-
-Processed datasets are committed under `data/processed/` and are regenerated by scripts in `scripts/`. A GitHub Action (`.github/workflows/refresh-data.yml`) refreshes the data on a schedule and can be run manually.
+Given the everchanging nature of the London bus network, RouteMapster periodically refreshes its data to ensure information presented is up-to-date.
+Processed datasets are committed under `data/processed/` and are regenerated by scripts in `scripts/`. A GitHub Action refreshes the data on a schedule, but can be run manually.
 
 The scheduled refresh currently runs weekly (Sunday 04:00 UTC).
 
