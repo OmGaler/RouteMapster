@@ -1425,18 +1425,50 @@ function renderOmniResults(items, totalCount) {
 function parseOmniQuery(query) {
 	const trimmed = String(query || "").trim();
 	if (!trimmed) {
-		return { type: null, tokens: [] };
+		return { type: null, tokens: [], matchMode: "all" };
 	}
-	const match = trimmed.match(/^(route|station|stop|garage|operator|postcode|district)\s*:\s*(.*)$/i);
+	const tokenizeOmniTerms = (value) => tokenizeAdvancedFilterQuery(value)
+		.flatMap((token) => splitAdvancedFilterValues(token))
+		.map((token) => token.toLowerCase())
+		.filter(Boolean);
+	const resolveScopedType = (rawKey) => {
+		const key = String(rawKey || "").trim().toLowerCase();
+		if (!key) {
+			return null;
+		}
+		if (key === "district") {
+			return "postcode";
+		}
+		if (["route", "station", "stop", "garage", "operator", "postcode"].includes(key)) {
+			return key;
+		}
+		const keyInfo = normalizeAdvancedFilterKey(key);
+		if (!keyInfo) {
+			return null;
+		}
+		if (keyInfo.key === "route_ids") {
+			return "route";
+		}
+		if (keyInfo.key === "operators") {
+			return "operator";
+		}
+		if (keyInfo.key === "garages") {
+			return "garage";
+		}
+		return null;
+	};
+	const match = trimmed.match(/^([^:\s]+)\s*:\s*(.*)$/i);
 	if (match) {
-		const rawType = match[1].toLowerCase();
-		const type = rawType === "district" ? "postcode" : rawType;
-		const rest = match[2] || "";
-		const tokens = rest.toLowerCase().split(/\s+/).filter(Boolean);
-		return { type, tokens };
+		const type = resolveScopedType(match[1]);
+		if (type) {
+			const rest = match[2] || "";
+			const tokens = tokenizeOmniTerms(rest);
+			const isMultiRouteScope = type === "route" && tokens.length > 1;
+			return { type, tokens, matchMode: isMultiRouteScope ? "any" : "all" };
+		}
 	}
-	const tokens = trimmed.toLowerCase().split(/\s+/).filter(Boolean);
-	return { type: null, tokens };
+	const tokens = tokenizeOmniTerms(trimmed);
+	return { type: null, tokens, matchMode: "all" };
 }
 
 const ADVANCED_FILTER_FORCE_PREFIX = /^(filters?|advanced|adv)\s*:\s*(.*)$/i;
@@ -1466,6 +1498,14 @@ function tokenizeAdvancedFilterQuery(query) {
 	for (let i = 0; i < text.length; i += 1) {
 		const char = text[i];
 		if (quote) {
+			if (char === "\\" && i + 1 < text.length) {
+				const next = text[i + 1];
+				if (next === quote || next === "\\") {
+					current += next;
+					i += 1;
+					continue;
+				}
+			}
 			if (char === quote) {
 				quote = null;
 			} else {
@@ -1473,9 +1513,17 @@ function tokenizeAdvancedFilterQuery(query) {
 			}
 			continue;
 		}
-		if (char === "\"" || char === "'") {
+		if (char === "\"") {
 			quote = char;
 			continue;
+		}
+		if (char === "'") {
+			const prev = i > 0 ? text[i - 1] : "";
+			const isDelimiter = !prev || /\s|[:,=|]/.test(prev);
+			if (isDelimiter) {
+				quote = char;
+				continue;
+			}
 		}
 		if (/\s/.test(char)) {
 			if (current) {
@@ -1501,6 +1549,10 @@ function normalizeAdvancedFilterKey(rawKey) {
 	const map = {
 		route: { key: "route_ids", group: "route" },
 		routes: { key: "route_ids", group: "route" },
+		routeno: { key: "route_ids", group: "route" },
+		route_no: { key: "route_ids", group: "route" },
+		routenumber: { key: "route_ids", group: "route" },
+		route_number: { key: "route_ids", group: "route" },
 		routeid: { key: "route_ids", group: null },
 		routeids: { key: "route_ids", group: null },
 		id: { key: "route_ids", group: null },
@@ -1530,7 +1582,7 @@ function normalizeAdvancedFilterKey(rawKey) {
 		spatial: { key: "extreme", group: null },
 		extreme: { key: "extreme", group: null },
 		extremity: { key: "extreme", group: null },
-		overnight: { key: "flags_has_overnight", group: null },
+		overnight: { key: "overnight", group: null },
 		hasovernight: { key: "flags_has_overnight", group: null },
 		freq: { key: "freq", group: null },
 		frequency: { key: "freq", group: null },
@@ -1983,6 +2035,20 @@ function parseAdvancedFilterQuery(query) {
 				}
 				break;
 			}
+			case "overnight": {
+				const range = parseAdvancedRange(value);
+				if (range) {
+					freq.overnight = range;
+					applied = true;
+					break;
+				}
+				const boolValue = parseAdvancedBoolean(value);
+				if (boolValue !== null) {
+					flags.has_overnight = boolValue;
+					applied = true;
+				}
+				break;
+			}
 			case "flags_has_overnight": {
 				const boolValue = parseAdvancedBoolean(value);
 				if (boolValue !== null) {
@@ -2119,6 +2185,7 @@ function filterOmniSearchResults(query) {
 	}
 	const parsed = parseOmniQuery(query);
 	const tokens = parsed.tokens;
+	const matchMode = parsed.matchMode === "any" ? "any" : "all";
 	const rawLower = tokens.join(" ");
 	if (tokens.length === 0) {
 		omniSearchState.filteredItems = [];
@@ -2131,6 +2198,9 @@ function filterOmniSearchResults(query) {
 		.filter((item) => {
 			if (parsed.type && item.type !== parsed.type) {
 				return false;
+			}
+			if (matchMode === "any") {
+				return tokens.some((token) => item.searchText?.includes(token));
 			}
 			return tokens.every((token) => item.searchText?.includes(token));
 		})
@@ -2146,8 +2216,31 @@ function filterOmniSearchResults(query) {
 		.sort((a, b) => b.score - a.score || String(a.item.title).localeCompare(String(b.item.title)))
 		.map((entry) => entry.item);
 
-	const totalCount = matches.length;
-	const limited = matches.slice(0, 12);
+	let results = matches;
+	if (parsed.type === "route" && matchMode === "any" && tokens.length > 1) {
+		const routeIds = Array.from(
+			new Set(
+				matches
+					.map((item) => String(item?.routeId || "").trim().toUpperCase())
+					.filter(Boolean)
+			)
+		);
+		if (routeIds.length > 1) {
+			const bulkItem = {
+				id: `route-bulk:${routeIds.join(",")}`,
+				type: "route_bulk",
+				typeLabel: "Route set",
+				title: `Show ${routeIds.length} matched routes`,
+				subtitle: routeIds.join(", "),
+				searchText: "",
+				routeIds
+			};
+			results = [bulkItem, ...matches];
+		}
+	}
+
+	const totalCount = results.length;
+	const limited = results.slice(0, 12);
 	omniSearchState.filteredItems = limited;
 	omniSearchState.selectedIndex = 0;
 	if (limited.length === 0) {
@@ -2478,6 +2571,10 @@ function handleOmniSelection(item) {
 		return;
 	}
 	closeOmniSearch();
+	if (item.type === "route_bulk") {
+		showOmniRoutes(item.routeIds, "Explorer").catch(() => {});
+		return;
+	}
 	if (item.type === "route") {
 		applyOmniRouteSelection(item).catch(() => {});
 		return;
