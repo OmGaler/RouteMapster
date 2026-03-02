@@ -1,8 +1,10 @@
-﻿# RouteMapster
+# RouteMapster
 
 ![RouteMapster logo](assets/routemapster.png)
 
-RouteMapster is an interactive, map-based explorer for the London bus network. RouteMapster makes it easy to see how routes, stops, stations, garages, operators, and service patterns all fit together within the network — with quick search, flexible filters, and exportable analyses. Independent, open-source, non-commercial and not in any way affiliated with Transport for London (TfL).
+RouteMapster is an interactive, map-based explorer for the London bus network, built to make it easy to visualise how routes, stops, stations, garages, operators, and service patterns all fit together within the network.
+It is designed for analysis, not live operations: use Explorer quick search, layered map views, flexible advanced filters, and built-in, exportable analyses to investigate the network.
+RouteMapster is independent, open-source, and not in any way affiliated with Transport for London (TfL).
 
 ## What you can explore
 
@@ -38,11 +40,36 @@ RouteMapster is an interactive, map-based explorer for the London bus network. R
 - `C` clear all (layers + highlighted routes)
 - `?` open Keyboard Shortcuts list
 - `Esc` close Explorer/details panel/advanced filter results
+
 ## Modules
+
+### Garages module
+
+Explore London bus garages and their allocations.
+
+- View garage locations on the map, optionally scaled by the proportion of the bus network's total allocation.
+- Click a garage to see its code, operator, and allocated routes.
+- Use together with route filters to inspect operator/garage coverage patterns.
+
+### Bus stations module
+
+Inspect bus stations across the network.
+
+- Toggle station markers on the map, optionally scaled by number of routes.
+- Click a station to view routes serving that station.
+
+### Frequencies module
+
+Visualise service levels along shared trunks using combined route frequencies.
+
+- Show a frequency overlay for shared corridors.
+- Compare service levels by time band (Peak AM, Peak PM, Off-peak, Weekend, Overnight).
+- Identify high combined frequency trunks versus lower-frequency coverage areas.
+- Treat values as analytical indicators rather than real-time or timetable guarantees.
 
 ### Advanced route filters
 
-RouteMapster provides the ability to construct custom queries that present the user with a list of all routes that satisfy given conditions." Build a compound query, then click **Apply filters**.
+RouteMapster provides the ability to construct custom queries that present the user with a list of all routes that satisfy given conditions. Build a compound query, then click **Apply filters**.
 
 Core filters
 
@@ -69,7 +96,6 @@ Results & export
 
 - Filtered routes show in the right panel; "Show all on map" highlights them; "Export CSV" downloads the table in a spreadsheet-compatible format.
 
----
 
 #### Advanced filters Syntax
 
@@ -154,12 +180,14 @@ Data is derived from TfL Open Data and the TfL Unified API and public garage ref
 - `src/analyses.js`, `src/stop_analyses.js` — analytics modules  
 - `scripts/` — data fetch and processing pipeline (routes, stops, frequencies, garages)  
 - `data/processed/` — processed geodatasets
-### Disclaimers 
-RouteMapster is not:
-- An official TfL product.
-- A journey planner, real-time tracker, or replacement for TfL live tools.
 
----
+### Disclaimers
+
+- RouteMapster is an independent project and is not affiliated with or endorsed by Transport for London (TfL).
+- RouteMapster is not a journey planner, real-time arrivals tracker, or replacement for official TfL services.
+- Data is sourced from public datasets/APIs and may be incomplete, outdated, or inaccurate.
+- This project is provided "as is", without warranties of any kind, and use is at your own risk.
+- For live travel decisions, service updates, and disruption information, use official TfL tools.
 
 ## Contact / Support
 
@@ -168,8 +196,12 @@ Please also submit any bug reports or feature requests by opening a GitHub issue
 
 For anything else, email route-mapster [a] omergaler [dot] com
 
-## License & attribution
+## Licence & attribution
 
-RouteMapster is an independent project and is not affiliated with or endorsed by Transport for London.  
-Data uses TfL Open Data / Unified API and other public sources under their respective terms (commonly the Open Government Licence v3.0).  
-Code licensing: see `LICENSE.md` (RouteMapster Non-Commercial Software License, modified MPL 2.0; commercial use requires explicit permission).
+RouteMapster is an independent project and is not affiliated with or endorsed by Transport for London.
+The data in this project uses TfL Open Data / Unified API and other public sources under their respective terms.
+Bus route geometry, stops and frequencies are powered by TfL Open Data and the TfL API, and are made available under the [Open Government Licence v2.0](https://www.nationalarchives.gov.uk/doc/open-government-licence/version/2/).
+This also contains OS data © Crown copyright and database rights 2016' and Geomni UK Map data © and database rights [2019]
+Garage data is sourced from londonbusroutes.net.
+
+The data has been modified for this project, including but not limited to, conversion to GeoJSON, geometry simplification, and attribute slimming. Raw source files are not versioned in this repository.
