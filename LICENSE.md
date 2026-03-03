@@ -53,11 +53,7 @@ If you do not comply with any term of this licence, your rights under this licen
 8.2 If any provision of this licence is held invalid or unenforceable, the remaining provisions will remain in full force and effect.  
 8.3 Nothing in this licence is intended to restrict or prevent use of the Licensed Software in ways that are permitted under applicable law.
 
-## 9. Alternate Licensing Rights
-
-The Licensor reserves the right to offer the Licensed Software, or any derivative works thereof, under a separate proprietary licence at its sole discretion. This alternate licensing does not affect the rights granted under this licence for recipients who receive the Licensed Software under its terms.
-
-## 10. Logo & Branding
+## 9. Logo & Branding
 
 The RouteMapster name and logo are © @OmGaler.
 They are not licensed for reuse, modification, or redistribution without permission.
