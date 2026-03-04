@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>RouteMapster</title>
+  <link rel="icon" type="image/png" href="assets/routemapster.png" />
 
   <!-- Leaflet CSS (required) -->
   <link
@@ -111,6 +112,10 @@
     #app.has-details #rightpanel,
     #app.has-advanced-results #rightpanel {
       display: flex;
+    }
+
+    #app.has-advanced-results:not(.has-details) #rightpanel .info-panel:not(#advancedResultsPanel) {
+      display: none;
     }
 
     .brand {
@@ -2093,7 +2098,7 @@
             <span>Colour routes by type</span>
             <input type="checkbox" id="colourRoutesByType" checked />
           </label>
-          <div class="module-note">When off, routes render in red.</div>
+          <div class="module-note">When off, all route types render in red.</div>
         </div>
 
         <div id="controls">
@@ -2103,9 +2108,9 @@
           </summary>
           <div class="module-body">
             <div class="module-section" id="networkFilters">
-              <div class="section-title">Route search</div>
+              <div class="section-title">Filter routes</div>
               <div class="field">
-                <label for="routeFilterEntry">Filter routes</label>
+                <label for="routeFilterEntry">Routes search</label>
                 <div class="tag-input" id="routeFilterInput">
                   <div class="tag-list" id="routeFilterTags"></div>
                   <input id="routeFilterEntry" type="search" placeholder="Type a route and hit space or enter" autocomplete="off" />
@@ -2120,7 +2125,7 @@
             </div>
 
             <div class="module-section">
-              <div class="section-title">Network filters</div>
+              <div class="section-title">Filter routes by type</div>
               <label class="toggle">
                 <span>Show all routes</span>
                 <input type="checkbox" id="showAllRoutes" checked />
@@ -2148,7 +2153,7 @@
             </div>
 
             <div class="module-section">
-              <div class="section-title">Deck type</div>
+              <div class="section-title">Vehicle type</div>
               <label class="toggle">
                 <span>Display all</span>
                 <input type="radio" id="showAllDeckers" name="deckFilter" checked />
@@ -2182,7 +2187,7 @@
             <div class="module-section">
               <div class="section-title">Stop filters</div>
               <div class="field">
-                <label for="busStopDistrictEntry">Filter by district</label>
+                <label for="busStopDistrictEntry">Filter by postcode district</label>
                 <div class="tag-input" id="busStopDistrictInput">
                   <div class="tag-list" id="busStopDistrictTags"></div>
                   <input id="busStopDistrictEntry" type="search" placeholder="e.g. N1, SW1" autocomplete="off" />
@@ -2195,7 +2200,7 @@
                   <input id="busStopBoroughEntry" type="search" placeholder="e.g. Camden" autocomplete="off" list="busStopBoroughOptions" />
                 </div>
                 <datalist id="busStopBoroughOptions"></datalist>
-                <div class="module-note">Use commas to add multiple boroughs.</div>
+                <div class="module-note">Use commas to add multiple boroughs or districts.</div>
               </div>
               <div class="field">
                 <label for="busStopRouteCount">Filter by route count</label>
@@ -2224,21 +2229,21 @@
                 <input type="checkbox" id="showBusStations" />
               </label>
               <label class="toggle">
-                <span>Scale station dots by route count</span>
+                <span>Scale station markers by route count</span>
                 <input type="checkbox" id="scaleBusStationMarkers" />
               </label>
-              <div class="module-note">Stations are clustered from stops labelled "bus station". Click one to see its routes.</div>
+              <div class="module-note">Stations are clustered from relevant stops. Click one to see its routes.</div>
             </div>
 
             <div class="module-section">
-              <div class="section-title">Find a station</div>
+              <!-- <div class="section-title">Find a station</div> -->
               <div class="field">
-                <label for="busStationSelect">Select station</label>
+                <label for="busStationSelect">Select bus station</label>
                 <select id="busStationSelect" class="select-field">
-                  <option value="">Choose a station</option>
+                  <option value="">Choose a bus station</option>
                 </select>
               </div>
-            </div>
+            <!-- </div> -->
           </div>
         </details>
 
@@ -2264,13 +2269,13 @@
             </div>
 
             <div class="module-section">
-              <div class="section-title">Find a garage</div>
+              <!-- <div class="section-title">Find a garage</div> -->
               <div class="field">
                 <label for="garageSelect">Select garage</label>
                 <select id="garageSelect" class="select-field">
                   <option value="">Choose a garage</option>
                 </select>
-              </div>
+              <!-- </div> -->
             </div>
 
             <div class="module-section">
@@ -2296,12 +2301,12 @@
             <span class="module-title">Frequencies</span>
           </summary>
           <div class="module-body">
-            <div class="module-note">Thickness reflects combined buses per hour on shared trunks.</div>
+            <div class="module-note">Thickness reflects combined buses per hour along shared trunks.</div>
 
             <div class="module-section">
-              <div class="section-title">Time band</div>
+              <!-- <div class="section-title">Time band</div> -->
               <div class="field">
-                <label for="frequencyBand">Select band</label>
+                <label for="frequencyBand">Select time band</label>
                 <select id="frequencyBand" class="select-field">
                   <option value="peak_am">Peak AM</option>
                   <option value="peak_pm">Peak PM</option>
@@ -2309,11 +2314,11 @@
                   <option value="weekend">Weekend</option>
                   <option value="overnight">Overnight</option>
                 </select>
-              </div>
+              <!-- </div> -->
             </div>
 
             <div class="module-section">
-              <div class="section-title">Trunk overlay</div>
+              <div class="section-title">Frequency overlay</div>
               <label class="toggle">
                 <span>Show frequency trunks</span>
                 <input type="checkbox" id="showFrequencyOverlay" />
@@ -2382,6 +2387,7 @@
 
             <details class="submodule" open>
               <summary><span class="section-title">Geography</span></summary>
+              <div class="module-note">Uses route geometry.</div>
               <div class="field">
                 <label for="advancedBoroughs">Boroughs</label>
                 <select id="advancedBoroughs" class="select-field" multiple size="5"></select>
@@ -2389,7 +2395,7 @@
                 <div id="advancedBoroughsNote" class="module-note"></div>
               </div>
               <div class="field">
-                <label for="advancedBoroughMode">Borough match</label>
+                <label for="advancedBoroughMode">Borough match mode</label>
                 <select id="advancedBoroughMode" class="select-field">
                   <option value="enter">Routes that enter</option>
                   <option value="within">Routes wholly within</option>
@@ -2405,7 +2411,7 @@
                   <option value="east">Most easterly</option>
                   <option value="west">Most westerly</option>
                 </select>
-                <div class="module-note">Uses route geometry. Loads on first apply.</div>
+                
               </div>
               <div id="advancedLengthWrap" class="field">
                 <label>Length (miles)</label>
@@ -2423,7 +2429,7 @@
                     </select>
                     <input id="advancedLengthRankCount" type="number" min="1" max="25" step="1" placeholder="Count (1-25)" />
                   </div>
-                  <div class="module-note">Filters to the N shortest/longest routes after other filters.</div>
+                  <div class="module-note">Filters to the N shortest/longest routes combined with other filters.</div>
                 </div>
               </div>
             </details>
@@ -2468,7 +2474,7 @@
             <span class="module-title">Advanced route analyses</span>
           </summary>
           <div class="module-body">
-            <div class="module-note">Diagnostics and summaries for route performance.</div>
+            <div class="module-note">Summaries of route aspects and details.</div>
             <div class="module-section">
               <div class="section-title">Analyse</div>
               <div class="field">
@@ -2478,7 +2484,7 @@
                   <option value="all">All routes</option>
                 </select>
               </div>
-              <div id="analysisScopeNote" class="module-note">Analyzing filtered subset.</div>
+              <div id="analysisScopeNote" class="module-note">Analysing filtered subset.</div>
             </div>
 
             <div class="module-section">
@@ -2587,27 +2593,19 @@
       </div>
       <div class="about-body">
         <div class="about-section">
-          <h3>What this is</h3>
-          <div>RouteMapster is a unified London bus route explorer, built to explore coverage, operators, and service patterns quickly without drowning in raw data.</div>
+          <h3>About</h3>
+          <div>RouteMapster is a unified London bus network explorer, built to explore coverage, operators, and service patterns quickly and intuitively.</div>
         </div>
 
         <div class="about-section">
           <h3>Data sources</h3>
           <ul class="about-list">
-            <li><a href="https://bus.data.tfl.gov.uk/bus-geometry/" target="_blank" rel="noopener">TfL Bus Open Data - route geometry</a></li>
-            <li><a href="https://api.tfl.gov.uk" target="_blank" rel="noopener">TfL Unified API - StopPoint + timetable data</a></li>
-            <li><a href="https://www.londonbusroutes.net/garages.htm" target="_blank" rel="noopener">LondonBusRoutes.net - garage allocations</a></li>
-            <li><a href="https://postcodes.io" target="_blank" rel="noopener">postcodes.io - postcode enrichment</a></li>
-            <li><a href="https://www.openstreetmap.org" target="_blank" rel="noopener">OpenStreetMap - basemap tiles</a></li>
+            <li><a href="https://bus.data.tfl.gov.uk/" target="_blank" rel="noopener">TfL Bus Open Data - route geometries</a></li>
+            <li><a href="https://api.tfl.gov.uk" target="_blank" rel="noopener">TfL Unified API - bus stops and timetable data</a></li>
+            <li><a href="http://www.londonbusroutes.net/garages.htm" target="_blank" rel="noopener">londonbusroutes.net - garage allocations</a></li>
+            <li><a href="https://postcodes.io" target="_blank" rel="noopener">postcodes.io - postcode data</a></li>
+            <li><a href="https://www.openstreetmap.org" target="_blank" rel="noopener">OpenStreetMap - map</a></li>
           </ul>
-        </div>
-
-        <div class="about-section">
-          <h3>Notes</h3>
-          <div>Not affiliated with TfL.</div>
-          <div>
-            <button id="openKeyboardShortcutsFromAbout" class="ghost-button tiny" type="button">Keyboard shortcuts (?)</button>
-          </div>
         </div>
 
         <div class="about-section">
@@ -2615,19 +2613,18 @@
           <div class="about-links">
             <a href="https://github.com/OmGaler/RouteMapster" target="_blank" rel="noopener">GitHub</a>
           </div>
+          <div>
+            <button id="openKeyboardShortcutsFromAbout" class="ghost-button tiny" type="button">Keyboard shortcuts (?)</button>
+          </div>
         </div>
 
         <div class="about-section">
-          <h3>Last updated</h3>
-          <div class="about-meta">
-            <div><strong>Routes geometry snapshot:</strong> <span id="aboutRoutesGeometryDate">-</span></div>
-            <div><strong>Garages:</strong> <span id="aboutUpdatedGarages">-</span></div>
-            <div><strong>Stops:</strong> <span id="aboutUpdatedStops">-</span></div>
-            <div><strong>Bus stations:</strong> <span id="aboutUpdatedStations">-</span></div>
-            <div><strong>Frequencies:</strong> <span id="aboutUpdatedFrequencies">-</span></div>
-            <div><strong>Route summary:</strong> <span id="aboutUpdatedRouteSummary">-</span></div>
-          </div>
+          <h3>Notes</h3>
+          <div>Not affiliated with TfL.</div>
+          <div>Data periodically refreshes but may be out-of-date or incorrect.</div>
+          <div>Use this as an exploration and reference tool, not as a live route planner or a guarantee of operational service.</div>
         </div>
+
       </div>
     </div>
   </div>
@@ -2642,7 +2639,7 @@
         <div class="about-section">
           <h3>Quick actions</h3>
           <div class="shortcuts-list">
-            <div class="shortcut-row"><div class="shortcut-keys"><span class="kbd-key">?</span></div><div class="shortcut-desc">Show keyboard shortcut</div></div>
+            <div class="shortcut-row"><div class="shortcut-keys"><span class="kbd-key">?</span></div><div class="shortcut-desc">Show keyboard shortcuts</div></div>
             <div class="shortcut-row"><div class="shortcut-keys"><span class="kbd-key">Ctrl</span><span class="kbd-key">F</span></div><div class="shortcut-desc">Open Explorer</div></div>
             <div class="shortcut-row"><div class="shortcut-keys"><span class="kbd-key">G</span></div><div class="shortcut-desc">Toggle garages</div></div>
             <div class="shortcut-row"><div class="shortcut-keys"><span class="kbd-key">B</span></div><div class="shortcut-desc">Toggle bus stops</div></div>

@@ -930,7 +930,7 @@
     if (!noteEl) {
       return;
     }
-    noteEl.textContent = `Analyzing ${count} bus stops.`;
+    noteEl.textContent = `Analysing ${count} bus stops.`;
   };
 
   const syncMapControlState = (els) => {
@@ -1133,7 +1133,7 @@
       <div class="module-note" id="stopAnalysisStatus">Loading bus stop datasets...</div>
       <div class="module-section">
         <div class="section-title">Scope</div>
-        <div id="stopScopeNote" class="module-note">Analyzing 0 bus stops.</div>
+        <div id="stopScopeNote" class="module-note">Analysing 0 bus stops.</div>
       </div>
       <div class="module-section">
         <div class="section-title">Filters</div>
@@ -1155,6 +1155,9 @@
         <div class="field">
           <label for="stopRegionSelect">Region</label>
           <select id="stopRegionSelect" class="select-field"></select>
+        </div>
+        <div class="button-row">
+          <button id="clearStopAnalysisFilters" class="ghost-button compact" type="button">Clear filters</button>
         </div>
       </div>
       <div class="module-section">
@@ -1216,6 +1219,7 @@
       districtOptions: target.querySelector("#stopDistrictOptions"),
       boroughSelect: target.querySelector("#stopBoroughSelect"),
       regionSelect: target.querySelector("#stopRegionSelect"),
+      clearFiltersButton: target.querySelector("#clearStopAnalysisFilters"),
       frequencyBand: target.querySelector("#stopFrequencyBand"),
       frequencyNote: target.querySelector("#stopFrequencyNote"),
       summary: target.querySelector("#stopAnalysisSummary"),
@@ -1253,6 +1257,23 @@
           </span>`;
         })
         .join("");
+    };
+
+    const clearFilters = () => {
+      state.districtTokens = [];
+      state.boroughToken = "";
+      state.regionToken = "";
+      if (els.districtEntry) {
+        els.districtEntry.value = "";
+      }
+      if (els.boroughSelect) {
+        els.boroughSelect.value = "";
+      }
+      if (els.regionSelect) {
+        els.regionSelect.value = "";
+      }
+      syncDistrictTags();
+      applyFiltersAndRefresh(els);
     };
 
     const addDistrictTokensFromValue = (value) => {
@@ -1339,6 +1360,10 @@
         state.regionToken = parseRegionToken(els.regionSelect.value);
         scheduleRefresh(els);
       });
+    }
+
+    if (els.clearFiltersButton) {
+      els.clearFiltersButton.addEventListener("click", clearFilters);
     }
 
     FREQUENCY_BANDS.forEach((band) => {
@@ -1507,4 +1532,3 @@
     initStopAnalyses
   };
 })();
-

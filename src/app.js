@@ -7977,17 +7977,77 @@ function setupBusStopFilterInput() {
 	const addBoroughTokensFromValue = (value) => {
 		const newTokens = normaliseBoroughTokens(value);
 		if (newTokens.length === 0) {
-			return;
+			return { added: 0 };
 		}
 		const tokenSet = new Set(boroughTokens);
+		let added = 0;
 		newTokens.forEach((token) => {
 			if (!tokenSet.has(token)) {
 				boroughTokens.push(token);
 				tokenSet.add(token);
+				added += 1;
 			}
 		});
-		syncTags();
-		applyAndRefresh();
+		if (added > 0) {
+			syncTags();
+			applyAndRefresh();
+		}
+		return { added };
+	};
+
+	const getKnownBoroughTokenSet = () => {
+		const tokenSet = new Set();
+		const lookup = appState.busStopBoroughLookup;
+		if (lookup instanceof Map && lookup.size > 0) {
+			lookup.forEach((_, token) => {
+				const normalised = normaliseBoroughToken(token);
+				if (normalised) {
+					tokenSet.add(normalised);
+				}
+			});
+		}
+		if (tokenSet.size === 0 && Array.isArray(appState.boroughIndex) && appState.boroughIndex.length > 0) {
+			appState.boroughIndex.forEach((entry) => {
+				const token = normaliseBoroughToken(entry?.name);
+				if (token) {
+					tokenSet.add(token);
+				}
+			});
+		}
+		return tokenSet;
+	};
+
+	const parseBoroughInputTokens = (value) => {
+		if (!value) {
+			return [];
+		}
+		return String(value)
+			.split(/[;,]+/)
+			.map((token) => String(token || "").trim())
+			.filter(Boolean);
+	};
+
+	const validateBoroughInputTokens = async (value) => {
+		await ensureBoroughOptionsLoaded().catch(() => {});
+		const rawTokens = parseBoroughInputTokens(value);
+		if (rawTokens.length === 0) {
+			return { valid: [], invalid: [] };
+		}
+		const known = getKnownBoroughTokenSet();
+		const validSet = new Set();
+		const invalidSet = new Set();
+		rawTokens.forEach((raw) => {
+			const token = normaliseBoroughToken(raw);
+			if (!token) {
+				return;
+			}
+			if (known.size > 0 && !known.has(token)) {
+				invalidSet.add(raw);
+				return;
+			}
+			validSet.add(token);
+		});
+		return { valid: Array.from(validSet), invalid: Array.from(invalidSet) };
 	};
 
 	const commitDistrictInput = () => {
@@ -7999,21 +8059,34 @@ function setupBusStopFilterInput() {
 		districtInput.value = "";
 	};
 
-	const commitBoroughInput = () => {
+	const commitBoroughInput = async () => {
 		if (!boroughInput) {
-			return;
+			return true;
 		}
 		const value = boroughInput.value.trim();
 		if (!value) {
-			return;
+			boroughInput.setCustomValidity("");
+			return true;
 		}
-		addBoroughTokensFromValue(value);
+		const parsed = await validateBoroughInputTokens(value);
+		if (parsed.invalid.length > 0) {
+			const label = parsed.invalid.join(", ");
+			boroughInput.setCustomValidity(`Unknown borough: ${label}. Choose from the borough list.`);
+			boroughInput.reportValidity();
+			return false;
+		}
+		boroughInput.setCustomValidity("");
+		addBoroughTokensFromValue(parsed.valid);
 		boroughInput.value = "";
+		return true;
 	};
 
-	applyButton.addEventListener("click", () => {
+	applyButton.addEventListener("click", async () => {
 		commitDistrictInput();
-		commitBoroughInput();
+		const boroughOk = await commitBoroughInput();
+		if (!boroughOk) {
+			return;
+		}
 		if (routeCountInput) {
 			routeCount = normaliseStopRouteCountValue(routeCountInput.value);
 		}
@@ -8075,7 +8148,7 @@ function setupBusStopFilterInput() {
 		boroughInput.addEventListener("keydown", (event) => {
 			if (event.key === "Enter") {
 				event.preventDefault();
-				commitBoroughInput();
+				commitBoroughInput().catch(() => {});
 				return;
 			}
 			if (event.key === "Backspace" && boroughInput.value.trim() === "" && boroughTokens.length > 0) {
@@ -8087,9 +8160,10 @@ function setupBusStopFilterInput() {
 		});
 
 		boroughInput.addEventListener("blur", () => {
-			commitBoroughInput();
+			commitBoroughInput().catch(() => {});
 		});
 		boroughInput.addEventListener("focus", () => {
+			boroughInput.setCustomValidity("");
 			ensureBoroughOptionsLoaded().catch(() => {});
 		});
 	}

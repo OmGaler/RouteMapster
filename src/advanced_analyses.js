@@ -669,8 +669,8 @@
       if (els.scopeNote) {
         const count = base.length || 0;
         els.scopeNote.textContent = scope === "all"
-          ? `Analyzing all routes (${count}).`
-          : `Analyzing filtered subset (${count}).`;
+          ? `Analysing all routes (${count}).`
+          : `Analysing filtered subset (${count}).`;
       }
     };
 
