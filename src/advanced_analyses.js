@@ -3,11 +3,105 @@
   const escapeHtml = utils.escapeHtml || ((value) => String(value || ""));
   const downloadCsv = utils.downloadCsv || (() => {});
 
-  const renderTable = (result) => {
+  const normaliseOverlayLabel = (value) => String(value || "").trim().toLowerCase();
+
+  const isSafeCssColour = (value) => {
+    const token = String(value || "").trim();
+    return /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(token)
+      || /^rgb\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*\)$/i.test(token)
+      || /^hsl\(\s*\d+(?:\.\d+)?\s*,\s*\d+(?:\.\d+)?%\s*,\s*\d+(?:\.\d+)?%\s*\)$/i.test(token);
+  };
+
+  const resolveOperatorBrandColour = (label) => {
+    const token = normaliseOverlayLabel(label).replace(/[^\w\s-]/g, " ");
+    if (!token) {
+      return "";
+    }
+    if (token.includes("metroline")) {
+      return "#e53935";
+    }
+    if (token.includes("arriva")) {
+      return "#14b8c4";
+    }
+    if (token.includes("go-ahead") || token.includes("go ahead")) {
+      return "#facc15";
+    }
+    if (token.includes("first")) {
+      return "#8b5cf6";
+    }
+    if (token.includes("stagecoach")) {
+      return "#f59e0b";
+    }
+    if (token.includes("transport uk")) {
+      return "#6b7280";
+    }
+    if (token.includes("uno")) {
+      return "#ec4899";
+    }
+    return "";
+  };
+
+  const buildAnalysisGroupColour = (index = 0) => {
+    const safeIndex = Number.isFinite(index) ? Math.max(0, Math.floor(index)) : 0;
+    const hue = (safeIndex * 137.508) % 360;
+    const saturationCycle = [84, 74, 92, 78];
+    const lightnessCycle = [42, 50, 38, 56];
+    const saturation = saturationCycle[safeIndex % saturationCycle.length];
+    const lightness = lightnessCycle[Math.floor(safeIndex / saturationCycle.length) % lightnessCycle.length];
+    return `hsl(${hue.toFixed(1)}, ${saturation}%, ${lightness}%)`;
+  };
+
+  const normaliseOverlayGroups = (groups, overlayKey = "") => {
+    const key = normaliseOverlayLabel(overlayKey);
+    return (Array.isArray(groups) ? groups : [])
+      .map((group, index) => {
+        const label = String(group?.label || group?.name || "").trim();
+        const routes = Array.isArray(group?.routes)
+          ? Array.from(new Set(group.routes.map((routeId) => String(routeId || "").trim().toUpperCase()).filter(Boolean)))
+          : [];
+        const providedColor = String(group?.color || "").trim();
+        const brandColor = key === "operator" ? resolveOperatorBrandColour(label) : "";
+        const color = isSafeCssColour(providedColor)
+          ? providedColor
+          : isSafeCssColour(brandColor)
+            ? brandColor
+            : buildAnalysisGroupColour(index);
+        return {
+          ...group,
+          label,
+          routes,
+          color
+        };
+      })
+      .filter((group) => group.label && group.routes.length > 0);
+  };
+
+  const buildOverlayLegendByLabel = (result) => {
+    const overlay = result?.mapOverlay;
+    if (!overlay || overlay.type !== "grouped-routes") {
+      return null;
+    }
+    const overlayKey = String(overlay?.key || "").trim();
+    const groups = normaliseOverlayGroups(overlay.groups, overlayKey);
+    const coloursByLabel = new Map();
+    groups.forEach((group) => {
+      const label = String(group?.label || "").trim();
+      if (!label) {
+        return;
+      }
+      const color = String(group?.color || "").trim();
+      coloursByLabel.set(normaliseOverlayLabel(label), color);
+    });
+    return coloursByLabel;
+  };
+
+  const renderTable = (result, analysisId = "") => {
     const columns = result.columns || [];
     const rows = result.rows || [];
     const firstColumn = String(columns[0] || "").trim().toLowerCase();
     const secondColumn = String(columns[1] || "").trim().toLowerCase();
+    const showOverlayDots = analysisId === "routes-by-operator";
+    const overlayLegend = showOverlayDots ? buildOverlayLegendByLabel(result) : null;
     const tableClasses = ["analysis-table"];
     if (firstColumn === "rank") {
       tableClasses.push("analysis-table--ranked");
@@ -18,7 +112,17 @@
     const tableClass = tableClasses.join(" ");
     const header = columns.map((col) => `<th>${escapeHtml(col)}</th>`).join("");
     const body = rows.map((row) => {
-      const cells = row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join("");
+      const rowCells = Array.isArray(row) ? row : [row];
+      const cells = rowCells.map((cell, cellIndex) => {
+        const cellText = String(cell ?? "");
+        if (cellIndex === 0 && overlayLegend && overlayLegend.size > 0) {
+          const color = overlayLegend.get(normaliseOverlayLabel(cellText));
+          if (color) {
+            return `<td><span class="analysis-group-cell"><span class="analysis-group-dot" style="--analysis-group-dot:${escapeHtml(color)}" aria-hidden="true"></span><span>${escapeHtml(cellText)}</span></span></td>`;
+          }
+        }
+        return `<td>${escapeHtml(cellText)}</td>`;
+      }).join("");
       return `<tr>${cells}</tr>`;
     }).join("");
     return `
@@ -473,7 +577,8 @@
     filteredRows: [],
     resultsByKey: new Map(),
     analysisById: new Map(),
-    currentScope: "filtered"
+    currentScope: "filtered",
+    hasRun: false
   };
 
   const resolveBaseRows = (scope) => {
@@ -590,7 +695,7 @@
         : "";
       let content = '<div class="info-empty">Chart rendering not available yet.</div>';
       if (entry.result?.type === "table") {
-        content = renderTable(entry.result);
+        content = renderTable(entry.result, entry.id);
       } else if (entry.result?.type === "note") {
         content = `<div class="module-note">${escapeHtml(entry.result.message || "No result.")}</div>`;
       } else if (entry.result?.type === "route-pills") {
@@ -609,6 +714,54 @@
     container.innerHTML = blocks;
     attachTableOverflowCues(container);
     if (api && typeof api.showAnalysisRoutes === "function") {
+      const groupedResult = results.find((entry) => entry?.result?.mapOverlay?.type === "grouped-routes");
+      if (groupedResult?.result?.mapOverlay) {
+        const grouped = groupedResult.result.mapOverlay;
+        const overlayKey = normaliseOverlayLabel(grouped.key || "group");
+        const groups = normaliseOverlayGroups(grouped.groups, overlayKey);
+        const routeIds = new Set();
+        groups.forEach((group) => {
+          const routes = Array.isArray(group?.routes) ? group.routes : [];
+          routes.forEach((routeId) => {
+            if (!routeId) {
+              return;
+            }
+            routeIds.add(String(routeId).trim().toUpperCase());
+          });
+        });
+        if (routeIds.size > 0) {
+          if (overlayKey === "garage") {
+            api.showAnalysisRoutes(Array.from(routeIds));
+          } else {
+            api.showAnalysisRoutes(Array.from(routeIds), {
+              groups,
+              groupLabel: grouped.key || "group"
+            });
+          }
+        } else if (typeof api.clearAnalysisRoutes === "function") {
+          api.clearAnalysisRoutes();
+        }
+        return;
+      }
+
+      const routeListResult = results.find((entry) => entry?.result?.mapOverlay?.type === "route-list");
+      if (routeListResult?.result?.mapOverlay) {
+        const overlay = routeListResult.result.mapOverlay;
+        const routeIds = Array.isArray(overlay.routeIds)
+          ? Array.from(new Set(
+            overlay.routeIds
+              .map((routeId) => String(routeId || "").trim().toUpperCase())
+              .filter(Boolean)
+          ))
+          : [];
+        if (routeIds.length > 0) {
+          api.showAnalysisRoutes(routeIds);
+        } else if (typeof api.clearAnalysisRoutes === "function") {
+          api.clearAnalysisRoutes();
+        }
+        return;
+      }
+
       const routeIds = new Set();
       results.forEach((entry) => {
         if (entry?.result?.type !== "route-pills") {
@@ -644,6 +797,7 @@
       scopeSelect: container.querySelector("#analysisScope"),
       analysisSelect: container.querySelector("#analysisSelect"),
       runButton: container.querySelector("#runAnalysis"),
+      clearButton: container.querySelector("#clearAnalysisHighlights"),
       output: container.querySelector("#analysisOutput"),
       scopeNote: container.querySelector("#analysisScopeNote")
     };
@@ -658,6 +812,21 @@
         .map((analysis) => `<option value="${escapeHtml(analysis.id)}">${escapeHtml(analysis.label)}</option>`)
         .join("");
     }
+    if (els.output && !String(els.output.innerHTML || "").trim()) {
+      els.output.innerHTML = '<div class="info-empty">No analysis results yet.</div>';
+    }
+
+    const updateScopeNote = () => {
+      if (!els.scopeNote) {
+        return;
+      }
+      const scope = els.scopeSelect?.value || "filtered";
+      const base = resolveBaseRows(scope);
+      const count = base.length || 0;
+      els.scopeNote.textContent = scope === "all"
+        ? `Ready to analyse all routes (${count}).`
+        : `Ready to analyse filtered subset (${count}).`;
+    };
 
     const runSelectedAnalysis = async () => {
       const scope = els.scopeSelect?.value || "filtered";
@@ -666,6 +835,7 @@
       await ensureSpatialForAnalyses(analysisId, base);
       const results = await runAnalyses(analysisId, base, null, { allRows: state.allRows });
       renderResults(els.output, results);
+      state.hasRun = true;
       if (els.scopeNote) {
         const count = base.length || 0;
         els.scopeNote.textContent = scope === "all"
@@ -674,16 +844,46 @@
       }
     };
 
+    const clearMapHighlights = () => {
+      const api = window.RouteMapsterAPI;
+      if (api && typeof api.clearAnalysisRoutes === "function") {
+        api.clearAnalysisRoutes();
+      }
+      if (api && typeof api.clearEndpointHighlight === "function") {
+        api.clearEndpointHighlight();
+      }
+      if (!els.output) {
+        return;
+      }
+      Array.from(els.output.querySelectorAll(".analysis-pill-row")).forEach((row) => {
+        row.classList.remove("is-active");
+        const details = row.querySelector(".analysis-pill-details");
+        if (details) {
+          details.hidden = true;
+        }
+      });
+    };
+
     if (els.runButton) {
       els.runButton.addEventListener("click", () => {
         runSelectedAnalysis().catch(() => {});
       });
     }
 
+    if (els.clearButton) {
+      els.clearButton.addEventListener("click", () => {
+        clearMapHighlights();
+      });
+    }
+
     if (els.scopeSelect) {
       els.scopeSelect.addEventListener("change", () => {
         state.currentScope = els.scopeSelect.value;
-        runSelectedAnalysis().catch(() => {});
+        if (state.hasRun) {
+          runSelectedAnalysis().catch(() => {});
+          return;
+        }
+        updateScopeNote();
       });
     }
 
@@ -779,16 +979,17 @@
     document.addEventListener("routeFiltersUpdated", (event) => {
       const detail = event.detail || {};
       state.filteredRows = detail.rows || [];
-      if (els.scopeSelect?.value === "filtered") {
+      if (els.scopeSelect?.value === "filtered" && state.hasRun) {
         runSelectedAnalysis().catch(() => {});
+        return;
       }
+      updateScopeNote();
     });
 
-    runSelectedAnalysis().catch(() => {});
+    updateScopeNote();
   };
 
   window.RouteMapsterAdvancedAnalyses = {
     initAdvancedAnalyses
   };
 })();
-

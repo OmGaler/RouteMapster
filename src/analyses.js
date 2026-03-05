@@ -74,6 +74,35 @@
     .map((garage) => String(garage || "").trim())
     .filter((garage) => !isUnknownLike(garage));
 
+  const getRouteId = (row) => String(row?.route_id_norm || row?.route_id || "").trim().toUpperCase();
+
+  const groupRoutesByPrimaryLabel = (rows, getLabel) => {
+    const groups = new Map();
+    (Array.isArray(rows) ? rows : []).forEach((row) => {
+      const routeId = getRouteId(row);
+      if (!routeId) {
+        return;
+      }
+      const label = String(getLabel(row) || "").trim() || "Unknown";
+      if (!groups.has(label)) {
+        groups.set(label, new Set());
+      }
+      groups.get(label).add(routeId);
+    });
+    return Array.from(groups.entries())
+      .map(([label, routeSet]) => ({
+        label,
+        routes: Array.from(routeSet)
+          .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+      }))
+      .sort((a, b) => {
+        if (b.routes.length !== a.routes.length) {
+          return b.routes.length - a.routes.length;
+        }
+        return a.label.localeCompare(b.label, undefined, { numeric: true });
+      });
+  };
+
   const routeOverlapCoverageCache = {
     key: "",
     promise: null,
@@ -440,10 +469,16 @@
           });
         });
         const sorted = Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
+        const groups = groupRoutesByPrimaryLabel(rows, (row) => getPrimaryKnownOperator(row) || "Unknown");
         return {
           type: "table",
           columns: ["Operator", "Routes"],
-          rows: sorted.map(([operator, count]) => [operator, count])
+          rows: sorted.map(([operator, count]) => [operator, count]),
+          mapOverlay: {
+            type: "grouped-routes",
+            key: "operator",
+            groups
+          }
         };
       }
     },
@@ -458,10 +493,23 @@
           });
         });
         const sorted = Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
+        const groups = groupRoutesByPrimaryLabel(rows, (row) => {
+          const known = getKnownGarages(row);
+          if (known.length > 0) {
+            return known[0];
+          }
+          const all = getGarages(row);
+          return all[0] || "Unknown";
+        });
         return {
           type: "table",
           columns: ["Garage", "Routes"],
-          rows: sorted.map(([garage, count]) => [garage, count])
+          rows: sorted.map(([garage, count]) => [garage, count]),
+          mapOverlay: {
+            type: "grouped-routes",
+            key: "garage",
+            groups
+          }
         };
       }
     },
@@ -489,9 +537,16 @@
           return {
             type: "table",
             columns: ["Route", "Operator", "Garage count", "Garages"],
-            rows: [["No routes with multiple known garages found", "", "", ""]]
+            rows: [["No routes with multiple known garages found", "", "", ""]],
+            mapOverlay: {
+              type: "route-list",
+              routeIds: []
+            }
           };
         }
+        const routeIds = matches
+          .map((entry) => String(entry.routeId || "").trim().toUpperCase())
+          .filter(Boolean);
         return {
           type: "table",
           columns: ["Route", "Operator", "Garage count", "Garages"],
@@ -500,7 +555,11 @@
             entry.operator,
             entry.garages.length,
             entry.garages.join(", ")
-          ]))
+          ])),
+          mapOverlay: {
+            type: "route-list",
+            routeIds
+          }
         };
       }
     },
@@ -649,6 +708,9 @@
           .slice()
           .sort((a, b) => b.frequency_peak_am - a.frequency_peak_am)
           .slice(0, 25);
+        const routeIds = sorted
+          .map((row) => getRouteId(row))
+          .filter(Boolean);
         return {
           type: "table",
           columns: ["Rank", "Route", "Operator", "Peak AM", "Offpeak", "Weekend", "Overnight"],
@@ -660,7 +722,11 @@
             formatNumber(row.frequency_offpeak),
             formatNumber(row.frequency_weekend),
             formatNumber(row.frequency_overnight)
-          ])
+          ]),
+          mapOverlay: {
+            type: "route-list",
+            routeIds
+          }
         };
       }
     },
@@ -710,9 +776,16 @@
           return {
             type: "table",
             columns: ["Rank", "Route", "Length (mi)", "Operator", "Garage"],
-            rows: [["No length_miles data available", "", "", "", ""]]
+            rows: [["No length_miles data available", "", "", "", ""]],
+            mapOverlay: {
+              type: "route-list",
+              routeIds: []
+            }
           };
         }
+        const routeIds = sorted
+          .map((row) => getRouteId(row))
+          .filter(Boolean);
         return {
           type: "table",
           columns: ["Rank", "Route", "Length (mi)", "Operator", "Garage"],
@@ -722,7 +795,11 @@
             formatNumber(row.length_miles, 2),
             getPrimaryKnownOperator(row),
             getGarages(row)[0]
-          ])
+          ]),
+          mapOverlay: {
+            type: "route-list",
+            routeIds
+          }
         };
       }
     },
@@ -739,9 +816,16 @@
           return {
             type: "table",
             columns: ["Rank", "Route", "Length (mi)", "Operator", "Garage"],
-            rows: [["No length_miles data available", "", "", "", ""]]
+            rows: [["No length_miles data available", "", "", "", ""]],
+            mapOverlay: {
+              type: "route-list",
+              routeIds: []
+            }
           };
         }
+        const routeIds = sorted
+          .map((row) => getRouteId(row))
+          .filter(Boolean);
         return {
           type: "table",
           columns: ["Rank", "Route", "Length (mi)", "Operator", "Garage"],
@@ -751,7 +835,11 @@
             formatNumber(row.length_miles, 2),
             getPrimaryKnownOperator(row),
             getGarages(row)[0]
-          ])
+          ]),
+          mapOverlay: {
+            type: "route-list",
+            routeIds
+          }
         };
       }
     },
@@ -768,9 +856,16 @@
           return {
             type: "table",
             columns: ["Rank", "Route", "Route-only stops", "Total stops", "Route-only %", "Operator", "Garage"],
-            rows: [["No route-only stop data available", "", "", "", "", "", ""]]
+            rows: [["No route-only stop data available", "", "", "", "", "", ""]],
+            mapOverlay: {
+              type: "route-list",
+              routeIds: []
+            }
           };
         }
+        const routeIds = sorted
+          .map((row) => getRouteId(row))
+          .filter(Boolean);
         return {
           type: "table",
           columns: ["Rank", "Route", "Route-only stops", "Total stops", "Route-only %", "Operator", "Garage"],
@@ -782,7 +877,11 @@
             Number.isFinite(row.unique_stops_pct) ? `${formatNumber(row.unique_stops_pct * 100, 0)}%` : "",
             getPrimaryKnownOperator(row),
             getGarages(row)[0]
-          ])
+          ]),
+          mapOverlay: {
+            type: "route-list",
+            routeIds
+          }
         };
       }
     },
@@ -809,6 +908,9 @@
           return String(a.routeId).localeCompare(String(b.routeId), undefined, { numeric: true });
         });
         const top = scores.slice(0, Math.min(TOP_COUNT, scores.length));
+        const routeIds = top
+          .map((entry) => String(entry.routeId || "").trim().toUpperCase())
+          .filter(Boolean);
         return {
           type: "table",
           columns: ["Rank", "Route", "Operator", "Exclusive %", "Exclusive mi", "Route mi"],
@@ -819,7 +921,11 @@
             `${formatNumber(entry.exclusiveRatio * 100, 0)}%`,
             formatNumber(entry.exclusiveMiles, 2),
             formatNumber(entry.totalMiles, 2)
-          ]))
+          ])),
+          mapOverlay: {
+            type: "route-list",
+            routeIds
+          }
         };
       }
     },

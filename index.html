@@ -709,6 +709,21 @@
       max-width: 100%;
     }
 
+    .analysis-group-cell {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .analysis-group-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      background: var(--analysis-group-dot, #94a3b8);
+      flex: 0 0 auto;
+      opacity: 0.95;
+    }
+
     .analysis-block {
       border: 1px solid var(--panel-border);
       border-radius: 14px;
@@ -2492,6 +2507,7 @@
               <div class="analysis-toolbar">
                 <select id="analysisSelect" class="select-field"></select>
                 <button id="runAnalysis" class="ghost-button compact" type="button">Run analysis</button>
+                <button id="clearAnalysisHighlights" class="ghost-button compact" type="button">Clear highlights</button>
               </div>
               <div id="analysisOutput" class="analysis-output"></div>
             </div>

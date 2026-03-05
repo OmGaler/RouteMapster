@@ -55,6 +55,20 @@ const ROUTE_COLOURS = {
 	school: "#3b82f6",
 	prefix: "#10b981"
 };
+const ANALYSIS_GROUP_COLOURS = [
+	"#ef4444",
+	"#3b82f6",
+	"#10b981",
+	"#f59e0b",
+	"#e11d48",
+	"#06b6d4",
+	"#84cc16",
+	"#f97316",
+	"#6366f1",
+	"#14b8a6",
+	"#a855f7",
+	"#0ea5e9"
+];
 const DEFAULT_ROUTE_DRAW_ORDER = ["regular", "twentyfour", "prefix", "night", "school"];
 // const DEFAULT_ROUTE_DRAW_ORDER = ["school", "night", "prefix", "twentyfour", "regular"];
 const ROUTE_PANE = "routes-pane";
@@ -6538,17 +6552,57 @@ function clearAnalysisRoutes() {
 	}
 }
 
-async function showAnalysisRoutes(routeIds) {
+async function showAnalysisRoutes(routeIds, options = {}) {
 	if (!appState.map) {
 		return;
 	}
+	const normaliseAnalysisRouteId = (value) => String(value || "").trim().toUpperCase();
 	const list = Array.isArray(routeIds)
-		? Array.from(new Set(routeIds.map((id) => String(id || "").trim().toUpperCase()).filter(Boolean)))
+		? Array.from(new Set(routeIds.map((id) => normaliseAnalysisRouteId(id)).filter(Boolean)))
 		: [];
 	if (list.length === 0) {
 		clearAnalysisRoutes();
 		return;
 	}
+
+	const buildAnalysisGroupColour = (label, fallbackIndex = 0) => {
+		const token = String(label || "").trim();
+		if (!token) {
+			return ANALYSIS_GROUP_COLOURS[fallbackIndex % ANALYSIS_GROUP_COLOURS.length];
+		}
+		let hash = 0;
+		for (let i = 0; i < token.length; i += 1) {
+			hash = ((hash << 5) - hash) + token.charCodeAt(i);
+			hash |= 0;
+		}
+		return ANALYSIS_GROUP_COLOURS[Math.abs(hash) % ANALYSIS_GROUP_COLOURS.length];
+	};
+
+	const normaliseAnalysisGroups = (groups) => {
+		if (!Array.isArray(groups)) {
+			return [];
+		}
+		return groups.map((group, index) => {
+			const label = String(group?.label || group?.name || "").trim() || `Group ${index + 1}`;
+			const routes = Array.isArray(group?.routes)
+				? Array.from(new Set(group.routes.map((routeId) => normaliseAnalysisRouteId(routeId)).filter(Boolean)))
+				: [];
+			const color = String(group?.color || "").trim() || buildAnalysisGroupColour(label, index);
+			return { label, routes, color };
+		}).filter((group) => group.routes.length > 0);
+	};
+
+	const groupedRoutes = normaliseAnalysisGroups(options.groups);
+	const routeColourLookup = new Map();
+	groupedRoutes.forEach((group, index) => {
+		const color = group.color || buildAnalysisGroupColour(group.label, index);
+		group.routes.forEach((routeId) => {
+			if (!routeColourLookup.has(routeId)) {
+				routeColourLookup.set(routeId, color);
+			}
+		});
+	});
+
 	if (!appState.analysisActive) {
 		appState.analysisPrevSuppress = appState.suppressNetworkRoutes;
 	}
@@ -6574,7 +6628,9 @@ async function showAnalysisRoutes(routeIds) {
 	const layerGroup = L.layerGroup().addTo(appState.map);
 	appState.analysisRouteLayer = layerGroup;
 
-	const routeSets = appState.useRouteTypeColours ? await loadNetworkRouteSets() : null;
+	const routeSets = routeColourLookup.size === 0 && appState.useRouteTypeColours
+		? await loadNetworkRouteSets()
+		: null;
 	const concurrency = 6;
 	let index = 0;
 	const worker = async () => {
@@ -6588,7 +6644,7 @@ async function showAnalysisRoutes(routeIds) {
 			if (!segments || segments.length === 0) {
 				continue;
 			}
-			const color = getFocusedRouteColour(routeId, routeSets);
+			const color = routeColourLookup.get(routeId) || getFocusedRouteColour(routeId, routeSets);
 			segments.forEach((segment) => {
 				const line = L.polyline(segment, {
 					color,
@@ -6604,7 +6660,13 @@ async function showAnalysisRoutes(routeIds) {
 	};
 	await Promise.all(Array.from({ length: concurrency }, () => worker()));
 	if (loadToken === appState.analysisRouteLoadToken) {
-		updateSelectedInfo(`Shared endpoint routes: ${list.length}`);
+		if (groupedRoutes.length > 0) {
+			const groupLabel = String(options.groupLabel || "group").trim();
+			const suffix = groupedRoutes.length === 1 ? "" : "s";
+			updateSelectedInfo(`Analysis routes: ${list.length} across ${groupedRoutes.length} ${groupLabel}${suffix}.`);
+		} else {
+			updateSelectedInfo(`Shared endpoint routes: ${list.length}`);
+		}
 	}
 }
 
