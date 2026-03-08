@@ -135,6 +135,15 @@
       .filter((token) => !isExcludedRoute(token));
   };
 
+  const isNightRoute = (routeId) => /^N\d/.test(String(routeId || "").trim().toUpperCase());
+
+  const extractNightRoutes = (routes) => {
+    if (!Array.isArray(routes) || routes.length === 0) {
+      return [];
+    }
+    return routes.filter((routeId) => isNightRoute(routeId));
+  };
+
   const parseNumberInput = (input) => {
     if (!input || input.value === "") {
       return null;
@@ -380,6 +389,7 @@
     const borough = resolveStopBorough(props, lon, lat, boroughIndex, boroughCache);
     const region = getRegionFromBorough(borough) || normaliseRegionToken(props?.region || "") || "Unknown";
     const routes = extractRouteTokens(props?.ROUTES);
+    const nightRoutes = extractNightRoutes(routes);
     const frequency = buildFrequencyTotals(routes, frequencyData);
     const betweenness = parseCentralityValue(props?.betweenness_global ?? props?.betweenness);
     const closeness_topo = parseCentralityValue(props?.closeness_topo);
@@ -398,7 +408,9 @@
       borough,
       region,
       routes,
+      night_routes: nightRoutes,
       route_count: routes.length,
+      night_route_count: nightRoutes.length,
       lat: Number.isFinite(lat) ? lat : null,
       lon: Number.isFinite(lon) ? lon : null,
       frequency,
@@ -606,6 +618,36 @@
             ];
           }),
           meta: { expandRouteIndex: 4 }
+        };
+      }
+    },
+    "top-stops-night-routes": {
+      id: "top-stops-night-routes",
+      label: "Top bus stops by night route count",
+      run: (rows) => {
+        const sorted = rows
+          .filter((row) => row.night_route_count > 0)
+          .slice()
+          .sort((a, b) => b.night_route_count - a.night_route_count || b.route_count - a.route_count)
+          .slice(0, 25);
+        if (sorted.length === 0) {
+          return { type: "note", message: "No night routes were found in the selected bus stops." };
+        }
+        return {
+          type: "table",
+          columns: ["Rank", "Bus stop", "District", "Night routes", "All routes", "Night route list"],
+          rows: sorted.map((row, index) => {
+            const fullList = sortRouteIds(row.night_routes || []).join(", ");
+            return [
+              index + 1,
+              formatStopLabel(row),
+              row.district,
+              row.night_route_count,
+              row.route_count,
+              fullList
+            ];
+          }),
+          meta: { expandRouteIndex: 5 }
         };
       }
     },

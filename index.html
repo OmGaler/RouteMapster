@@ -2091,7 +2091,11 @@
       <div class="sidebar-scroll">
         <div class="brand">
           <div class="brand-mark">
-            <img src="assets/routemapster.svg" alt="RouteMapster logo" />
+            <img
+              src="assets/routemapster.svg"
+              alt="RouteMapster logo"
+              onerror="if (this.dataset.fallbackApplied === '1') return; this.dataset.fallbackApplied='1'; this.src='assets/routemapster.png';"
+            />
           </div>
           <div>
             <div class="brand-title">RouteMapster</div>
@@ -2592,7 +2596,11 @@
   <div id="loadingModal" class="loading-modal" aria-hidden="true">
     <div class="loading-card" role="status" aria-live="polite">
       <div class="loading-logo">
-        <img src="assets/routemapster.svg" alt="RouteMapster logo" />
+        <img
+          src="assets/routemapster.svg"
+          alt="RouteMapster logo"
+          onerror="if (this.dataset.fallbackApplied === '1') return; this.dataset.fallbackApplied='1'; this.src='assets/routemapster.png';"
+        />
       </div>
       <div class="loading-text">
         <strong id="loadingModalTitle">Loading route geometry</strong>
