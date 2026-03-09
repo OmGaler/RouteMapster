@@ -205,7 +205,9 @@ For anything else, please write to route-mapster [a] omergaler [dot] com
 RouteMapster is an independent project and is not affiliated with or endorsed by Transport for London.
 The data in this project uses TfL Open Data / Unified API and other public sources under their respective terms.
 Bus route geometry, stops and frequencies are powered by TfL Open Data and the TfL API, and are made available under the [Open Government Licence v2.0](https://www.nationalarchives.gov.uk/doc/open-government-licence/version/2/).
-This also contains OS data © Crown copyright and database rights 2016' and Geomni UK Map data © and database rights [2019]
-Garage data is sourced from londonbusroutes.net.
+Powered by TfL Open Data
+Contains OS data © Crown copyright and database rights 2016
+Geomni UK Map data © and database rights 2019
+Garage data sourced from londonbusroutes.net.
 
-The data has been modified for this project, including but not limited to, conversion to GeoJSON, geometry simplification, and attribute slimming. Raw source files are not versioned in this repository.
+The data has been modified for this project, including but not limited to, conversion to GeoJSON, geometry simplification, attribute slimming and various transformations. Raw source files are not versioned in this repository.
