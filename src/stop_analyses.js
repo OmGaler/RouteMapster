@@ -21,7 +21,7 @@
   const DEFAULT_MAP_TOP_N = 50;
   const MAP_METRICS = [
     { value: "route_count", label: "Routes per stop" },
-    { value: "name_count", label: "Stops sharing this name" }
+    { value: "name_count", label: "Stops with this name" }
   ];
 
   const utils = window.RouteMapsterUtils || {};
@@ -841,14 +841,13 @@
           .map(([name, entry]) => [
             name,
             entry.count,
-            formatNumber(entry.count > 0 ? entry.routeTotal / entry.count : 0, 2),
-            entry.districts.size
+            formatNumber(entry.count > 0 ? entry.routeTotal / entry.count : 0, 2)
           ])
-          .sort((a, b) => (b[1] || 0) - (a[1] || 0) || (b[3] || 0) - (a[3] || 0) || String(a[0]).localeCompare(String(b[0])))
+          .sort((a, b) => (b[1] || 0) - (a[1] || 0) || String(a[0]).localeCompare(String(b[0])))
           .slice(0, 25);
         return {
           type: "table",
-          columns: ["Rank", "Bus stop name", "Bus stops", "Avg routes", "Districts"],
+          columns: ["Rank", "Bus stop name", "Bus stops", "Avg routes"],
           rows: rowsOut.map((row, index) => [index + 1, ...row]),
           meta: {
             rowMeta: rowsOut.map((row) => ({ highlightName: row[0] })),
@@ -869,14 +868,13 @@
           .map(([letter, entry]) => [
             letter,
             entry.count,
-            formatNumber(entry.count > 0 ? entry.routeTotal / entry.count : 0, 2),
-            entry.districts.size
+            formatNumber(entry.count > 0 ? entry.routeTotal / entry.count : 0, 2)
           ])
           .sort((a, b) => (b[1] || 0) - (a[1] || 0) || String(a[0]).localeCompare(String(b[0])))
           .slice(0, 25);
         return {
           type: "table",
-          columns: ["Rank", "Stop letter", "Bus stops", "Avg routes", "Districts"],
+          columns: ["Rank", "Stop letter", "Bus stops", "Avg routes"],
           rows: rowsOut.map((row, index) => [index + 1, ...row])
         };
       }

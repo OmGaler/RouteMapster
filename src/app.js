@@ -3056,7 +3056,7 @@ function clearAdvancedStopsLayer() {
 
 const ADVANCED_STOP_METRIC_LABELS = {
 	route_count: "Routes per stop",
-	name_count: "Stops sharing this name"
+	name_count: "Stops with this name"
 };
 const ADVANCED_STOP_GRADIENT = {
 	steps: ["#2c7bb6", "#5aa4d6", "#abd9e9", "#fee090", "#fdae61", "#d7191c"],
