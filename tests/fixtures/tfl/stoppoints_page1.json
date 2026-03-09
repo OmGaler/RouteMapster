@@ -4,6 +4,7 @@
       "id": "490000123A",
       "naptanId": "490000123A",
       "commonName": "Alpha Stop",
+      "indicator": "Stop A",
       "lat": 51.5,
       "lon": -0.1,
       "stopType": "NaptanPublicBusCoachTram",

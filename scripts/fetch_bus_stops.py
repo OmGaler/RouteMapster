@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -184,6 +185,39 @@ def extract_borough(sp: Dict[str, Any]) -> Optional[str]:
         return None
     text = str(borough).strip()
     return text if text else None
+
+
+def extract_stop_letter(sp: Dict[str, Any]) -> Optional[str]:
+    """Extract the bus stop indicator/letter from a StopPoint payload."""
+    candidates = [
+        sp.get("indicator"),
+        sp.get("stopLetter"),
+        sp.get("stop_letter"),
+        additional_prop(sp, "Indicator"),
+        additional_prop(sp, "StopLetter"),
+        additional_prop(sp, "Stop Letter"),
+    ]
+    for candidate in candidates:
+        if candidate is None:
+            continue
+        text = str(candidate).strip().upper()
+        if not text:
+            continue
+        text = text.replace(".", " ")
+        if text.startswith("STOP "):
+            text = text[5:].strip()
+        token = text.split()[0] if text.split() else ""
+        if not token:
+            continue
+        if token.startswith("->"):
+            continue
+        if token in {"OPP", "ADJ", "NR", "O/S", "STAND"}:
+            continue
+        if token.endswith("-BOUND") or token in {"NORTHBOUND", "SOUTHBOUND", "EASTBOUND", "WESTBOUND"}:
+            continue
+        if re.fullmatch(r"[A-Z]{1,2}\d?", token):
+            return token
+    return None
 
 
 def _ring_bbox(ring: List[List[float]]) -> Tuple[float, float, float, float]:
@@ -356,6 +390,9 @@ def stoppoints_payload_to_features(
             "POSTCODE": postcode.strip() if postcode else "",
             "ROUTES": ", ".join(sort_routes(routes)) if routes else "",
         }
+        stop_letter = extract_stop_letter(sp)
+        if stop_letter:
+            props["STOP_LETTER"] = stop_letter
         if borough:
             props["BOROUGH"] = borough
         props.update(parent_fields)
@@ -550,6 +587,9 @@ def to_geojson(
             "ROUTES": ", ".join(sort_routes(routes)) if routes else "",
             "URL": f"https://tfl.gov.uk/bus/stop/{sid}/",
         }
+        stop_letter = extract_stop_letter(sp)
+        if stop_letter:
+            props["STOP_LETTER"] = stop_letter
         if borough:
             props["BOROUGH"] = borough
         props.update(parent_fields)

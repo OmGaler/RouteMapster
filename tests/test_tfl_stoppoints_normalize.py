@@ -20,5 +20,31 @@ def test_stoppoints_payload_to_features_filters_non_bus():
     props = feature["properties"]
     assert props.get("NAPTAN_ID") == "490000123A"
     assert props.get("NAME") == "Alpha Stop"
+    assert props.get("STOP_LETTER") == "A"
     assert props.get("POSTCODE") == "SW1A 1AA"
     assert props.get("ROUTES") == "11, N11"
+
+
+def test_stoppoints_payload_to_features_drops_directional_indicators():
+    payload = {
+        "stopPoints": [
+            {
+                "id": "490000999S",
+                "naptanId": "490000999S",
+                "commonName": "Directional Stop",
+                "indicator": "->S",
+                "lat": 51.5,
+                "lon": -0.1,
+                "stopType": "NaptanPublicBusCoachTram",
+                "modes": ["bus"],
+                "additionalProperties": [
+                    {"key": "Postcode", "value": "SW1A 1AA"}
+                ],
+            }
+        ]
+    }
+
+    features = stoppoints_payload_to_features(payload)
+    assert len(features) == 1
+    props = features[0]["properties"]
+    assert "STOP_LETTER" not in props

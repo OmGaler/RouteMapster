@@ -323,6 +323,29 @@ function getStopCode(props) {
 	return props?.PLACE_ID || props?.STOP_CODE || props?.NAPTAN_ID || props?.NAPTAN_ATCO || "";
 }
 
+function getStopLetter(props) {
+	const value = props?.STOP_LETTER || props?.INDICATOR || props?.indicator || "";
+	const cleaned = String(value || "").trim().toUpperCase().replace(/\./g, " ");
+	if (!cleaned) {
+		return "";
+	}
+	const withoutPrefix = cleaned.startsWith("STOP ") ? cleaned.slice(5).trim() : cleaned;
+	const token = withoutPrefix.split(/\s+/)[0] || "";
+	if (!token) {
+		return "";
+	}
+	if (token.startsWith("->")) {
+		return "";
+	}
+	if (["OPP", "ADJ", "NR", "O/S", "STAND"].includes(token)) {
+		return "";
+	}
+	if (token.endsWith("-BOUND") || ["NORTHBOUND", "SOUTHBOUND", "EASTBOUND", "WESTBOUND"].includes(token)) {
+		return "";
+	}
+	return /^[A-Z]{1,2}\d?$/.test(token) ? token : "";
+}
+
 function normaliseBoroughName(value) {
 	if (window.RouteMapsterUtils?.normaliseBoroughToken) {
 		return window.RouteMapsterUtils.normaliseBoroughToken(value);
@@ -449,12 +472,16 @@ function setInfoPanelVisible(visible) {
 	appRoot.classList.toggle("has-details", visible);
 }
 
-function setInfoPanel({ title, subtitle, bodyHtml }) {
+function setInfoPanel({ title, titleHtml, subtitle, bodyHtml }) {
 	const titleEl = document.getElementById("infoTitle");
 	const subtitleEl = document.getElementById("infoSubtitle");
 	const bodyEl = document.getElementById("infoBody");
 	if (titleEl) {
-		titleEl.textContent = title || "Details";
+		if (titleHtml) {
+			titleEl.innerHTML = titleHtml;
+		} else {
+			titleEl.textContent = title || "Details";
+		}
 	}
 	if (subtitleEl) {
 		if (subtitle) {
@@ -3028,7 +3055,8 @@ function clearAdvancedStopsLayer() {
 }
 
 const ADVANCED_STOP_METRIC_LABELS = {
-	route_count: "Routes per stop"
+	route_count: "Routes per stop",
+	name_count: "Stops sharing this name"
 };
 const ADVANCED_STOP_GRADIENT = {
 	steps: ["#2c7bb6", "#5aa4d6", "#abd9e9", "#fee090", "#fdae61", "#d7191c"],
@@ -3049,7 +3077,7 @@ function formatAdvancedStopMetricValue(metric, value) {
 	if (!Number.isFinite(value)) {
 		return "";
 	}
-	if (metric === "route_count") {
+	if (metric === "route_count" || metric === "name_count") {
 		return String(Math.round(value));
 	}
 	return formatCentralityValue(value);
@@ -3104,6 +3132,22 @@ function getAdvancedStopMetricRange(stops, metric) {
 		}
 	});
 	return found ? { min, max } : null;
+}
+
+function buildStopPropsFromAdvancedStop(stop) {
+	const routes = Array.isArray(stop?.routes) ? stop.routes : [];
+	return {
+		NAME: stop?.name || "",
+		PLACE_ID: stop?.id || "",
+		NAPTAN_ID: stop?.id || "",
+		POSTCODE: stop?.postcode || "",
+		BOROUGH: stop?.borough || "",
+		region: stop?.region || "",
+		STOP_LETTER: stop?.stop_letter || "",
+		ROUTES: routes.join(", "),
+		URL: stop?.url || "",
+		child_stop_count: stop?.child_stop_count
+	};
 }
 
 function buildAdvancedStopPopup(stop, options = {}) {
@@ -3186,9 +3230,16 @@ function renderAdvancedStopsLayer(stops, options = {}) {
 			color: strokeColor,
 			fillColor,
 			fillOpacity: 0.88,
-			pane: STOP_PANE
+			pane: STOP_PANE,
+			interactive: true
 		});
 		bindHoverPopup(marker, () => buildAdvancedStopPopup(stop, options));
+		marker.on("click", () => {
+			const props = buildStopPropsFromAdvancedStop(stop);
+			setSelectedFeature("stop", props);
+			refreshSelectedInfoPanel().catch(() => {});
+			updateSelectedInfo(getStopDisplayName(props));
+		});
 		marker.addTo(layerGroup);
 	});
 	layerGroup.addTo(appState.map);
@@ -3840,6 +3891,10 @@ function buildBusStopInfoHtml(props, routeSets) {
 	const road = getStopRoadName(props);
 	const postcode = props?.POSTCODE || "";
 	const stopCode = getStopCode(props);
+	const stopLetter = getStopLetter(props);
+	const titleHtml = stopLetter
+		? `${escapeHtml(name)} <span class="info-title-badge">${escapeHtml(stopLetter)}</span>`
+		: escapeHtml(name);
 	const placeId = props?.PLACE_ID || "";
 	const childStopCount = props?.child_stop_count ?? props?.CHILD_STOP_COUNT;
 	const borough = props?.borough || props?.BOROUGH || "";
@@ -3869,6 +3924,7 @@ function buildBusStopInfoHtml(props, routeSets) {
 		: "";
 	return {
 		title: name,
+		titleHtml,
 		subtitle: "Bus stop",
 		bodyHtml: `
 			<div class="info-section">
@@ -5836,6 +5892,7 @@ function captureInfoPanelSnapshot() {
 	const bodyEl = document.getElementById("infoBody");
 	return {
 		title: titleEl?.textContent || "Details",
+		titleHtml: titleEl?.innerHTML || "",
 		subtitle: subtitleEl && subtitleEl.style.display !== "none" ? (subtitleEl.textContent || "") : "",
 		bodyHtml: bodyEl?.innerHTML || "",
 		visible: Boolean(appRoot?.classList.contains("has-details")),
@@ -5850,6 +5907,7 @@ function restoreInfoPanelSnapshot(snapshot) {
 	}
 	setInfoPanel({
 		title: snapshot.title || "Details",
+		titleHtml: snapshot.titleHtml || "",
 		subtitle: snapshot.subtitle || "",
 		bodyHtml: snapshot.bodyHtml || ""
 	});

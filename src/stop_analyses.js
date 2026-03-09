@@ -20,7 +20,8 @@
   ];
   const DEFAULT_MAP_TOP_N = 50;
   const MAP_METRICS = [
-    { value: "route_count", label: "Routes per stop" }
+    { value: "route_count", label: "Routes per stop" },
+    { value: "name_count", label: "Stops sharing this name" }
   ];
 
   const utils = window.RouteMapsterUtils || {};
@@ -104,7 +105,7 @@
     if (!Number.isFinite(value)) {
       return "";
     }
-    if (metric === "route_count") {
+    if (metric === "route_count" || metric === "name_count") {
       return formatNumber(value, 0);
     }
     return formatCentralityValue(value);
@@ -207,6 +208,28 @@
 
   const getStopName = (props) => props?.NAME || props?.STOP_NAME || props?.NAPTAN_NAME || "";
   const getStopId = (props) => props?.PLACE_ID || props?.NAPTAN_ID || props?.STOP_CODE || props?.NAPTAN_ATCO || "";
+  const getStopLetter = (props) => {
+    const value = props?.STOP_LETTER || props?.INDICATOR || props?.indicator || "";
+    const cleaned = String(value || "").trim().toUpperCase().replace(/\./g, " ");
+    if (!cleaned) {
+      return "";
+    }
+    const withoutPrefix = cleaned.startsWith("STOP ") ? cleaned.slice(5).trim() : cleaned;
+    const token = withoutPrefix.split(/\s+/)[0] || "";
+    if (!token) {
+      return "";
+    }
+    if (token.startsWith("->")) {
+      return "";
+    }
+    if (["OPP", "ADJ", "NR", "O/S", "STAND"].includes(token)) {
+      return "";
+    }
+    if (token.endsWith("-BOUND") || ["NORTHBOUND", "SOUTHBOUND", "EASTBOUND", "WESTBOUND"].includes(token)) {
+      return "";
+    }
+    return /^[A-Z]{1,2}\d?$/.test(token) ? token : "";
+  };
 
   const formatStopLabel = (row) => {
     const name = row.name || "Bus stop";
@@ -388,6 +411,7 @@
     const district = normalisePostcodeDistrict(postcode) || "Unknown";
     const borough = resolveStopBorough(props, lon, lat, boroughIndex, boroughCache);
     const region = getRegionFromBorough(borough) || normaliseRegionToken(props?.region || "") || "Unknown";
+    const stop_letter = getStopLetter(props);
     const routes = extractRouteTokens(props?.ROUTES);
     const nightRoutes = extractNightRoutes(routes);
     const frequency = buildFrequencyTotals(routes, frequencyData);
@@ -407,6 +431,7 @@
       district,
       borough,
       region,
+      stop_letter,
       routes,
       night_routes: nightRoutes,
       route_count: routes.length,
@@ -474,9 +499,22 @@
       return [];
     }
     const cache = new Map();
-    return geojson.features
+    const rows = geojson.features
       .map((feature) => buildStopRow(feature, frequencyData, boroughIndex, cache))
       .filter((row) => row && (row.name || row.id) && row.route_count > 0);
+    const nameCounts = new Map();
+    rows.forEach((row) => {
+      const key = String(row.name || "").trim();
+      if (!key) {
+        return;
+      }
+      nameCounts.set(key, (nameCounts.get(key) || 0) + 1);
+    });
+    rows.forEach((row) => {
+      const key = String(row.name || "").trim();
+      row.name_count = key ? (nameCounts.get(key) || 0) : 0;
+    });
+    return rows;
   };
 
   const renderTable = (result) => {
@@ -592,6 +630,30 @@
       }
     });
     return buckets.map((bucket, index) => [bucket.label, counts[index]]);
+  };
+
+  const buildGroupedStopRows = (rows, keyFn) => {
+    const summary = new Map();
+    rows.forEach((row) => {
+      const key = keyFn(row);
+      if (!key) {
+        return;
+      }
+      if (!summary.has(key)) {
+        summary.set(key, {
+          count: 0,
+          routeTotal: 0,
+          districts: new Set()
+        });
+      }
+      const entry = summary.get(key);
+      entry.count += 1;
+      entry.routeTotal += row.route_count || 0;
+      if (row.district && row.district !== "Unknown") {
+        entry.districts.add(row.district);
+      }
+    });
+    return Array.from(summary.entries());
   };
 
   const analysisRegistry = {
@@ -758,6 +820,54 @@
           rows: buildDistribution(rows)
         };
       }
+    },
+    "common-stop-names": {
+      id: "common-stop-names",
+      label: "Most common bus stop names",
+      run: (rows) => {
+        const grouped = buildGroupedStopRows(rows, (row) => String(row.name || "").trim());
+        if (grouped.length === 0) {
+          return { type: "note", message: "No bus stop names were found in the selected bus stops." };
+        }
+        const rowsOut = grouped
+          .map(([name, entry]) => [
+            name,
+            entry.count,
+            formatNumber(entry.count > 0 ? entry.routeTotal / entry.count : 0, 2),
+            entry.districts.size
+          ])
+          .sort((a, b) => (b[1] || 0) - (a[1] || 0) || (b[3] || 0) - (a[3] || 0) || String(a[0]).localeCompare(String(b[0])))
+          .slice(0, 25);
+        return {
+          type: "table",
+          columns: ["Rank", "Bus stop name", "Bus stops", "Avg routes", "Districts"],
+          rows: rowsOut.map((row, index) => [index + 1, ...row])
+        };
+      }
+    },
+    "common-stop-letters": {
+      id: "common-stop-letters",
+      label: "Most common bus stop letters",
+      run: (rows) => {
+        const grouped = buildGroupedStopRows(rows, (row) => row.stop_letter);
+        if (grouped.length === 0) {
+          return { type: "note", message: "No bus stop letters are available in the selected bus stops." };
+        }
+        const rowsOut = grouped
+          .map(([letter, entry]) => [
+            letter,
+            entry.count,
+            formatNumber(entry.count > 0 ? entry.routeTotal / entry.count : 0, 2),
+            entry.districts.size
+          ])
+          .sort((a, b) => (b[1] || 0) - (a[1] || 0) || String(a[0]).localeCompare(String(b[0])))
+          .slice(0, 25);
+        return {
+          type: "table",
+          columns: ["Rank", "Stop letter", "Bus stops", "Avg routes", "Districts"],
+          rows: rowsOut.map((row, index) => [index + 1, ...row])
+        };
+      }
     }
   };
 
@@ -773,6 +883,7 @@
     districtTokens: [],
     boroughToken: "",
     regionToken: "",
+    stopLetterToken: "",
     moduleOpen: true,
     mapMode: "filtered",
     mapTopN: DEFAULT_MAP_TOP_N,
@@ -786,10 +897,12 @@
     const districts = state.districtTokens.slice();
     const boroughs = state.boroughToken ? [state.boroughToken] : [];
     const region = parseRegionToken(els.regionSelect?.value || "");
+    const stopLetter = getStopLetter({ STOP_LETTER: els.stopLetterInput?.value || state.stopLetterToken });
     return {
       districts,
       boroughs,
-      region
+      region,
+      stopLetter
     };
   };
 
@@ -802,6 +915,7 @@
       ? new Set(spec.boroughs)
       : null;
     const regionToken = spec.region || "";
+    const stopLetterToken = String(spec.stopLetter || "").trim().toUpperCase();
     return list.filter((row) => {
       if (districtSet && !districtSet.has(row.district)) {
         return false;
@@ -810,6 +924,9 @@
         return false;
       }
       if (regionToken && regionToken !== "ALL" && row.region !== regionToken) {
+        return false;
+      }
+      if (stopLetterToken && row.stop_letter !== stopLetterToken) {
         return false;
       }
       return true;
@@ -1198,6 +1315,12 @@
           <label for="stopRegionSelect">Region</label>
           <select id="stopRegionSelect" class="select-field"></select>
         </div>
+        <div class="field">
+          <label for="stopLetterInput">Stop letter</label>
+          <input id="stopLetterInput" class="select-field" type="search" placeholder="e.g. C" autocomplete="off" list="stopLetterOptions" />
+          <datalist id="stopLetterOptions"></datalist>
+          <div class="module-note">Leave blank to include stops with and without letters.</div>
+        </div>
         <div class="button-row">
           <button id="clearStopAnalysisFilters" class="ghost-button compact" type="button">Clear filters</button>
         </div>
@@ -1261,6 +1384,8 @@
       districtOptions: target.querySelector("#stopDistrictOptions"),
       boroughSelect: target.querySelector("#stopBoroughSelect"),
       regionSelect: target.querySelector("#stopRegionSelect"),
+      stopLetterInput: target.querySelector("#stopLetterInput"),
+      stopLetterOptions: target.querySelector("#stopLetterOptions"),
       clearFiltersButton: target.querySelector("#clearStopAnalysisFilters"),
       frequencyBand: target.querySelector("#stopFrequencyBand"),
       frequencyNote: target.querySelector("#stopFrequencyNote"),
@@ -1305,6 +1430,7 @@
       state.districtTokens = [];
       state.boroughToken = "";
       state.regionToken = "";
+      state.stopLetterToken = "";
       if (els.districtEntry) {
         els.districtEntry.value = "";
       }
@@ -1313,6 +1439,9 @@
       }
       if (els.regionSelect) {
         els.regionSelect.value = "";
+      }
+      if (els.stopLetterInput) {
+        els.stopLetterInput.value = "";
       }
       syncDistrictTags();
       applyFiltersAndRefresh(els);
@@ -1404,6 +1533,24 @@
       });
     }
 
+    if (els.stopLetterInput) {
+      els.stopLetterInput.addEventListener("input", () => {
+        state.stopLetterToken = getStopLetter({ STOP_LETTER: els.stopLetterInput.value || "" });
+      });
+      els.stopLetterInput.addEventListener("change", () => {
+        const normalised = getStopLetter({ STOP_LETTER: els.stopLetterInput.value || "" });
+        state.stopLetterToken = normalised;
+        els.stopLetterInput.value = normalised;
+        scheduleRefresh(els);
+      });
+      els.stopLetterInput.addEventListener("blur", () => {
+        const normalised = getStopLetter({ STOP_LETTER: els.stopLetterInput.value || "" });
+        state.stopLetterToken = normalised;
+        els.stopLetterInput.value = normalised;
+        scheduleRefresh(els);
+      });
+    }
+
     if (els.clearFiltersButton) {
       els.clearFiltersButton.addEventListener("click", clearFilters);
     }
@@ -1451,6 +1598,17 @@
           .map((borough) => `<option value="${escapeHtml(borough)}">${escapeHtml(borough)}</option>`)
           .join("");
         els.boroughSelect.innerHTML = `<option value="">All boroughs</option>${options}`;
+      }
+      const letterSet = new Set(
+        state.stops
+          .map((row) => row.stop_letter)
+          .filter(Boolean)
+      );
+      if (els.stopLetterOptions) {
+        els.stopLetterOptions.innerHTML = Array.from(letterSet)
+          .sort((a, b) => String(a).localeCompare(String(b)))
+          .map((letter) => `<option value="${escapeHtml(letter)}"></option>`)
+          .join("");
       }
 
       if (els.frequencyBand) {

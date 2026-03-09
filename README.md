@@ -152,17 +152,21 @@ Filters
 - Postcode district filter (multi-select, e.g., W1, EC1, SW1).
 - Borough filter (choose one or more borough(s)).
 - Region filter: Central / NE / NW / SW / SE.
+- Stop letter filter (e.g., show only stop `C`).
 - Filter by route count.
 
 Map overlays
 
 - Top N bus stops by routes per stop.
+- Colour by routes per stop or by how many stops share the same name.
 
 Analyses
 
 - Top bus stops by route count
 - Top bus stops by night route count
 - Top bus stops by combined frequency (selected band)
+- Most common bus stop names
+- Most common bus stop letters
 - Bus stop summary by postcode district
 - Coverage gaps by postcode district (fewest average routes per stop)
 - Routes-per-stop distribution
