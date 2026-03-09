@@ -520,6 +520,8 @@
   const renderTable = (result) => {
     const columns = result.columns || [];
     const rows = result.rows || [];
+    const rowMeta = Array.isArray(result?.meta?.rowMeta) ? result.meta.rowMeta : [];
+    const activeRowKey = String(result?.meta?.activeRowKey || "");
     const expandRouteIndex = Number.isInteger(result?.meta?.expandRouteIndex)
       ? result.meta.expandRouteIndex
       : null;
@@ -534,14 +536,20 @@
     }
     const tableClass = tableClasses.join(" ");
     const header = columns.map((col) => `<th>${escapeHtml(col)}</th>`).join("");
-    const body = rows.map((row) => {
+    const body = rows.map((row, rowIndex) => {
+      const meta = rowMeta[rowIndex] || null;
+      const attrs = [];
+      if (meta?.highlightName) {
+        attrs.push(`data-highlight-name="${escapeHtml(meta.highlightName)}"`);
+        attrs.push('class="is-clickable' + (activeRowKey && activeRowKey === String(meta.highlightName) ? ' is-active' : '') + '"');
+      }
       const cells = row.map((cell, index) => {
         if (expandRouteIndex === index && typeof cell === "string") {
           return `<td>${buildRouteListHtml(cell)}</td>`;
         }
         return `<td>${escapeHtml(cell)}</td>`;
       }).join("");
-      return `<tr>${cells}</tr>`;
+      return `<tr ${attrs.join(" ")}>${cells}</tr>`;
     }).join("");
     return `
       <div class="analysis-table-shell">
@@ -841,7 +849,11 @@
         return {
           type: "table",
           columns: ["Rank", "Bus stop name", "Bus stops", "Avg routes", "Districts"],
-          rows: rowsOut.map((row, index) => [index + 1, ...row])
+          rows: rowsOut.map((row, index) => [index + 1, ...row]),
+          meta: {
+            rowMeta: rowsOut.map((row) => ({ highlightName: row[0] })),
+            activeRowKey: state.activeStopNameHighlight || ""
+          }
         };
       }
     },
@@ -878,6 +890,7 @@
     frequencyAvailable: false,
     centralityAvailable: false,
     currentAnalysisIds: [],
+    activeStopNameHighlight: "",
     resultsByKey: new Map(),
     debounceHandle: null,
     districtTokens: [],
@@ -891,6 +904,14 @@
     mapColourMetric: "",
     suppressedBaseStops: false,
     suppressedBaseStopsPrev: null
+  };
+
+  const getHighlightedNameStops = (rows) => {
+    const name = String(state.activeStopNameHighlight || "").trim();
+    if (!name) {
+      return [];
+    }
+    return rows.filter((row) => String(row.name || "").trim() === name);
   };
 
   const buildFilterSpec = (els) => {
@@ -1142,6 +1163,17 @@
   };
 
   const buildMapDisplay = (rows) => {
+    const highlightedNameStops = getHighlightedNameStops(rows);
+    if (highlightedNameStops.length > 0) {
+      const colorMetric = resolveMetricSelection(state.mapColourMetric, state, { allowNone: true });
+      const note = `Highlighting ${highlightedNameStops.length} stops named ${state.activeStopNameHighlight}.`;
+      return {
+        stops: highlightedNameStops,
+        note,
+        showLegend: Boolean(colorMetric),
+        options: { colorBy: colorMetric || "" }
+      };
+    }
     if (state.mapMode === "off") {
       return { stops: [], note: "Map overlay is off.", showLegend: false, options: { colorBy: "" } };
     }
@@ -1256,6 +1288,9 @@
     const spec = buildFilterSpec(els);
     const filtered = applyFilters(state.stops, spec);
     state.filteredStops = filtered;
+    if (state.activeStopNameHighlight && getHighlightedNameStops(filtered).length === 0) {
+      state.activeStopNameHighlight = "";
+    }
     renderSummary(els.summary, filtered, {
       frequencyBand: state.frequencyBand,
       frequencyAvailable: state.frequencyAvailable,
@@ -1659,6 +1694,9 @@
         return;
       }
       const analysisId = els.analysisSelect.value;
+      if (analysisId !== "common-stop-names") {
+        state.activeStopNameHighlight = "";
+      }
       state.currentAnalysisIds = [analysisId];
       const results = runAnalyses(state.currentAnalysisIds, state.filteredStops, {
         frequencyBand: state.frequencyBand,
@@ -1666,6 +1704,7 @@
         centralityAvailable: state.centralityAvailable
       });
       renderResults(els.output, results);
+      syncMapStops(els);
     };
 
     if (els.runButton) {
@@ -1679,15 +1718,31 @@
     if (els.output) {
       els.output.addEventListener("click", (event) => {
         const button = event.target.closest(".analysis-export");
-        if (!button) {
+        if (button) {
+          const key = button.dataset.analysisKey;
+          const entry = state.resultsByKey.get(key);
+          if (!entry || entry.result?.type !== "table") {
+            return;
+          }
+          downloadCsv("bus_stop_analysis.csv", entry.result.columns, entry.result.rows);
           return;
         }
-        const key = button.dataset.analysisKey;
-        const entry = state.resultsByKey.get(key);
-        if (!entry || entry.result?.type !== "table") {
+        const row = event.target.closest("tr[data-highlight-name]");
+        if (!row) {
           return;
         }
-        downloadCsv("bus_stop_analysis.csv", entry.result.columns, entry.result.rows);
+        const highlightName = String(row.dataset.highlightName || "").trim();
+        if (!highlightName) {
+          return;
+        }
+        state.activeStopNameHighlight = state.activeStopNameHighlight === highlightName ? "" : highlightName;
+        const results = runAnalyses(state.currentAnalysisIds, state.filteredStops, {
+          frequencyBand: state.frequencyBand,
+          frequencyAvailable: state.frequencyAvailable,
+          centralityAvailable: state.centralityAvailable
+        });
+        renderResults(els.output, results);
+        syncMapStops(els);
       });
     }
 
@@ -1707,6 +1762,7 @@
           });
           renderResults(els.output, results);
         }
+        syncMapStops(els);
       });
     }
 

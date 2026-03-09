@@ -3134,6 +3134,19 @@ function getAdvancedStopMetricRange(stops, metric) {
 	return found ? { min, max } : null;
 }
 
+function getAdvancedStopMetricT(metric, value, range) {
+	if (!Number.isFinite(value) || !range) {
+		return null;
+	}
+	if (metric === "name_count") {
+		const min = Math.log1p(Math.max(0, range.min));
+		const max = Math.log1p(Math.max(0, range.max));
+		const current = Math.log1p(Math.max(0, value));
+		return max === min ? 1 : (current - min) / (max - min);
+	}
+	return range.max === range.min ? 1 : (value - range.min) / (range.max - range.min);
+}
+
 function buildStopPropsFromAdvancedStop(stop) {
 	const routes = Array.isArray(stop?.routes) ? stop.routes : [];
 	return {
@@ -3208,17 +3221,15 @@ function renderAdvancedStopsLayer(stops, options = {}) {
 		if (colorMetric && metricRange) {
 			const value = getAdvancedStopMetricValue(stop, colorMetric);
 			if (Number.isFinite(value)) {
-				const t = metricRange.max === metricRange.min
-					? 1
-					: (value - metricRange.min) / (metricRange.max - metricRange.min);
+				const t = getAdvancedStopMetricT(colorMetric, value, metricRange);
 				const palette = ADVANCED_STOP_GRADIENT.steps;
 				const idx = Math.min(
 					palette.length - 1,
-					Math.max(0, Math.round(t * (palette.length - 1)))
+					Math.max(0, Math.round((t ?? 0) * (palette.length - 1)))
 				);
 				fillColor = palette[idx];
 				strokeColor = "#334155";
-				radius = 3.5 + (t * 2.5);
+				radius = 3.5 + ((t ?? 0) * 2.5);
 			} else {
 				fillColor = ADVANCED_STOP_GRADIENT.fallback;
 				strokeColor = ADVANCED_STOP_GRADIENT.fallbackStroke;

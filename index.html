@@ -780,6 +780,18 @@
       vertical-align: top;
     }
 
+    .analysis-table tbody tr.is-clickable {
+      cursor: pointer;
+    }
+
+    .analysis-table tbody tr.is-clickable:hover td {
+      background: rgba(239, 68, 68, 0.08);
+    }
+
+    .analysis-table tbody tr.is-active td {
+      background: rgba(239, 68, 68, 0.14);
+    }
+
     .analysis-table th:nth-child(1),
     .analysis-table td:nth-child(1) {
       min-width: 140px;
@@ -1187,7 +1199,7 @@
       height: 28px;
       padding: 0 10px;
       border-radius: 999px;
-      background: #c62828;
+      background: var(--route-regular);
       color: #fff8f3;
       font-size: 13px;
       font-weight: 800;
