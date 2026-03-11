@@ -1028,7 +1028,14 @@ function collectGarageGroupRoutes(group) {
 	if (!group || !Array.isArray(group.features)) {
 		return [];
 	}
-	const routeSets = buildGarageRouteSets(group.features);
+	return collectGarageRoutesFromFeatures(group.features);
+}
+
+function collectGarageRoutesFromFeatures(features) {
+	if (!Array.isArray(features) || features.length === 0) {
+		return [];
+	}
+	const routeSets = buildGarageRouteSets(features);
 	const combined = new Set();
 	[routeSets.regular, routeSets.night, routeSets.school].forEach((set) => {
 		if (!set) {
@@ -1179,12 +1186,20 @@ async function buildOmniSearchIndex() {
 	if (Array.isArray(stations)) {
 		stations.forEach((station) => {
 			const name = station?.name || "Bus station";
+			const stopCount = Number.isFinite(station?.stopCount) ? station.stopCount : 0;
 			const routeCount = Number.isFinite(station?.routes?.size)
 				? station.routes.size
 				: Number.isFinite(station?.routeCount)
 					? station.routeCount
 					: 0;
-			const subtitle = routeCount > 0 ? `${routeCount} routes` : "Bus station";
+			const subtitleParts = [];
+			if (stopCount > 0) {
+				subtitleParts.push(`${stopCount} ${stopCount === 1 ? "stop" : "stops"}`);
+			}
+			if (routeCount > 0) {
+				subtitleParts.push(`${routeCount} ${routeCount === 1 ? "route" : "routes"}`);
+			}
+			const subtitle = subtitleParts.length > 0 ? subtitleParts.join(" · ") : "Bus station";
 			const routes = Array.from(station?.routes || []);
 			const routePills = routes.length > 0
 				? renderRoutePills(routes, routeSetsForPills)
@@ -1210,16 +1225,20 @@ async function buildOmniSearchIndex() {
 		groups.forEach((group) => {
 			const details = buildGarageGroupDetails(group);
 			const routes = collectGarageGroupRoutes(group);
+			const routeCount = routes.length;
+			const routeSummary = routeCount > 0 ? `${routeCount} ${routeCount === 1 ? "route" : "routes"}` : "";
 			const routePills = routes.length > 0
 				? renderRoutePills(routes, routeSetsForPills)
 				: "";
+			const subtitleParts = [details.subtitle, routeSummary].filter(Boolean);
+			const subtitle = subtitleParts.length > 0 ? subtitleParts.join(" · ") : "Garage";
 			const searchText = buildOmniSearchText(details.searchTokens);
 			items.push({
 				id: `garage:${details.label}`,
 				type: "garage",
 				typeLabel: getOmniTypeLabel("garage"),
 				title: details.label,
-				subtitle: details.subtitle,
+				subtitle,
 				metaHtml: routePills,
 				searchText,
 				titleLower: details.label.toLowerCase(),
@@ -4461,9 +4480,15 @@ function buildGarageInfoHtml(features, routeSets) {
 	}
 
 	const displayFeatures = getUniqueGarageDisplayFeatures(features);
-	const intro = displayFeatures.length > 1
+	const routeCount = collectGarageRoutesFromFeatures(displayFeatures).length;
+	const introLabel = displayFeatures.length > 1
 		? `${displayFeatures.length} garages at this location`
 		: "Garage location";
+	const introParts = [introLabel];
+	if (routeCount > 0) {
+		introParts.push(`${routeCount} ${routeCount === 1 ? "route" : "routes"}`);
+	}
+	const intro = introParts.join(" · ");
 	const sections = displayFeatures.map((feature) => {
 		const p = feature.properties || {};
 		const name = p["Garage name"] || p["TfL garage code"] || "Garage";
@@ -6503,7 +6528,15 @@ function buildBusStationPopup(station) {
 function buildBusStationInfoHtml(station, routeSets) {
 	const routes = Array.from(station.routes || []);
 	const stopCount = Number.isFinite(station.stopCount) ? station.stopCount : 0;
-	const subtitle = stopCount > 0 ? `${stopCount} stops` : "Bus station";
+	const routeCount = routes.length;
+	const subtitleParts = [];
+	if (stopCount > 0) {
+		subtitleParts.push(`${stopCount} ${stopCount === 1 ? "stop" : "stops"}`);
+	}
+	if (routeCount > 0) {
+		subtitleParts.push(`${routeCount} ${routeCount === 1 ? "route" : "routes"}`);
+	}
+	const subtitle = subtitleParts.length > 0 ? subtitleParts.join(" · ") : "Bus station";
 	return {
 		title: station.name || "Bus station",
 		subtitle,
