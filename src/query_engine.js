@@ -331,6 +331,12 @@
     const endpointEndLat = parseNumber(resolveField(row, ["endpoint_end_lat", "end_lat", "endLat"]));
     const endpointEndLon = parseNumber(resolveField(row, ["endpoint_end_lon", "end_lon", "endLon"]));
     const endpointPairKey = normaliseEndpointKey(resolveField(row, ["endpoint_pair_key", "endpointPair", "endpoint_pair"]));
+    const destinationOutbound = normaliseToken(resolveField(row, ["destination_outbound", "destinationOutbound"]));
+    const destinationInbound = normaliseToken(resolveField(row, ["destination_inbound", "destinationInbound"]));
+    const destinationOutboundQualifier = normaliseToken(resolveField(row, ["destination_outbound_qualifier", "destinationOutboundQualifier"]));
+    const destinationInboundQualifier = normaliseToken(resolveField(row, ["destination_inbound_qualifier", "destinationInboundQualifier"]));
+    const destinationOutboundFull = normaliseToken(resolveField(row, ["destination_outbound_full", "destinationOutboundFull"]));
+    const destinationInboundFull = normaliseToken(resolveField(row, ["destination_inbound_full", "destinationInboundFull"]));
 
     const operatorList = splitList(operatorsRaw);
     const operatorNorm = operatorList.map(normaliseLower);
@@ -362,6 +368,12 @@
       frequency_overnight: parseNumber(resolveField(row, ["frequency_overnight", "overnight"])),
       length_km: lengthKm,
       length_miles: lengthMiles,
+      destination_outbound: destinationOutbound,
+      destination_inbound: destinationInbound,
+      destination_outbound_qualifier: destinationOutboundQualifier,
+      destination_inbound_qualifier: destinationInboundQualifier,
+      destination_outbound_full: destinationOutboundFull,
+      destination_inbound_full: destinationInboundFull,
       unique_stops: uniqueStops,
       total_stops: totalStops,
       unique_stops_pct: uniqueStopsPct,

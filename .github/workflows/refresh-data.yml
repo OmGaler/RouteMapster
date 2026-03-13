@@ -44,6 +44,12 @@ jobs:
       - name: Fetch garages
         run: python scripts/fetch_and_process_garages.py --base data/garages-base.geojson
 
+      - name: Fetch route destinations
+        run: python scripts/fetch_route_destinations.py
+
+      - name: Build route summary
+        run: python scripts/build_route_summary.py
+
       # - name: Run tests
       #   run: pytest -q
 

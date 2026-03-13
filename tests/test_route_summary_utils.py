@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import json
 import math
+import shutil
+from pathlib import Path
+from uuid import uuid4
 
 from scripts.utils import route_summary as rs
 
@@ -67,3 +71,108 @@ def test_geometry_length_and_route_length_aggregation() -> None:
     length = rs.route_length_km(route_geojson)
     assert length is not None
     assert math.isclose(length, mean_expected, rel_tol=1e-6)
+
+
+def _local_temp_dir() -> Path:
+    root = Path(".pytest_local_tmp")
+    root.mkdir(exist_ok=True)
+    path = root / f"route-summary-{uuid4().hex}"
+    path.mkdir()
+    return path
+
+
+def test_load_route_destinations_map_reads_cached_destinations() -> None:
+    temp_dir = _local_temp_dir()
+    try:
+        path = temp_dir / "route_destinations.json"
+        path.write_text(
+            json.dumps(
+                {
+                    "generated_at_utc": "2026-03-13T00:00:00Z",
+                    "routes": {
+                        "24": {
+                            "outbound": {
+                                "destination": "Hampstead Heath",
+                                "qualifier": "Royal Free Hospital",
+                                "full": "Hampstead Heath, Royal Free Hospital",
+                            },
+                            "inbound": {
+                                "destination": "Pimlico",
+                                "qualifier": "Grosvenor Road",
+                                "full": "Pimlico, Grosvenor Road",
+                            },
+                        }
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        loaded = rs.load_route_destinations_map(path)
+
+        assert loaded["24"]["destination_outbound"] == "Hampstead Heath"
+        assert loaded["24"]["destination_inbound"] == "Pimlico"
+        assert loaded["24"]["destination_outbound_qualifier"] == "Royal Free Hospital"
+        assert loaded["24"]["destination_inbound_qualifier"] == "Grosvenor Road"
+        assert loaded["24"]["destination_outbound_full"] == "Hampstead Heath, Royal Free Hospital"
+        assert loaded["24"]["destination_inbound_full"] == "Pimlico, Grosvenor Road"
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+def test_build_route_summary_rows_includes_cached_destinations() -> None:
+    temp_path = _local_temp_dir()
+    try:
+        garages_path = temp_path / "garages.geojson"
+        frequencies_path = temp_path / "frequencies.json"
+        routes_dir = temp_path / "routes"
+        routes_index_path = temp_path / "index.json"
+        vehicles_path = temp_path / "vehicles.json"
+        destinations_path = temp_path / "route_destinations.json"
+
+        garages_path.write_text(json.dumps({"features": []}), encoding="utf-8")
+        frequencies_path.write_text(json.dumps({}), encoding="utf-8")
+        routes_dir.mkdir()
+        routes_index_path.write_text(json.dumps({"routes": ["24"]}), encoding="utf-8")
+        vehicles_path.write_text(json.dumps({}), encoding="utf-8")
+        destinations_path.write_text(
+            json.dumps(
+                {
+                    "routes": {
+                        "24": {
+                            "outbound": {
+                                "destination": "Hampstead Heath",
+                                "qualifier": "Royal Free Hospital",
+                                "full": "Hampstead Heath, Royal Free Hospital",
+                            },
+                            "inbound": {
+                                "destination": "Pimlico",
+                                "qualifier": "Grosvenor Road",
+                                "full": "Pimlico, Grosvenor Road",
+                            },
+                        }
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        rows = rs.build_route_summary_rows(
+            garages_path,
+            frequencies_path,
+            routes_dir,
+            routes_index_path,
+            vehicles_path,
+            destinations_path,
+            include_length=False,
+        )
+
+        assert len(rows) == 1
+        row = rows[0]
+        assert row["route"] == "24"
+        assert row["destination_outbound"] == "Hampstead Heath"
+        assert row["destination_inbound"] == "Pimlico"
+        assert row["destination_outbound_qualifier"] == "Royal Free Hospital"
+        assert row["destination_inbound_qualifier"] == "Grosvenor Road"
+    finally:
+        shutil.rmtree(temp_path, ignore_errors=True)

@@ -215,6 +215,8 @@ const appState = {
 	stopRoutesFromLines: new Map(),
 	stopPointFetches: new Map(),
 	routeStopFetches: new Map(),
+	routeDestinationCache: new Map(),
+	routeDestinationFetches: new Map(),
 	vehicleLookup: null,
 	vehicleLookupPromise: null,
 	busStationLayer: null,
@@ -278,6 +280,8 @@ const appState = {
 	routeHoverFrame: null,
 	routeHoverLastKey: "",
 	infoPanelKind: null,
+	routeInfoPanelRouteId: null,
+	routeInfoPanelOptions: null,
 	infoPanelBackStack: [],
 	advancedResultsRouteReturnPending: false,
 	loadingModalCount: 0,
@@ -498,6 +502,31 @@ function setInfoPanel({ title, titleHtml, subtitle, bodyHtml }) {
 	setInfoPanelVisible(true);
 }
 
+function cloneRouteInfoPanelOptions(options = {}) {
+	return {
+		includeRoadNames: options?.includeRoadNames === true,
+		roadNames: Array.isArray(options?.roadNames) ? options.roadNames.slice() : []
+	};
+}
+
+function setRouteInfoPanelContext(routeId, options = {}) {
+	const normalised = String(routeId || "").trim().toUpperCase();
+	appState.routeInfoPanelRouteId = normalised || null;
+	appState.routeInfoPanelOptions = normalised ? cloneRouteInfoPanelOptions(options) : null;
+}
+
+function clearRouteInfoPanelContext() {
+	appState.routeInfoPanelRouteId = null;
+	appState.routeInfoPanelOptions = null;
+}
+
+function isCurrentRouteInfoPanel(routeId) {
+	const normalised = String(routeId || "").trim().toUpperCase();
+	return Boolean(normalised)
+		&& appState.infoPanelKind === "route"
+		&& appState.routeInfoPanelRouteId === normalised;
+}
+
 function setSelectedFeature(type, data) {
 	appState.selectedFeatureToken += 1;
 	appState.selectedFeature = { type, data, token: appState.selectedFeatureToken };
@@ -518,14 +547,20 @@ async function refreshSelectedInfoPanel() {
 		return;
 	}
 	if (type === "stop") {
+		clearRouteInfoPanelContext();
+		appState.infoPanelKind = "stop";
 		setInfoPanel(buildBusStopInfoHtml(data, routeSets));
 		return;
 	}
 	if (type === "station") {
+		clearRouteInfoPanelContext();
+		appState.infoPanelKind = "station";
 		setInfoPanel(buildBusStationInfoHtml(data, routeSets));
 		return;
 	}
 	if (type === "garage") {
+		clearRouteInfoPanelContext();
+		appState.infoPanelKind = "garage";
 		setInfoPanel(buildGarageInfoHtml(data, routeSets));
 	}
 }
@@ -543,6 +578,7 @@ function resetInfoPanel() {
 	});
 	setInfoPanelVisible(false);
 	appState.infoPanelKind = null;
+	clearRouteInfoPanelContext();
 	appState.infoPanelBackStack = [];
 	appState.advancedResultsRouteReturnPending = false;
 	clearSelectedFeature();
@@ -897,6 +933,315 @@ function buildRouteGarageLabelsFromRow(row) {
 	return Array.from(new Set(fallback));
 }
 
+function normaliseRouteDirectionToken(value) {
+	const token = String(value || "").trim().toLowerCase();
+	if (!token) {
+		return "unknown";
+	}
+	if (token === "outbound" || token === "out" || token === "1") {
+		return "outbound";
+	}
+	if (token === "inbound" || token === "in" || token === "2") {
+		return "inbound";
+	}
+	return token;
+}
+
+function cleanRouteDestinationLabel(value) {
+	const text = String(value || "")
+		.replace(/\s+/g, " ")
+		.trim()
+		.replace(/^\.+/, "")
+		.trim();
+	if (!text) {
+		return "";
+	}
+	const lowered = text.toLowerCase();
+	if (lowered === "unknown" || lowered === "unkown" || lowered === "n/a" || lowered === "na" || lowered === "null") {
+		return "";
+	}
+	return text;
+}
+
+function buildEmptyRouteDestinationBuckets() {
+	return {
+		destinations: {
+			routeSection: new Set(),
+			sequenceName: new Set()
+		},
+		origins: {
+			routeSection: new Set(),
+			sequenceName: new Set()
+		}
+	};
+}
+
+function ensureRouteDestinationDirectionBucket(map, direction) {
+	const key = normaliseRouteDirectionToken(direction);
+	if (!map.has(key)) {
+		map.set(key, buildEmptyRouteDestinationBuckets());
+	}
+	return map.get(key);
+}
+
+function addRouteDestinationCandidate(bucket, value) {
+	const cleaned = cleanRouteDestinationLabel(value);
+	if (!cleaned) {
+		return;
+	}
+	bucket.add(cleaned);
+}
+
+function extractRouteDestinationContextFromRoutePayload(payload) {
+	const lines = Array.isArray(payload) ? payload : [payload];
+	const stopIds = [];
+	const seenStopIds = new Set();
+	const serviceTypes = new Set();
+	lines.forEach((line) => {
+		if (!line || typeof line !== "object") {
+			return;
+		}
+		const routeSections = Array.isArray(line.routeSections) ? line.routeSections : [];
+		routeSections.forEach((section) => {
+			if (!section || typeof section !== "object") {
+				return;
+			}
+			const serviceType = String(section.serviceType || "").trim();
+			if (serviceType) {
+				serviceTypes.add(serviceType);
+			}
+			[String(section.originator || "").trim(), String(section.destination || "").trim()]
+				.filter(Boolean)
+				.forEach((stopId) => {
+					if (seenStopIds.has(stopId)) {
+						return;
+					}
+					seenStopIds.add(stopId);
+					stopIds.push(stopId);
+				});
+		});
+	});
+	return {
+		stopIds,
+		serviceTypes: Array.from(serviceTypes)
+	};
+}
+
+function parseRouteDestinationsFromStopRoutePayload(payloads, routeId) {
+	const directions = new Map();
+	const fallbackDirections = new Map();
+	(Array.isArray(payloads) ? payloads : []).forEach((payload) => {
+		const entries = Array.isArray(payload) ? payload : [];
+		entries.forEach((entry) => {
+			if (!entry || typeof entry !== "object") {
+				return;
+			}
+			const lineId = String(entry.lineId || entry.lineName || "").trim().toUpperCase();
+			if (!lineId || lineId !== routeId) {
+				return;
+			}
+			if (entry.isActive === false) {
+				return;
+			}
+			const value = cleanRouteDestinationLabel(entry.vehicleDestinationText);
+			if (value) {
+				const bucket = ensureRouteDestinationDirectionBucket(directions, entry.direction);
+				addRouteDestinationCandidate(bucket.destinations.routeSection, value);
+				return;
+			}
+			const fallbackValue = cleanRouteDestinationLabel(entry.destinationName);
+			if (!fallbackValue) {
+				return;
+			}
+			const fallbackBucket = ensureRouteDestinationDirectionBucket(fallbackDirections, entry.direction);
+			addRouteDestinationCandidate(fallbackBucket.destinations.routeSection, fallbackValue);
+		});
+	});
+	const activeDirections = directions.size > 0 ? directions : fallbackDirections;
+	const sourceLabel = directions.size > 0 ? "vehicleDestinationText" : "destinationName";
+
+	const preferredOrder = ["outbound", "inbound"];
+	const sectionOrder = [];
+	preferredOrder.forEach((direction) => {
+		if (activeDirections.has(direction)) {
+			sectionOrder.push(direction);
+		}
+	});
+	Array.from(activeDirections.keys())
+		.filter((direction) => !preferredOrder.includes(direction))
+		.sort((a, b) => a.localeCompare(b))
+		.forEach((direction) => sectionOrder.push(direction));
+
+	const sections = sectionOrder
+		.map((direction) => {
+			const values = Array.from(activeDirections.get(direction)?.destinations?.routeSection || []);
+			if (values.length === 0) {
+				return null;
+			}
+			return {
+				direction,
+				values,
+				source: sourceLabel
+			};
+		})
+		.filter(Boolean);
+
+	return {
+		sections,
+		hasData: sections.length > 0
+	};
+}
+
+function getRouteDestinationLinesFromRow(row) {
+	if (!row || typeof row !== "object") {
+		return [];
+	}
+	const values = [
+		cleanRouteDestinationLabel(row.destination_outbound),
+		cleanRouteDestinationLabel(row.destination_inbound)
+	].filter(Boolean);
+	return Array.from(new Set(values));
+}
+
+function getRouteDestinationSummaryText(row) {
+	const lines = getRouteDestinationLinesFromRow(row);
+	return lines.length > 0 ? lines.join(" / ") : "";
+}
+
+function hasRouteSummaryDestinations(row) {
+	return getRouteDestinationLinesFromRow(row).length > 0;
+}
+
+async function ensureRouteDestinationData(routeId) {
+	const normalised = String(routeId || "").trim().toUpperCase();
+	if (!normalised || isExcludedRoute(normalised)) {
+		return { status: "empty", sections: [] };
+	}
+	const cached = appState.routeDestinationCache.get(normalised);
+	if (cached && cached.status !== "loading") {
+		return cached;
+	}
+	if (appState.routeDestinationFetches.has(normalised)) {
+		return appState.routeDestinationFetches.get(normalised);
+	}
+	appState.routeDestinationCache.set(normalised, { status: "loading", sections: [] });
+	const url = `https://api.tfl.gov.uk/Line/${encodeURIComponent(normalised)}/Route`;
+	const fetchPromise = fetch(url)
+		.then((res) => {
+			if (!res.ok) {
+				throw new Error(`TfL route API ${res.status}`);
+			}
+			return res.json();
+		})
+		.then(async (payload) => {
+			const context = extractRouteDestinationContextFromRoutePayload(payload || []);
+			if (!Array.isArray(context.stopIds) || context.stopIds.length === 0) {
+				return { status: "empty", sections: [] };
+			}
+			const wantsNightOnly = context.serviceTypes.length > 0
+				&& context.serviceTypes.every((value) => String(value).trim().toLowerCase() === "night");
+			const stopRouteSuffix = wantsNightOnly ? "?serviceTypes=Night" : "?serviceTypes=Regular";
+			const stopPayloads = await Promise.all(
+				context.stopIds.map((stopId) => {
+					const stopUrl = `https://api.tfl.gov.uk/StopPoint/${encodeURIComponent(stopId)}/Route${stopRouteSuffix}`;
+					return fetch(stopUrl)
+						.then((stopRes) => (stopRes.ok ? stopRes.json() : null))
+						.catch(() => null);
+				})
+			);
+			const parsed = parseRouteDestinationsFromStopRoutePayload(stopPayloads, normalised);
+			const state = parsed.hasData
+				? { status: "ready", sections: parsed.sections }
+				: { status: "empty", sections: [] };
+			appState.routeDestinationCache.set(normalised, state);
+			return state;
+		})
+		.catch(() => {
+			const state = { status: "error", sections: [] };
+			appState.routeDestinationCache.set(normalised, state);
+			return state;
+		})
+		.finally(() => {
+			appState.routeDestinationFetches.delete(normalised);
+		});
+	appState.routeDestinationFetches.set(normalised, fetchPromise);
+	return fetchPromise;
+}
+
+function buildRouteDestinationsSectionHtml(routeId, row) {
+	const summaryLines = getRouteDestinationLinesFromRow(row);
+	if (summaryLines.length > 0) {
+		return `
+			<div class="info-section">
+				<div class="info-label">Destinations</div>
+				${summaryLines.map((line) => `<div>${escapeHtml(line)}</div>`).join("")}
+			</div>
+		`;
+	}
+	const normalised = String(routeId || "").trim().toUpperCase();
+	const state = normalised ? appState.routeDestinationCache.get(normalised) : null;
+	if (!state || state.status === "loading") {
+		return `
+			<div class="info-section">
+				<div class="info-label">Destinations</div>
+				<div class="info-empty">Loading from TfL route API.</div>
+			</div>
+		`;
+	}
+	if (state.status === "error") {
+		return `
+			<div class="info-section">
+				<div class="info-label">Destinations</div>
+				<div class="info-empty">TfL route API did not return usable destination data.</div>
+			</div>
+		`;
+	}
+	if (!Array.isArray(state.sections) || state.sections.length === 0) {
+		return `
+			<div class="info-section">
+				<div class="info-label">Destinations</div>
+				<div class="info-empty">No destination labels returned by the TfL route API.</div>
+			</div>
+		`;
+	}
+	const lines = [];
+	const seen = new Set();
+	state.sections.forEach((section) => {
+		(section.values || []).forEach((value) => {
+			const cleaned = cleanRouteDestinationLabel(value);
+			const key = cleaned.toLowerCase();
+			if (!cleaned || seen.has(key)) {
+				return;
+			}
+			seen.add(key);
+			lines.push(cleaned);
+		});
+	});
+	if (lines.length === 0) {
+		return `
+			<div class="info-section">
+				<div class="info-label">Destinations</div>
+				<div class="info-empty">No destination labels returned by the TfL route API.</div>
+			</div>
+		`;
+	}
+	return `
+		<div class="info-section">
+			<div class="info-label">Destinations</div>
+			${lines.map((line) => `<div>${escapeHtml(line)}</div>`).join("")}
+		</div>
+	`;
+}
+
+function refreshCurrentRouteInfoPanel(routeId) {
+	const normalised = String(routeId || "").trim().toUpperCase();
+	if (!isCurrentRouteInfoPanel(normalised)) {
+		return;
+	}
+	const options = cloneRouteInfoPanelOptions(appState.routeInfoPanelOptions || {});
+	setRouteInfoPanel(normalised, options).catch(() => {});
+}
+
 function buildRouteDetailsBodyHtml(routeId, row, routeSets, options = {}) {
 	const meta = getRouteMetaFromRow(row);
 	const operators = Array.isArray(row?.operator_names_arr)
@@ -953,6 +1298,7 @@ function buildRouteDetailsBodyHtml(routeId, row, routeSets, options = {}) {
 			<div class="info-label">Route</div>
 			${renderRoutePills([routeId], routeSets)}
 		</div>
+		${buildRouteDestinationsSectionHtml(routeId, row)}
 		${roadSection}
 		<div class="info-section">
 			<div class="info-label">Details</div>
@@ -1007,6 +1353,12 @@ async function setRouteInfoPanel(routeId, options = {}) {
 		bodyHtml: buildRouteDetailsBodyHtml(normalised, row, routeSets, options)
 	});
 	appState.infoPanelKind = "route";
+	setRouteInfoPanelContext(normalised, options);
+	if (!hasRouteSummaryDestinations(row)) {
+		ensureRouteDestinationData(normalised)
+			.then(() => refreshCurrentRouteInfoPanel(normalised))
+			.catch(() => refreshCurrentRouteInfoPanel(normalised));
+	}
 }
 
 async function showRouteDetailsAndFocus(routeId, options = {}) {
@@ -1156,8 +1508,10 @@ async function buildOmniSearchIndex() {
 			const row = summaryIndex.get(routeId) || null;
 			const meta = getRouteMetaFromRow(row);
 			const typeLabel = formatRouteTypeLabel(meta.routeType);
-			const subtitleParts = [typeLabel, meta.operator, meta.garage, meta.vehicleType].filter(Boolean);
-			const subtitle = subtitleParts.length > 0 ? subtitleParts.join(" · ") : "Bus route";
+			const metaParts = [typeLabel, meta.operator, meta.garage, meta.vehicleType].filter(Boolean);
+			const metaSummary = metaParts.length > 0 ? metaParts.join(" · ") : "";
+			const destinationSummary = getRouteDestinationSummaryText(row);
+			const subtitle = metaSummary || "Bus route";
 			const freqText = buildRouteFrequencySummary(meta.freqs, routeId, meta.routeType);
 			const title = `Route ${routeId}`;
 			const searchText = buildOmniSearchText([
@@ -1166,7 +1520,12 @@ async function buildOmniSearchIndex() {
 				meta.operator,
 				meta.garage,
 				meta.routeType,
-				meta.vehicleType
+				meta.vehicleType,
+				destinationSummary,
+				row?.destination_outbound_full,
+				row?.destination_inbound_full,
+				row?.destination_outbound_qualifier,
+				row?.destination_inbound_qualifier
 			]);
 			items.push({
 				id: `route:${routeId}`,
@@ -1175,6 +1534,7 @@ async function buildOmniSearchIndex() {
 				title,
 				subtitle,
 				freqText,
+				detailText: destinationSummary ? `Destinations: ${destinationSummary}` : "",
 				searchText,
 				titleLower: title.toLowerCase(),
 				routeId,
@@ -1452,9 +1812,11 @@ function renderOmniResults(items, totalCount) {
 		const isSelected = index === selectedIndex;
 		const subtitle = item.subtitle || "";
 		const freqText = item.freqText || "";
+		const detailText = item.detailText || "";
 		const metaHtml = item.metaHtml || "";
 		const subtitleHtml = subtitle ? `<div class="omni-result-subtitle">${escapeHtml(subtitle)}</div>` : "";
 		const freqHtml = freqText ? `<div class="omni-result-freq">${escapeHtml(freqText)}</div>` : "";
+		const detailHtml = detailText ? `<div class="omni-result-subtitle">${escapeHtml(detailText)}</div>` : "";
 		const metaBlock = metaHtml ? `<div class="omni-result-meta">${metaHtml}</div>` : "";
 		return `
 			<button type="button" class="omni-result${isSelected ? " is-selected" : ""}" data-index="${index}"
@@ -1464,6 +1826,7 @@ function renderOmniResults(items, totalCount) {
 					<div class="omni-result-title">${escapeHtml(item.title || "")}</div>
 					${subtitleHtml}
 					${freqHtml}
+					${detailHtml}
 					${metaBlock}
 				</div>
 			</button>
@@ -2409,6 +2772,7 @@ async function setOperatorInfoPanel(operatorName, routes) {
 	const routeHtml = safeRoutes.length > 0
 		? renderRoutePills(safeRoutes, routeSets)
 		: '<div class="info-empty">No routes listed.</div>';
+	clearRouteInfoPanelContext();
 	setInfoPanel({
 		title: operatorName || "Operator",
 		subtitle: "Operator",
@@ -2419,6 +2783,7 @@ async function setOperatorInfoPanel(operatorName, routes) {
 			</div>
 		`
 	});
+	appState.infoPanelKind = "operator";
 }
 
 async function renderOmniPostcodeStops(data) {
@@ -2558,6 +2923,7 @@ async function applyOmniPostcodeSelection(item) {
 		: '<div class="info-empty">No routes listed.</div>';
 	const title = `Postcode district ${data.key}`;
 	const subtitle = "Postcode district";
+	clearRouteInfoPanelContext();
 	setInfoPanel({
 		title,
 		subtitle,
@@ -2572,6 +2938,7 @@ async function applyOmniPostcodeSelection(item) {
 			</div>
 		`
 	});
+	appState.infoPanelKind = "postcode";
 	if (appState.map && Number.isFinite(data.lat) && Number.isFinite(data.lon)) {
 		appState.map.flyTo([data.lat, data.lon], Math.max(appState.map.getZoom(), 13));
 	}
@@ -5899,6 +6266,7 @@ function buildRouteGeometryHoverHtml(routes, routeSets, frequencyTotal) {
 function setRouteGeometryInfoPanel({ routes, routeSets, frequencyTotal }) {
 	const safeRoutes = Array.isArray(routes) ? routes : [];
 	const title = safeRoutes.length === 1 ? `Route ${safeRoutes[0]}` : "Routes here";
+	clearRouteInfoPanelContext();
 	setInfoPanel({
 		title,
 		subtitle: "Route geometry",
@@ -5933,7 +6301,9 @@ function captureInfoPanelSnapshot() {
 		bodyHtml: bodyEl?.innerHTML || "",
 		visible: Boolean(appRoot?.classList.contains("has-details")),
 		kind: appState.infoPanelKind || null,
-		selectedFeature: appState.selectedFeature || null
+		selectedFeature: appState.selectedFeature || null,
+		routeInfoPanelRouteId: appState.routeInfoPanelRouteId || null,
+		routeInfoPanelOptions: appState.routeInfoPanelOptions ? cloneRouteInfoPanelOptions(appState.routeInfoPanelOptions) : null
 	};
 }
 
@@ -5950,6 +6320,8 @@ function restoreInfoPanelSnapshot(snapshot) {
 	setInfoPanelVisible(snapshot.visible !== false);
 	appState.infoPanelKind = snapshot.kind || null;
 	appState.selectedFeature = snapshot.selectedFeature || null;
+	appState.routeInfoPanelRouteId = snapshot.routeInfoPanelRouteId || null;
+	appState.routeInfoPanelOptions = snapshot.routeInfoPanelOptions ? cloneRouteInfoPanelOptions(snapshot.routeInfoPanelOptions) : null;
 }
 
 function pushInfoPanelBackSnapshot() {
@@ -8957,6 +9329,7 @@ window.RouteMapsterAPI = {
 	sortRouteIds,
 	compareRouteIds,
 	getRoutePillClass,
+	getRouteDestinationSummaryText,
 	escapeHtml,
 	setLoadingModalVisible,
 	showEndpointPairOnMap,

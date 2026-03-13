@@ -35,6 +35,18 @@
     return value;
   };
 
+  const getRouteDestinationSummaryText = (row) => {
+    const api = window.RouteMapsterAPI;
+    if (api && typeof api.getRouteDestinationSummaryText === "function") {
+      return api.getRouteDestinationSummaryText(row);
+    }
+    const values = [
+      String(row?.destination_outbound || "").trim(),
+      String(row?.destination_inbound || "").trim()
+    ].filter(Boolean);
+    return Array.from(new Set(values)).join(" / ");
+  };
+
   const isSchoolRoute = (value) => String(value || "").trim().toLowerCase() === "school";
 
   const parseTokens = (value) => {
@@ -1207,6 +1219,7 @@
       const totalStops = Number.isFinite(row.total_stops) ? formatNumber(row.total_stops, 0) : "";
       const uniqueStopsPct = Number.isFinite(row.unique_stops_pct) ? formatNumber(row.unique_stops_pct * 100, 0) : "";
       const lengthMiles = Number.isFinite(row.length_miles) ? formatNumber(row.length_miles, 2) : "";
+      const destinationSummary = getRouteDestinationSummaryText(row);
       const isVisible = state.visibleRoutes.has(routeId);
       const metaParts = [routeType, operator, garage, cleanMetaValue(vehicle)]
         .filter(Boolean)
@@ -1224,6 +1237,7 @@
             </button>
           </div>
           <div class="route-card__meta">${escapeHtml(metaParts)}</div>
+          ${destinationSummary ? `<div class="route-card__meta">Destinations: ${escapeHtml(destinationSummary)}</div>` : ""}
           ${showFrequencies ? `<div class="route-card__freq">Frequency (BPH): Peak AM: ${peakAm || "–"} · Peak PM: ${peakPm || "–"} · Offpeak: ${offpeak || "–"} · Weekend: ${weekend || "–"} · Overnight: ${overnight || "–"}</div>` : ""}
           <div class="route-card__kpi">Unique stops: ${uniqueStopsText} · Length: ${lengthText} · Overnight: ${hasOvernight}</div>
         </div>

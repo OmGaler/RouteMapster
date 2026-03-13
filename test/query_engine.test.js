@@ -299,8 +299,8 @@ test("loadRouteSummary parses CSV and caches result", async () => {
       return {
         ok: true,
         text: async () => [
-          "route_id,route_type,operator_names,frequency_peak_am,length_km,unique_stops",
-          "12,regular,Operator A,8,10,44"
+          "route_id,route_type,operator_names,frequency_peak_am,length_km,unique_stops,destination_outbound,destination_inbound,destination_outbound_qualifier,destination_inbound_qualifier",
+          "12,regular,Operator A,8,10,44,Hampstead Heath,Pimlico,Royal Free Hospital,Grosvenor Road"
         ].join("\n")
       };
     }
@@ -317,6 +317,10 @@ test("loadRouteSummary parses CSV and caches result", async () => {
   assert.equal(first[0].unique_stops, 2);
   assert.equal(first[0].total_stops, 3);
   assert.equal(first[0].unique_stops_pct, 2 / 3);
+  assert.equal(first[0].destination_outbound, "Hampstead Heath");
+  assert.equal(first[0].destination_inbound, "Pimlico");
+  assert.equal(first[0].destination_outbound_qualifier, "Royal Free Hospital");
+  assert.equal(first[0].destination_inbound_qualifier, "Grosvenor Road");
 });
 
 test("loadRouteSummary returns empty list on fetch failure", async () => {

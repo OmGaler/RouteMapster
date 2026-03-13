@@ -5,6 +5,7 @@ Build a route-level summary DataFrame from processed data.
 Sources:
 - data/processed/garages.geojson (garage/operator + route allocations)
 - data/processed/frequencies.json (buses per hour by band)
+- data/processed/route_destinations.json (cached passenger-facing blind destinations)
 - data/processed/routes/*.geojson (route geometry for length)
 
 Output:
@@ -26,6 +27,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Build route summary table.")
     parser.add_argument("--garages", default="data/processed/garages.geojson", help="Garages GeoJSON.")
     parser.add_argument("--frequencies", default="data/processed/frequencies.json", help="Frequencies JSON.")
+    parser.add_argument("--destinations", default="data/processed/route_destinations.json", help="Cached route destinations JSON.")
     parser.add_argument("--routes-dir", default="data/processed/routes", help="Route geometries directory.")
     parser.add_argument("--routes-index", default="data/processed/routes/index.json", help="Routes index JSON.")
     parser.add_argument("--out", default="data/processed/route_summary.csv", help="Output CSV/JSON path.")
@@ -36,6 +38,7 @@ def main() -> int:
     df = build_route_summary_df(
         garages_path=args.garages,
         frequencies_path=args.frequencies,
+        destinations_path=args.destinations,
         routes_dir=args.routes_dir,
         routes_index_path=args.routes_index,
         include_excluded=args.include_excluded,

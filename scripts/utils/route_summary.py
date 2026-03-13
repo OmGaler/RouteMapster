@@ -261,6 +261,30 @@ def load_vehicles_map(path: Path) -> Dict[str, str]:
     return out
 
 
+def load_route_destinations_map(path: Path) -> Dict[str, Dict[str, str]]:
+    if not path.exists():
+        return {}
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        return {}
+    routes_payload = payload.get("routes")
+    routes = routes_payload if isinstance(routes_payload, dict) else payload
+    out: Dict[str, Dict[str, str]] = {}
+    for key, value in routes.items():
+        route_id = normalize_route_id(key)
+        if not route_id or not isinstance(value, dict):
+            continue
+        out[route_id] = {
+            "destination_outbound": str(value.get("outbound", {}).get("destination") or "").strip(),
+            "destination_inbound": str(value.get("inbound", {}).get("destination") or "").strip(),
+            "destination_outbound_qualifier": str(value.get("outbound", {}).get("qualifier") or "").strip(),
+            "destination_inbound_qualifier": str(value.get("inbound", {}).get("qualifier") or "").strip(),
+            "destination_outbound_full": str(value.get("outbound", {}).get("full") or "").strip(),
+            "destination_inbound_full": str(value.get("inbound", {}).get("full") or "").strip(),
+        }
+    return out
+
+
 def split_suffix_route(route_id: str) -> Tuple[str, str]:
     match = SUFFIX_ROUTE_RE.match(route_id)
     if not match:
@@ -274,6 +298,7 @@ def build_route_summary_rows(
     routes_dir: Path,
     routes_index_path: Path,
     vehicles_path: Path,
+    destinations_path: Path,
     include_excluded: bool = False,
     include_length: bool = True,
 ) -> List[Dict[str, Any]]:
@@ -286,6 +311,7 @@ def build_route_summary_rows(
     route_sets = build_route_sets(features)
     route_garages = build_route_garage_map(features)
     vehicles = load_vehicles_map(vehicles_path)
+    destinations = load_route_destinations_map(destinations_path)
 
     if frequencies_path.exists():
         frequencies = json.loads(frequencies_path.read_text(encoding="utf-8"))
@@ -346,6 +372,7 @@ def build_route_summary_rows(
         if weekend is None:
             weekend = 0
         vehicle = vehicles.get(route_id)
+        destination_data = destinations.get(route_id, {})
         additional = format_join(additional_journeys.get(route_id, set()))
 
         length_km = None
@@ -367,6 +394,12 @@ def build_route_summary_rows(
                 "garage_name": garage_names,
                 "operator": operators,
                 "vehicle": vehicle,
+                "destination_outbound": destination_data.get("destination_outbound", ""),
+                "destination_inbound": destination_data.get("destination_inbound", ""),
+                "destination_outbound_qualifier": destination_data.get("destination_outbound_qualifier", ""),
+                "destination_inbound_qualifier": destination_data.get("destination_inbound_qualifier", ""),
+                "destination_outbound_full": destination_data.get("destination_outbound_full", ""),
+                "destination_inbound_full": destination_data.get("destination_inbound_full", ""),
                 "additional_journeys": additional,
                 "frequency_peak_am": peak_am,
                 "frequency_peak_pm": peak_pm,
@@ -387,6 +420,7 @@ def build_route_summary_df(
     routes_dir: Union[Path, str] = "data/processed/routes",
     routes_index_path: Union[Path, str] = "data/processed/routes/index.json",
     vehicles_path: Union[Path, str] = "data/vehicles.json",
+    destinations_path: Union[Path, str] = "data/processed/route_destinations.json",
     include_excluded: bool = False,
     include_length: bool = True,
 ) -> pd.DataFrame:
@@ -397,6 +431,7 @@ def build_route_summary_df(
     routes = Path(routes_dir)
     routes_index = Path(routes_index_path)
     vehicles = Path(vehicles_path)
+    destinations = Path(destinations_path)
 
     rows = build_route_summary_rows(
         garages,
@@ -404,6 +439,7 @@ def build_route_summary_df(
         routes,
         routes_index,
         vehicles,
+        destinations,
         include_excluded=include_excluded,
         include_length=include_length,
     )
@@ -415,6 +451,12 @@ def build_route_summary_df(
         "garage_name",
         "operator",
         "vehicle",
+        "destination_outbound",
+        "destination_inbound",
+        "destination_outbound_qualifier",
+        "destination_inbound_qualifier",
+        "destination_outbound_full",
+        "destination_inbound_full",
         "additional_journeys",
         "frequency_peak_am",
         "frequency_peak_pm",
