@@ -76,6 +76,7 @@ const STOP_PANE = "stops-pane";
 const STATION_PANE = "stations-pane";
 const GARAGE_PANE = "garages-pane";
 const HIGHLIGHT_PANE = "highlight-pane";
+const MOBILE_POINT_TAP_FALLBACK_DISTANCE = 24;
 const MAP_PANE_ORDER = [
 	{ name: ROUTE_PANE, zIndex: 410 },
 	{ name: STOP_PANE, zIndex: 420 },
@@ -279,6 +280,7 @@ const appState = {
 	routeHoverPopup: null,
 	routeHoverFrame: null,
 	routeHoverLastKey: "",
+	lastInteractivePointTapAt: 0,
 	infoPanelKind: null,
 	routeInfoPanelRouteId: null,
 	routeInfoPanelOptions: null,
@@ -440,6 +442,84 @@ function createInteractivePointRenderer(pane, hoverSupported = supportsHoverInte
 		renderer._container.style.pointerEvents = "auto";
 	}
 	return renderer;
+}
+
+function attachPointTapHandler(marker, onTap, options = {}) {
+	if (!marker || typeof onTap !== "function") {
+		return onTap;
+	}
+	const wrapped = () => {
+		appState.lastInteractivePointTapAt = Date.now();
+		onTap();
+	};
+	marker._routeMapsterPointTap = {
+		onTap: wrapped,
+		priority: Number.isFinite(options?.priority) ? options.priority : 0
+	};
+	return wrapped;
+}
+
+function getVisiblePointTapLayers() {
+	if (!appState.map) {
+		return [];
+	}
+	return [
+		appState.garageLayer,
+		appState.busStationLayer,
+		appState.busStopLayer,
+		appState.omniStopsLayer,
+		appState.advancedStopsLayer
+	].filter((layer) => layer && appState.map.hasLayer(layer));
+}
+
+function findNearestPointTapCandidate(latlng) {
+	if (!appState.map || !latlng) {
+		return null;
+	}
+	const tapPoint = appState.map.latLngToContainerPoint(latlng);
+	const bounds = appState.map.getBounds().pad(0.05);
+	let best = null;
+	getVisiblePointTapLayers().forEach((layerGroup) => {
+		if (!layerGroup?.eachLayer) {
+			return;
+		}
+		layerGroup.eachLayer((layer) => {
+			const meta = layer?._routeMapsterPointTap;
+			const markerLatLng = typeof layer?.getLatLng === "function" ? layer.getLatLng() : null;
+			if (!meta?.onTap || !markerLatLng || !bounds.contains(markerLatLng)) {
+				return;
+			}
+			const markerPoint = appState.map.latLngToContainerPoint(markerLatLng);
+			const distance = tapPoint.distanceTo(markerPoint);
+			const radius = typeof layer?.getRadius === "function"
+				? Number(layer.getRadius())
+				: Number(layer?.options?.radius || 0);
+			const maxDistance = Math.max(MOBILE_POINT_TAP_FALLBACK_DISTANCE, radius + 12);
+			if (!Number.isFinite(distance) || distance > maxDistance) {
+				return;
+			}
+			const priority = Number.isFinite(meta.priority) ? meta.priority : 0;
+			if (!best || distance < best.distance || (distance === best.distance && priority > best.priority)) {
+				best = { onTap: meta.onTap, distance, priority };
+			}
+		});
+	});
+	return best;
+}
+
+function handleMobilePointTap(event) {
+	if (supportsHoverInteractions() || !appState.map || !event?.latlng) {
+		return false;
+	}
+	if (Date.now() - Number(appState.lastInteractivePointTapAt || 0) < 250) {
+		return false;
+	}
+	const candidate = findNearestPointTapCandidate(event.latlng);
+	if (!candidate?.onTap) {
+		return false;
+	}
+	candidate.onTap();
+	return true;
 }
 
 function compactOptionText(label, maxChars = 34) {
@@ -3005,13 +3085,14 @@ async function applyOmniStopSelection(item) {
 			pane: STOP_PANE
 		});
 		bindHoverPopup(marker, () => buildBusStopPopup(props), { hoverSupported });
-		marker.on("click", () => {
+		const handleTap = attachPointTapHandler(marker, () => {
 			setSelectedFeature("stop", props);
 			refreshSelectedInfoPanel().catch(() => {});
 			ensureStopPointRoutes(props)
 				.then(() => refreshSelectedInfoPanel().catch(() => {}))
 				.catch(() => {});
-		});
+		}, { priority: 1 });
+		marker.on("click", handleTap);
 		marker.addTo(layerGroup);
 	}
 	if (loadToken !== appState.omniStopsLoadToken) {
@@ -3401,12 +3482,13 @@ async function addGaragesLayer(map) {
     });
     const hoverHtml = buildGarageHoverHtml(group.features);
     bindHoverPopup(marker, hoverHtml, { hoverSupported });
-    marker.on('click', () => {
+    const handleTap = attachPointTapHandler(marker, () => {
       setGarageSelectValue(buildGarageSelectKey(group.features));
       setSelectedFeature("garage", group.features);
       refreshSelectedInfoPanel().catch(() => {});
       selectGarageRoutes(group.features);
-    });
+    }, { priority: 3 });
+    marker.on('click', handleTap);
     if (labelsEnabled) {
       const labelHtml = buildGarageLabelHtml(group.features);
       if (labelHtml) {
@@ -3673,12 +3755,13 @@ function renderAdvancedStopsLayer(stops, options = {}) {
 			interactive: true
 		});
 		bindHoverPopup(marker, () => buildAdvancedStopPopup(stop, options), { hoverSupported });
-		marker.on("click", () => {
+		const handleTap = attachPointTapHandler(marker, () => {
 			const props = buildStopPropsFromAdvancedStop(stop);
 			setSelectedFeature("stop", props);
 			refreshSelectedInfoPanel().catch(() => {});
 			updateSelectedInfo(getStopDisplayName(props));
-		});
+		}, { priority: 1 });
+		marker.on("click", handleTap);
 		marker.addTo(layerGroup);
 	});
 	layerGroup.addTo(appState.map);
@@ -3739,14 +3822,15 @@ async function addBusStopsLayer(map, options = {}) {
 				interactive: true
 			});
 			bindHoverPopup(marker, () => buildBusStopPopup(feature.properties || {}), { hoverSupported });
-			marker.on("click", () => {
+			const handleTap = attachPointTapHandler(marker, () => {
 				const props = feature.properties || {};
 				setSelectedFeature("stop", props);
 				refreshSelectedInfoPanel().catch(() => {});
 				ensureStopPointRoutes(props)
 					.then(() => refreshSelectedInfoPanel().catch(() => {}))
 					.catch(() => {});
-			});
+			}, { priority: 1 });
+			marker.on("click", handleTap);
 			marker.addTo(layerGroup);
 			if (typeof marker.bringToFront === "function") {
 				marker.bringToFront();
@@ -7414,13 +7498,14 @@ async function addBusStationsLayer(map) {
 			interactive: true
 		});
 		bindHoverPopup(marker, buildBusStationPopup(station), { hoverSupported });
-		marker.on("click", () => {
+		const handleTap = attachPointTapHandler(marker, () => {
 			setSelectedFeature("station", station);
 			refreshSelectedInfoPanel().catch(() => {});
 			highlightBusStation(station);
 			setBusStationSelectValue(station.key);
 			selectBusStationRoutes(station);
-		});
+		}, { priority: 2 });
+		marker.on("click", handleTap);
 		marker.addTo(layerGroup);
 	});
 	layerGroup.addTo(map);
@@ -8317,7 +8402,13 @@ function setupUI() {
 	}
 
 	if (appState.map) {
-		appState.map.on("click", () => {
+		appState.map.on("click", (event) => {
+			if (handleMobilePointTap(event)) {
+				return;
+			}
+			if (Date.now() - Number(appState.lastInteractivePointTapAt || 0) < 250) {
+				return;
+			}
 			if (appState.focusRouteId) {
 				clearFocusedRoute();
 			}
