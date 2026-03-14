@@ -843,6 +843,61 @@
         };
       }
     },
+    "routes-wholly-within-one-borough": {
+      id: "routes-wholly-within-one-borough",
+      label: "Routes wholly within one borough",
+      run: async (rows) => {
+        const filters = window.RouteMapsterAdvancedFilters;
+        if (!filters || typeof filters.listRoutesWhollyWithinBoroughs !== "function") {
+          return {
+            type: "note",
+            message: "Borough containment analysis is unavailable in this build."
+          };
+        }
+        const matches = await filters.listRoutesWhollyWithinBoroughs(rows);
+        if (!Array.isArray(matches)) {
+          return {
+            type: "note",
+            message: "Borough containment analysis is unavailable in this build."
+          };
+        }
+        const sorted = matches
+          .filter((entry) => Array.isArray(entry?.boroughTokens) && entry.boroughTokens.length === 1)
+          .slice()
+          .sort((a, b) => {
+            const lengthA = Number.isFinite(a?.row?.length_miles) ? a.row.length_miles : -Infinity;
+            const lengthB = Number.isFinite(b?.row?.length_miles) ? b.row.length_miles : -Infinity;
+            if (lengthB !== lengthA) {
+              return lengthB - lengthA;
+            }
+            return String(a?.routeId || "").localeCompare(String(b?.routeId || ""), undefined, { numeric: true });
+          });
+        if (sorted.length === 0) {
+          return {
+            type: "table",
+            columns: ["Route", "Length (mi)", "Borough"],
+            rows: [["No routes wholly within one borough found", "", ""]],
+            mapOverlay: {
+              type: "route-list",
+              routeIds: []
+            }
+          };
+        }
+        return {
+          type: "table",
+          columns: ["Route", "Length (mi)", "Borough"],
+          rows: sorted.map((entry) => [
+            entry.row?.route_id || entry.row?.route_id_norm || entry.routeId,
+            formatNumber(entry.row?.length_miles, 2),
+            entry.boroughLabels?.[0] || entry.boroughTokens?.[0] || ""
+          ]),
+          mapOverlay: {
+            type: "route-list",
+            routeIds: sorted.map((entry) => entry.routeId).filter(Boolean)
+          }
+        };
+      }
+    },
     "most-unique-stops-routes": {
       id: "most-unique-stops-routes",
       label: "Most route-only stops",

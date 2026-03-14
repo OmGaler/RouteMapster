@@ -456,6 +456,85 @@
     `;
   };
 
+  const getRouteSummaryRow = (routeId) => {
+    const normalised = String(routeId || "").trim().toUpperCase();
+    if (!normalised) {
+      return null;
+    }
+    const rows = Array.isArray(state.allRows) ? state.allRows : [];
+    for (let index = 0; index < rows.length; index += 1) {
+      const row = rows[index];
+      const candidate = String(row?.route_id_norm || row?.route_id || "").trim().toUpperCase();
+      if (candidate === normalised) {
+        return row;
+      }
+    }
+    return null;
+  };
+
+  const cleanDestinationLabel = (value) => {
+    const text = String(value || "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .replace(/^\.+/, "")
+      .trim();
+    if (!text) {
+      return "";
+    }
+    const lowered = text.toLowerCase();
+    if (lowered === "unknown" || lowered === "unkown" || lowered === "n/a" || lowered === "na" || lowered === "null") {
+      return "";
+    }
+    return text;
+  };
+
+  const getRouteDestinationLines = (row) => {
+    if (!row || typeof row !== "object") {
+      return [];
+    }
+    const values = [
+      cleanDestinationLabel(row.destination_outbound),
+      cleanDestinationLabel(row.destination_inbound)
+    ].filter(Boolean);
+    return Array.from(new Set(values));
+  };
+
+  const renderSharedEndpointDetails = (routeIds) => {
+    const routes = (Array.isArray(routeIds) ? routeIds : [])
+      .map((routeId) => String(routeId || "").trim().toUpperCase())
+      .filter(Boolean);
+    if (routes.length === 0) {
+      return "";
+    }
+    const rows = routes.map((routeId) => {
+      const row = getRouteSummaryRow(routeId);
+      const destinations = getRouteDestinationLines(row);
+      const operator = String(row?.operator_names_arr?.[0] || row?.operator_name || "").trim();
+      const routeType = String(row?.route_type || "").trim();
+      const meta = [routeType, operator].filter(Boolean).join(" · ");
+      return `
+        <div class="analysis-route-detail-row">
+          <div class="analysis-route-detail-head">
+            <div class="analysis-route-detail-id">${renderRoutePill(routeId)}</div>
+            ${meta ? `<div class="analysis-route-detail-meta">${escapeHtml(meta)}</div>` : ""}
+          </div>
+          <div class="analysis-route-destination-list">
+            ${destinations.length > 0
+              ? destinations.map((line) => `<div>${escapeHtml(line)}</div>`).join("")
+              : '<div class="analysis-route-destination-empty">No destination summary available.</div>'}
+          </div>
+        </div>
+      `;
+    }).join("");
+    return `
+      <div class="analysis-pill-details" hidden>
+        <div class="analysis-route-detail-list">
+          ${rows}
+        </div>
+      </div>
+    `;
+  };
+
   const renderRoutePillList = (result, analysisId) => {
     const groups = Array.isArray(result.groups) ? result.groups : [];
     if (groups.length === 0) {
@@ -539,8 +618,9 @@
       const confidence = Number.isFinite(group?.confidence) ? formatPercent(group.confidence) : "";
       const metrics = group?.metrics || {};
       const perRoute = Array.isArray(group?.per_route) ? group.per_route : [];
-      const details = metrics && Object.keys(metrics).length > 0
-        ? `
+      let details = "";
+      if (metrics && Object.keys(metrics).length > 0) {
+        details = `
           <div class="analysis-pill-details" hidden>
             <div class="analysis-metric-grid">
               ${renderMetricRow("Overlap", metrics.overlap, "overlap")}
@@ -557,8 +637,12 @@
               : ""
             }
           </div>
-        `
-        : "";
+        `;
+      } else if (analysisId === "shared-endpoints") {
+        details = renderSharedEndpointDetails(
+          sortedRoutes.map((route) => route?.id || route?.routeId || route?.route || route)
+        );
+      }
       return `
         <div class="analysis-pill-row" data-endpoint-a="${escapeHtml(endpointA)}" data-endpoint-b="${escapeHtml(endpointB)}" data-endpoint-key="${escapeHtml(endpointKey)}" data-route-ids="${escapeHtml(routeIds.join("|"))}" data-analysis-id="${escapeHtml(analysisId || "")}" data-group-index="${escapeHtml(String(index))}">
           <div class="analysis-pill-row__header">

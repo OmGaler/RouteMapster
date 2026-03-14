@@ -408,6 +408,40 @@ function isCompactMobileLayout() {
 	return window.matchMedia("(max-width: 900px)").matches;
 }
 
+function supportsHoverInteractions() {
+	if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+		return true;
+	}
+	return window.matchMedia("(hover: hover) and (pointer: fine)").matches;
+}
+
+function getTouchFriendlyHitTolerance(hoverSupported = supportsHoverInteractions()) {
+	return hoverSupported ? 0 : 10;
+}
+
+function getTouchFriendlyMarkerRadius(baseRadius, minimumTouchRadius, hoverSupported = supportsHoverInteractions()) {
+	const base = Number(baseRadius);
+	if (!Number.isFinite(base) || base <= 0) {
+		return 0;
+	}
+	if (hoverSupported) {
+		return base;
+	}
+	const minimum = Number(minimumTouchRadius);
+	return Number.isFinite(minimum) && minimum > base ? minimum : base;
+}
+
+function createInteractivePointRenderer(pane, hoverSupported = supportsHoverInteractions()) {
+	const renderer = L.svg({
+		pane,
+		tolerance: getTouchFriendlyHitTolerance(hoverSupported)
+	});
+	if (renderer?._container) {
+		renderer._container.style.pointerEvents = "auto";
+	}
+	return renderer;
+}
+
 function compactOptionText(label, maxChars = 34) {
 	const raw = String(label ?? "").trim();
 	if (!raw || raw.length <= maxChars) {
@@ -2809,6 +2843,8 @@ async function renderOmniPostcodeStops(data) {
 	}
 	const layerGroup = L.layerGroup().addTo(appState.map);
 	appState.omniStopsLayer = layerGroup;
+	const hoverSupported = supportsHoverInteractions();
+	const radius = getTouchFriendlyMarkerRadius(4, 6, hoverSupported);
 	matches.forEach((feature) => {
 		const coords = feature?.geometry?.coordinates;
 		const lon = Array.isArray(coords) ? Number(coords[0]) : null;
@@ -2818,14 +2854,14 @@ async function renderOmniPostcodeStops(data) {
 		}
 		const props = feature?.properties || {};
 		const marker = L.circleMarker([lat, lon], {
-			radius: 4,
+			radius,
 			weight: 1,
 			color: "#0f766e",
 			fillColor: "#22c55e",
 			fillOpacity: 0.8,
 			pane: STOP_PANE
 		});
-		bindHoverPopup(marker, () => buildBusStopPopup(props));
+		bindHoverPopup(marker, () => buildBusStopPopup(props), { hoverSupported });
 		marker.addTo(layerGroup);
 	});
 	return matches.length;
@@ -2958,16 +2994,17 @@ async function applyOmniStopSelection(item) {
 	const layerGroup = L.layerGroup();
 	const lat = Number(item?.stopLat);
 	const lon = Number(item?.stopLon);
+	const hoverSupported = supportsHoverInteractions();
 	if (Number.isFinite(lat) && Number.isFinite(lon)) {
 		const marker = L.circleMarker([lat, lon], {
-			radius: 5,
+			radius: getTouchFriendlyMarkerRadius(5, 6, hoverSupported),
 			weight: 1.2,
 			color: "#0f766e",
 			fillColor: "#22c55e",
 			fillOpacity: 0.9,
 			pane: STOP_PANE
 		});
-		bindHoverPopup(marker, () => buildBusStopPopup(props));
+		bindHoverPopup(marker, () => buildBusStopPopup(props), { hoverSupported });
 		marker.on("click", () => {
 			setSelectedFeature("stop", props);
 			refreshSelectedInfoPanel().catch(() => {});
@@ -3332,10 +3369,8 @@ async function addGaragesLayer(map) {
     appState.map.removeLayer(appState.garageRenderer);
     appState.garageRenderer = null;
   }
-  const renderer = L.svg({ pane: GARAGE_PANE });
-  if (renderer._container) {
-    renderer._container.style.pointerEvents = "auto";
-  }
+  const hoverSupported = supportsHoverInteractions();
+  const renderer = createInteractivePointRenderer(GARAGE_PANE, hoverSupported);
   appState.garageRenderer = renderer;
   const scaleEnabled = isGarageScaleEnabled();
   const labelsEnabled = isGarageLabelEnabled();
@@ -3351,7 +3386,11 @@ async function addGaragesLayer(map) {
   const layerGroup = L.layerGroup();
   groups.forEach((group) => {
     const groupPercent = getGarageGroupPercent(group.features);
-    const radius = getGarageMarkerRadius(groupPercent, scaleEnabled, maxPercent);
+    const radius = getTouchFriendlyMarkerRadius(
+      getGarageMarkerRadius(groupPercent, scaleEnabled, maxPercent),
+      8,
+      hoverSupported
+    );
     const marker = L.circleMarker(group.latlng, {
       radius,
       weight: 1,
@@ -3361,7 +3400,7 @@ async function addGaragesLayer(map) {
       interactive: true
     });
     const hoverHtml = buildGarageHoverHtml(group.features);
-    bindHoverPopup(marker, hoverHtml);
+    bindHoverPopup(marker, hoverHtml, { hoverSupported });
     marker.on('click', () => {
       setGarageSelectValue(buildGarageSelectKey(group.features));
       setSelectedFeature("garage", group.features);
@@ -3595,6 +3634,8 @@ function renderAdvancedStopsLayer(stops, options = {}) {
 	const colorMetric = options?.colorBy || "";
 	const metricRange = colorMetric ? getAdvancedStopMetricRange(stops, colorMetric) : null;
 	const layerGroup = L.layerGroup();
+	const hoverSupported = supportsHoverInteractions();
+	const renderer = createInteractivePointRenderer(STOP_PANE, hoverSupported);
 	stops.forEach((stop) => {
 		const lat = Number(stop?.lat);
 		const lon = Number(stop?.lon);
@@ -3622,15 +3663,16 @@ function renderAdvancedStopsLayer(stops, options = {}) {
 			}
 		}
 		const marker = L.circleMarker([lat, lon], {
-			radius,
+			radius: getTouchFriendlyMarkerRadius(radius, 6, hoverSupported),
 			weight: 1,
 			color: strokeColor,
 			fillColor,
 			fillOpacity: 0.88,
 			pane: STOP_PANE,
+			renderer,
 			interactive: true
 		});
-		bindHoverPopup(marker, () => buildAdvancedStopPopup(stop, options));
+		bindHoverPopup(marker, () => buildAdvancedStopPopup(stop, options), { hoverSupported });
 		marker.on("click", () => {
 			const props = buildStopPropsFromAdvancedStop(stop);
 			setSelectedFeature("stop", props);
@@ -3670,10 +3712,9 @@ async function addBusStopsLayer(map, options = {}) {
 			appState.busStopFilterBoroughs,
 			appState.busStopFilterRouteCount
 		);
-		const renderer = L.svg({ pane: STOP_PANE });
-		if (renderer._container) {
-			renderer._container.style.pointerEvents = "auto";
-		}
+		const hoverSupported = supportsHoverInteractions();
+		const renderer = createInteractivePointRenderer(STOP_PANE, hoverSupported);
+		const radius = getTouchFriendlyMarkerRadius(4, 6, hoverSupported);
 		appState.busStopRenderer = renderer;
 		const layerGroup = L.layerGroup();
 
@@ -3688,7 +3729,7 @@ async function addBusStopsLayer(map, options = {}) {
 				return;
 			}
 			const marker = L.circleMarker([lat, lon], {
-				radius: 4,
+				radius,
 				weight: 1,
 				color: "#1d4ed8",
 				fillColor: "#2563eb",
@@ -3697,7 +3738,7 @@ async function addBusStopsLayer(map, options = {}) {
 				renderer,
 				interactive: true
 			});
-			bindHoverPopup(marker, () => buildBusStopPopup(feature.properties || {}));
+			bindHoverPopup(marker, () => buildBusStopPopup(feature.properties || {}), { hoverSupported });
 			marker.on("click", () => {
 				const props = feature.properties || {};
 				setSelectedFeature("stop", props);
@@ -6099,8 +6140,13 @@ function formatGarageRoutes(props) {
 	return `Routes:<br/>${lines.join('<br/>')}`;
 }
 
-function bindHoverPopup(layer, html) {
+function bindHoverPopup(layer, html, options = {}) {
 	if (!layer || !html) {
+		return;
+	}
+	const hoverSupported = options?.hoverSupported ?? supportsHoverInteractions();
+	if (!hoverSupported) {
+		// Touch-first devices do not have a stable hover state, and binding hover popups can consume the first tap.
 		return;
 	}
 	const getContent = typeof html === "function" ? html : () => html;
@@ -7341,10 +7387,8 @@ async function addBusStationsLayer(map) {
 	if (appState.useRouteTypeColours) {
 		await loadNetworkRouteSets();
 	}
-	const renderer = L.svg({ pane: STATION_PANE });
-	if (renderer._container) {
-		renderer._container.style.pointerEvents = "auto";
-	}
+	const hoverSupported = supportsHoverInteractions();
+	const renderer = createInteractivePointRenderer(STATION_PANE, hoverSupported);
 	appState.busStationRenderer = renderer;
 	const scaleEnabled = isBusStationScaleEnabled();
 	const maxRoutes = scaleEnabled ? getBusStationScaleMax(stations) : 0;
@@ -7354,7 +7398,11 @@ async function addBusStationsLayer(map) {
 			return;
 		}
 		const routeCount = Number(station?.routes?.size || station?.routeCount || 0);
-		const radius = getBusStationMarkerRadius(routeCount, scaleEnabled, maxRoutes);
+		const radius = getTouchFriendlyMarkerRadius(
+			getBusStationMarkerRadius(routeCount, scaleEnabled, maxRoutes),
+			8,
+			hoverSupported
+		);
 		const marker = L.circleMarker(station.latlng, {
 			radius,
 			weight: 2,
@@ -7365,7 +7413,7 @@ async function addBusStationsLayer(map) {
 			renderer,
 			interactive: true
 		});
-		bindHoverPopup(marker, buildBusStationPopup(station));
+		bindHoverPopup(marker, buildBusStationPopup(station), { hoverSupported });
 		marker.on("click", () => {
 			setSelectedFeature("station", station);
 			refreshSelectedInfoPanel().catch(() => {});

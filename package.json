@@ -4,6 +4,6 @@
   "private": true,
   "scripts": {
     "start": "node src/index.js",
-    "test": "node test/shared_utils.test.js && node test/geo_utils.test.js && node test/query_engine.test.js"
+    "test": "node test/shared_utils.test.js && node test/geo_utils.test.js && node test/query_engine.test.js && node test/analyses.test.js"
   }
 }

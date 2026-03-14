@@ -775,10 +775,7 @@
     return coverage;
   };
 
-  const computeRoutesWhollyWithin = async (rows, boroughSet) => {
-    if (!boroughSet || boroughSet.size === 0) {
-      return null;
-    }
+  const listRoutesWhollyWithinBoroughs = async (rows) => {
     const boroughIndex = await loadBoroughIndex();
     if (!boroughIndex || boroughIndex.length === 0) {
       return null;
@@ -787,30 +784,46 @@
     if (!api || typeof api.loadRouteGeometry !== "function") {
       return null;
     }
+    const boroughLabels = new Map();
+    boroughIndex.forEach((entry) => {
+      const label = String(entry?.name || "").trim();
+      const token = normaliseBoroughToken(label);
+      if (token && label && !boroughLabels.has(token)) {
+        boroughLabels.set(token, label);
+      }
+    });
     if (typeof api.setLoadingModalVisible === "function") {
       api.setLoadingModalVisible(true);
     }
-    const routeIds = rows
-      .map((row) => row?.route_id_norm)
-      .filter((routeId) => routeId);
-    const allowed = new Set();
+    const routeRows = (Array.isArray(rows) ? rows : [])
+      .map((row) => ({
+        row,
+        routeId: String(row?.route_id_norm || row?.route_id || "").trim().toUpperCase()
+      }))
+      .filter((entry) => entry.routeId);
+    const matches = [];
     const concurrency = 6;
     let index = 0;
     const worker = async () => {
-      while (index < routeIds.length) {
-        const routeId = routeIds[index];
+      while (index < routeRows.length) {
+        const entry = routeRows[index];
         index += 1;
-        const coverage = await computeRouteGeometryCoverage(routeId, boroughIndex);
+        const coverage = await computeRouteGeometryCoverage(entry.routeId, boroughIndex);
         if (!coverage || coverage.hasOutside) {
           continue;
         }
-        if (!Array.isArray(coverage.tokens) || coverage.tokens.length === 0) {
+        const tokens = Array.isArray(coverage.tokens)
+          ? coverage.tokens.map((token) => String(token || "").trim().toLowerCase()).filter(Boolean)
+          : [];
+        if (tokens.length === 0) {
           continue;
         }
-        const allInside = coverage.tokens.every((token) => boroughSet.has(String(token).toLowerCase()));
-        if (allInside) {
-          allowed.add(routeId);
-        }
+        matches.push({
+          row: entry.row,
+          routeId: entry.routeId,
+          boroughTokens: tokens,
+          boroughLabels: tokens.map((token) => boroughLabels.get(token) || token)
+        });
       }
     };
     try {
@@ -820,6 +833,24 @@
         api.setLoadingModalVisible(false);
       }
     }
+    return matches;
+  };
+
+  const computeRoutesWhollyWithin = async (rows, boroughSet) => {
+    if (!boroughSet || boroughSet.size === 0) {
+      return null;
+    }
+    const matches = await listRoutesWhollyWithinBoroughs(rows);
+    if (!Array.isArray(matches)) {
+      return null;
+    }
+    const allowed = new Set();
+    matches.forEach((match) => {
+      const tokens = Array.isArray(match?.boroughTokens) ? match.boroughTokens : [];
+      if (tokens.length > 0 && tokens.every((token) => boroughSet.has(String(token).toLowerCase()))) {
+        allowed.add(match.routeId);
+      }
+    });
     return allowed;
   };
 
@@ -1779,6 +1810,7 @@
     clearMapHighlights: (appState) => clearMapHighlights(appState),
     getCurrentFilterSpec: () => state.filterSpec,
     getCurrentRows: () => state.filteredRows,
+    listRoutesWhollyWithinBoroughs,
     applyFilterSpec,
     dismissResults,
     showResults
