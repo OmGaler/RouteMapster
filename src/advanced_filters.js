@@ -393,7 +393,7 @@
   };
 
   const loadBoroughsGeojson = async () => {
-    const res = await fetch(BOROUGHS_GEOJSON_PATH, { cache: "no-store" });
+    const res = await fetch(BOROUGHS_GEOJSON_PATH);
     if (!res.ok) {
       return null;
     }
@@ -447,7 +447,7 @@
     if (api?.appState?.busStopsGeojson) {
       return api.appState.busStopsGeojson;
     }
-    const res = await fetch(BUS_STOPS_GEOJSON_PATH, { cache: "no-store" });
+    const res = await fetch(BUS_STOPS_GEOJSON_PATH);
     if (!res.ok) {
       return null;
     }

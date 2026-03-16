@@ -171,7 +171,7 @@
     if (routeStopStatsPromise) {
       return routeStopStatsPromise;
     }
-    routeStopStatsPromise = fetch(STOPS_GEOJSON_PATH, { cache: "no-store" })
+    routeStopStatsPromise = fetch(STOPS_GEOJSON_PATH)
       .then((response) => response.ok ? response.json() : null)
       .then((geojson) => {
         routeStopStatsCache = buildRouteStopStats(geojson);
@@ -399,7 +399,7 @@
     const loadSummaryText = async () => {
       for (const path of ROUTE_SUMMARY_PATHS) {
         try {
-          const response = await fetch(path, { cache: "no-store" });
+          const response = await fetch(path);
           if (!response.ok) {
             continue;
           }

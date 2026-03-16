@@ -16,7 +16,6 @@ const GARAGES_GEOJSON_PATH = "/data/processed/garages.geojson";
 const BOROUGHS_GEOJSON_PATH = "/data/boroughs.geojson";
 const VEHICLE_LOOKUP_PATH = "/data/vehicles.json";
 const FREQUENCY_DATA_PATH = "/data/processed/frequencies.json";
-const ABOUT_METADATA_PATH = "/data/processed/last_updated.json";
 const EARTH_RADIUS_KM = 6371.0088;
 const ENDPOINT_KEY_PRECISION = 3;
 const LOADING_MODAL_DEFAULT_TITLE = "Loading route geometry";
@@ -33,20 +32,6 @@ const ROUTE_SORT_KEY_CACHE_LIMIT = 4096;
 const ROUTE_TOKEN_CACHE_LIMIT = 8192;
 const routeSortKeyCache = new Map();
 const routeTokenCache = new Map();
-const DATE_TOKEN_FORMATTER = new Intl.DateTimeFormat("en-GB", {
-	day: "2-digit",
-	month: "short",
-	year: "numeric",
-	timeZone: "UTC"
-});
-const ISO_UTC_FORMATTER = new Intl.DateTimeFormat("en-GB", {
-	day: "2-digit",
-	month: "short",
-	year: "numeric",
-	hour: "2-digit",
-	minute: "2-digit",
-	timeZone: "UTC"
-});
 
 const ROUTE_COLOURS = {
 	regular: "#ef4444",
@@ -255,8 +240,6 @@ const appState = {
 	showFrequencyLayer: false,
 	frequencySegmentTotals: null,
 	frequencyMaxTotal: 0,
-	aboutMetadata: null,
-	aboutLoadPromise: null,
 	geocodeLastAt: 0,
 	selectedFeatureToken: 0,
 	advancedFiltersState: null,
@@ -3288,42 +3271,6 @@ function setupOmniSearch() {
 	});
 }
 
-function formatDateToken(token) {
-	if (!token) {
-		return "-";
-	}
-	const text = String(token).trim();
-	if (!/^\d{8}$/.test(text)) {
-		return text;
-	}
-	const year = Number(text.slice(0, 4));
-	const month = Number(text.slice(4, 6)) - 1;
-	const day = Number(text.slice(6, 8));
-	const date = new Date(Date.UTC(year, month, day));
-	if (Number.isNaN(date.getTime())) {
-		return text;
-	}
-	return DATE_TOKEN_FORMATTER.format(date);
-}
-
-function formatIsoUtc(value) {
-	if (!value) {
-		return "-";
-	}
-	const date = new Date(value);
-	if (Number.isNaN(date.getTime())) {
-		return String(value);
-	}
-	return `${ISO_UTC_FORMATTER.format(date)} UTC`;
-}
-
-function setAboutValue(id, value) {
-	const el = document.getElementById(id);
-	if (el) {
-		el.textContent = value || "-";
-	}
-}
-
 function getAboutNavigationTargets() {
 	const isFile = window.location.protocol === "file:" || window.location.pathname.endsWith(".html");
 	if (isFile) {
@@ -3339,48 +3286,8 @@ function getAboutNavigationTargets() {
 	};
 }
 
-async function loadAboutMetadata() {
-	if (appState.aboutMetadata) {
-		return appState.aboutMetadata;
-	}
-	if (appState.aboutLoadPromise) {
-		return appState.aboutLoadPromise;
-	}
-	appState.aboutLoadPromise = Promise.all([
-		fetch(ABOUT_METADATA_PATH)
-			.then((res) => res.ok ? res.json() : null)
-			.catch(() => null),
-		fetch(ROUTE_GEOMETRY_INDEX_PATH)
-			.then((res) => res.ok ? res.json() : null)
-			.catch(() => null)
-	])
-		.then(([meta, index]) => {
-			appState.aboutMetadata = { meta, index };
-			return appState.aboutMetadata;
-		})
-		.finally(() => {
-			appState.aboutLoadPromise = null;
-		});
-	return appState.aboutLoadPromise;
-}
-
-async function refreshAboutModal() {
-	const payload = await loadAboutMetadata();
-	const meta = payload?.meta || {};
-	const index = payload?.index || {};
-	const geometryDate = meta.routes_geometry_date || index.date;
-
-	setAboutValue("aboutRoutesGeometryDate", formatDateToken(geometryDate));
-	setAboutValue("aboutUpdatedGarages", formatIsoUtc(meta.garages));
-	setAboutValue("aboutUpdatedStops", formatIsoUtc(meta.stops));
-	setAboutValue("aboutUpdatedStations", formatIsoUtc(meta.bus_stations));
-	setAboutValue("aboutUpdatedFrequencies", formatIsoUtc(meta.frequencies));
-	setAboutValue("aboutUpdatedRouteSummary", formatIsoUtc(meta.route_summary));
-}
-
 function openAboutModal(pushState = true) {
 	setAboutModalVisible(true);
-	refreshAboutModal().catch(() => {});
 	if (pushState) {
 		const { aboutPath } = getAboutNavigationTargets();
 		window.history.pushState({ about: true }, "", aboutPath);
@@ -3861,7 +3768,7 @@ async function loadBoroughsGeojson() {
 	if (appState.boroughsGeojson) {
 		return appState.boroughsGeojson;
 	}
-	const res = await fetch(BOROUGHS_GEOJSON_PATH, { cache: "no-store" });
+	const res = await fetch(BOROUGHS_GEOJSON_PATH);
 	if (!res.ok) {
 		appState.boroughsGeojson = null;
 		return null;
@@ -3900,7 +3807,7 @@ async function loadBusStopsGeojson(options = {}) {
 	}
 	appState.busStopsGeojsonPromise = (async () => {
 		try {
-			const res = await fetch(BUS_STOPS_GEOJSON_PATH, { cache: "no-store" });
+			const res = await fetch(BUS_STOPS_GEOJSON_PATH);
 			if (!res.ok) {
 				appState.busStopsGeojson = null;
 				return null;
@@ -5193,7 +5100,7 @@ async function loadVehicleLookup() {
 	if (appState.vehicleLookupPromise) {
 		return appState.vehicleLookupPromise;
 	}
-	appState.vehicleLookupPromise = fetch(VEHICLE_LOOKUP_PATH, { cache: "no-store" })
+	appState.vehicleLookupPromise = fetch(VEHICLE_LOOKUP_PATH)
 		.then((res) => {
 			if (!res.ok) {
 				return null;
@@ -5555,7 +5462,7 @@ async function loadRouteGeometryRouteIds() {
 		return null;
 	}
 	try {
-		const res = await fetch(ROUTE_GEOMETRY_INDEX_PATH, { cache: "no-store" });
+		const res = await fetch(ROUTE_GEOMETRY_INDEX_PATH);
 		if (!res.ok) {
 			appState.geometryRouteIds = null;
 			return null;
@@ -5607,7 +5514,7 @@ async function loadFrequencyData() {
 	if (appState.frequencyLoadPromise) {
 		return appState.frequencyLoadPromise;
 	}
-	appState.frequencyLoadPromise = fetch(FREQUENCY_DATA_PATH, { cache: "no-store" })
+	appState.frequencyLoadPromise = fetch(FREQUENCY_DATA_PATH)
 		.then((response) => response.ok ? response.json() : null)
 		.then((data) => {
 			appState.frequencyData = data && typeof data === "object" ? data : null;
@@ -6141,7 +6048,7 @@ async function loadRouteGeometry(routeId) {
 	}
 	let segments = null;
 	try {
-		const response = await fetch(`${ROUTE_GEOMETRY_DIR}/${encodeURIComponent(normalised)}.geojson`, { cache: "no-store" });
+		const response = await fetch(`${ROUTE_GEOMETRY_DIR}/${encodeURIComponent(normalised)}.geojson`);
 		if (response.ok) {
 			const geojson = await response.json();
 			const extracted = extractRouteGeometryFromCollection(geojson);

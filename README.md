@@ -144,7 +144,7 @@ Runs summaries over all routes or the current filtered subset. Available analyse
 
 Most result tables support CSV export.
 
-## Bus stop filters and analyses
+### Bus stop filters and analyses
 
 Runs analyses over a bus stop dataset enriched with route counts, postcodes, and boroughs.
 

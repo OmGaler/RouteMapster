@@ -458,7 +458,7 @@
   };
 
   const loadStopsGeojson = async () => {
-    const res = await fetch(STOP_GEOJSON_PATH, { cache: "no-store" });
+    const res = await fetch(STOP_GEOJSON_PATH);
     if (!res.ok) {
       return null;
     }
@@ -467,7 +467,7 @@
   };
 
   const loadBoroughsGeojson = async () => {
-    const res = await fetch(BOROUGHS_GEOJSON_PATH, { cache: "no-store" });
+    const res = await fetch(BOROUGHS_GEOJSON_PATH);
     if (!res.ok) {
       return null;
     }
@@ -475,7 +475,7 @@
   };
 
   const loadFrequencyData = async () => {
-    const res = await fetch(FREQUENCY_DATA_PATH, { cache: "no-store" });
+    const res = await fetch(FREQUENCY_DATA_PATH);
     if (!res.ok) {
       return null;
     }
