@@ -1321,7 +1321,7 @@
     }
     const target = container.querySelector ? (container.querySelector("#stopAnalysesContainer") || container) : container;
     target.innerHTML = `
-      <div class="module-note">Bus stop analysis using stop, route, and frequency data.</div>
+      <div class="module-note">Bus stop insights using stop, route, and frequency data.</div>
       <div class="module-note" id="stopAnalysisStatus">Loading bus stop datasets...</div>
       <div class="module-section">
         <div class="section-title">Scope</div>
@@ -1400,7 +1400,7 @@
         <div id="stopMapNote" class="module-note"></div>
       </div>
       <div class="module-section">
-        <div class="section-title">Analysis tools</div>
+        <div class="section-title">Insight tools</div>
         <div class="analysis-toolbar">
           <select id="stopAnalysisSelect" class="select-field"></select>
           <button id="runStopAnalysis" class="ghost-button compact" type="button">Run analysis</button>

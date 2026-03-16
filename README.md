@@ -3,7 +3,7 @@
 ![RouteMapster logo](assets/routemapster.png)
 
 RouteMapster is an interactive, map-based explorer for the London bus network, built to make it easy to visualise how routes, stops, stations, garages, operators, and service patterns all fit together within the network.
-It is designed for analysis, not live operations: use Explorer quick search, layered map views, flexible advanced filters, and built-in, exportable analyses to investigate the network.
+It is designed for analysis, not live operations: use Explorer quick search, layered map views, flexible advanced filters, and built-in, exportable insights to investigate the network.
 RouteMapster is independent, open-source, and not in any way affiliated with Transport for London (TfL).
 
 ## What you can explore
@@ -13,8 +13,8 @@ RouteMapster is independent, open-source, and not in any way affiliated with Tra
 - **Garages** with operator and route allocations.
 - **Frequencies** view showing combined frequencies along shared corridors.  
 - **Explorer** quick search (`Ctrl+F`) to jump to routes, stops, stations, garages.  
-- **Advanced filters and analyses** for complex queries.  
-- **CSV exports** from filters and analyses.
+- **Advanced filters and insights** for complex queries.  
+- **CSV exports** from filters and insights.
 
 ## Using the app
 
@@ -35,8 +35,8 @@ RouteMapster is independent, open-source, and not in any way affiliated with Tra
 - `P` show prefix routes only
 - `H` show school routes only
 - `X` open Advanced route filters
-- `Y` open Advanced route analyses
-- `Z` open Bus stop analyses
+- `Y` open Advanced route insights
+- `Z` open Bus stop insights
 - `C` clear all (layers + highlighted routes)
 - `?` open Keyboard Shortcuts list
 - `Esc` close Explorer/details panel/advanced filter results
@@ -125,9 +125,9 @@ Example combinations:
 - `freq:peak_am:8-12 length:10+`
 - `type:any garage:X`
 
-### Advanced route analyses
+### Advanced route insights
 
-Runs summaries over all routes or the current filtered subset. Available analyses include:
+Runs summaries over all routes or the current filtered subset. Available insights include:
 
 - Routes by operator
 - Routes by garage
@@ -144,9 +144,9 @@ Runs summaries over all routes or the current filtered subset. Available analyse
 
 Most result tables support CSV export.
 
-### Bus stop filters and analyses
+### Bus stop filters and insights
 
-Runs analyses over a bus stop dataset enriched with route counts, postcodes, and boroughs.
+Runs insights over a bus stop dataset enriched with route counts, postcodes, and boroughs.
 
 Filters
 - Postcode district filter (multi-select, e.g., W1, EC1, SW1).
@@ -160,7 +160,7 @@ Map overlays
 - Top N bus stops by routes per stop.
 - Colour by routes per stop or by how many stops share the same name.
 
-Analyses
+Insights
 
 - Top bus stops by route count
 - Top bus stops by night route count
