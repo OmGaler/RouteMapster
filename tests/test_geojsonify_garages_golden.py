@@ -1,3 +1,4 @@
+"""Golden-file tests for the garage CSV to GeoJSON conversion pipeline."""
 from __future__ import annotations
 
 import json
@@ -10,6 +11,7 @@ FIXTURES_DIR = Path(__file__).parent / "fixtures" / "garages"
 
 
 def _garage_geocode_stub(postcode: str):
+    """Return deterministic coordinates for the fixture postcodes used in this test."""
     mapping = {
         "E8 4RH": (-0.055, 51.546, "E8 4RH"),
         "SW1A 1AA": (-0.141, 51.501, "SW1A 1AA"),

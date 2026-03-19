@@ -88,6 +88,7 @@ TIME_RE = re.compile(r"^(?:[01]?\d|2[0-3]|24):[0-5]\d(?::[0-5]\d)?$")
 
 @dataclass(frozen=True)
 class Band:
+    """Named time band used when reducing timetable data into headways."""
     label: str
     start_min: int
     end_min: int
@@ -98,6 +99,7 @@ class Band:
 
 @dataclass(frozen=True)
 class StopRecord:
+    """Minimal stop metadata used while sampling timetable endpoints."""
     stop_id: str
     name: str
     routes: Set[str]
@@ -1139,6 +1141,15 @@ def log(message: str, verbose: bool, always: bool = False) -> None:
 
 
 def main() -> int:
+    """Build the cached frequency dataset from route timetables.
+
+    Returns:
+        Process exit code for CLI usage.
+
+    Side effects:
+        Reads processed inputs, calls the TfL API, updates the local timetable
+        cache, and writes the frequency JSON output.
+    """
     parser = argparse.ArgumentParser(description="Build cached TfL timetable frequency bands.")
     parser.add_argument("--lines", help="Path to JSON array of line IDs (optional).")
     parser.add_argument("--stops", default=str(DEFAULT_STOPS), help="Path to stops GeoJSON.")

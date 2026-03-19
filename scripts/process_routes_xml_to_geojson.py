@@ -177,6 +177,15 @@ def cleanup_stale_routes(output_dir: Path, keep_routes: Iterable[str]) -> None:
 
 
 def main() -> int:
+    """Convert raw TfL route XML files into processed per-route GeoJSON.
+
+    Returns:
+        Process exit code for CLI usage.
+
+    Side effects:
+        Reads raw XML geometry files, writes processed GeoJSON files, and
+        refreshes the route index manifest.
+    """
     parser = argparse.ArgumentParser(description="Convert TfL route geometry XMLs into GeoJSON files.")
     parser.add_argument("--input-dir", help="Directory containing Route_Geometry_*.xml files.")
     parser.add_argument(

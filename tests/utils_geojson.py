@@ -1,3 +1,9 @@
+"""
+Shared GeoJSON assertions used by multiple Python test modules.
+
+These helpers keep fixture validation consistent and make failures easier to
+interpret than repeated inline structural assertions.
+"""
 from __future__ import annotations
 
 from typing import Any
@@ -7,10 +13,12 @@ ALLOWED_GEOM_TYPES = {"Point", "LineString", "MultiLineString", "Polygon", "Mult
 
 
 def _is_number(value: Any) -> bool:
+    """Return whether a value is a real numeric coordinate token."""
     return isinstance(value, (int, float)) and not isinstance(value, bool)
 
 
 def _assert_numeric_coords(coords: Any) -> None:
+    """Recursively assert that a nested coordinate structure is numeric."""
     if isinstance(coords, (list, tuple)):
         for item in coords:
             _assert_numeric_coords(item)
@@ -19,6 +27,7 @@ def _assert_numeric_coords(coords: Any) -> None:
 
 
 def assert_geometry(geom: dict) -> None:
+    """Assert the minimal structure and coordinate validity of a GeoJSON geometry."""
     assert isinstance(geom, dict), "Geometry must be a dict"
     gtype = geom.get("type")
     assert gtype in ALLOWED_GEOM_TYPES, f"Unexpected geometry type: {gtype!r}"
@@ -37,6 +46,7 @@ def assert_geometry(geom: dict) -> None:
 
 
 def assert_feature(feature: dict) -> None:
+    """Assert that a GeoJSON feature has the expected wrapper structure."""
     assert isinstance(feature, dict), "Feature must be a dict"
     assert feature.get("type") == "Feature", "Feature type must be 'Feature'"
     assert "geometry" in feature, "Feature missing geometry"
@@ -46,6 +56,7 @@ def assert_feature(feature: dict) -> None:
 
 
 def assert_feature_collection(fc: dict) -> None:
+    """Assert that a GeoJSON FeatureCollection only contains valid features."""
     assert isinstance(fc, dict), "FeatureCollection must be a dict"
     assert fc.get("type") == "FeatureCollection", "FeatureCollection type must be 'FeatureCollection'"
     features = fc.get("features")

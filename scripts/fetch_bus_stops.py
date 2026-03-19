@@ -72,6 +72,7 @@ def load_dotenv(path: str = ".env") -> None:
 
 @dataclass
 class Config:
+    """Runtime configuration for fetching and enriching the StopPoint export."""
     page_delay: float = 0.05
     timeout: Tuple[float, float] = (10.0, 60.0)  # (connect, read)
     max_pages: int = 500
@@ -361,8 +362,17 @@ def stoppoints_payload_to_features(
     payload: Dict[str, Any],
     active_routes: Optional[Set[str]] = None,
 ) -> List[Dict[str, Any]]:
-    """
-    Pure helper for tests: normalize a StopPoints payload into GeoJSON Features.
+    """Normalise a StopPoints payload into processed GeoJSON features.
+
+    Args:
+        payload: Raw StopPoints payload from the TfL API.
+        active_routes: Optional active route ids used to filter stale route tokens.
+
+    Returns:
+        Processed stop features matching the schema written to `stops.geojson`.
+
+    Side effects:
+        Reads borough polygons from disk when deriving borough labels.
     """
     if active_routes is None:
         active_routes = active_routes_from_geometry()
@@ -624,6 +634,12 @@ def to_geojson(
 
 
 def main() -> None:
+    """Fetch StopPoints, enrich them, and write the processed stop dataset.
+
+    Side effects:
+        Calls the TfL and postcodes.io APIs, updates the postcode cache, and
+        writes raw and processed stop outputs to disk.
+    """
     load_dotenv(".env")
     app_id = require_env("TFL_APP_ID")
     app_key = require_env("TFL_APP_KEY")

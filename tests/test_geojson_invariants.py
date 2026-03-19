@@ -1,3 +1,9 @@
+"""
+GeoJSON invariant tests for generated stop and garage fixtures.
+
+These tests prove that the pipeline produces structurally valid GeoJSON before
+the data is consumed by the browser application.
+"""
 from __future__ import annotations
 
 import json
@@ -12,6 +18,7 @@ FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
 
 def _garage_geocode_stub(postcode: str):
+    """Return deterministic coordinates for fixture postcode lookups."""
     mapping = {
         "E8 4RH": (-0.055, 51.546, "E8 4RH"),
         "SW1A 1AA": (-0.141, 51.501, "SW1A 1AA"),

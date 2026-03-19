@@ -1,3 +1,11 @@
+/**
+ * Serves the static RouteMapster application during local development.
+ *
+ * This entry point sits outside the browser bundle and exposes repository
+ * files directly from the project root so engineers can inspect generated
+ * artifacts without a separate build step. It depends only on Node's
+ * standard `http`, `fs`, and `path` modules.
+ */
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
@@ -19,10 +27,23 @@ const MIME_TYPES = {
 	'.ico': 'image/x-icon'
 };
 
+/**
+ * Starts the development server.
+ *
+ * Returns: `void`.
+ * Side effects: Opens an HTTP listener on `PORT`.
+ */
 function main() {
 	startServer();
 }
 
+/**
+ * Creates and starts the HTTP server used for local previews.
+ *
+ * Returns: `void`.
+ * Side effects: Reads from the filesystem, writes HTTP responses, and logs
+ * the listening address to stdout.
+ */
 function startServer() {
 	const server = http.createServer((req, res) => {
 		const requestUrl = new URL(req.url, `http://${req.headers.host}`);
@@ -71,6 +92,14 @@ function startServer() {
 	});
 }
 
+/**
+ * Streams a single file to the HTTP response.
+ *
+ * @param {string} filePath Absolute path to the file being served.
+ * @param {import('http').ServerResponse} res Response object for the current request.
+ * @returns {void}
+ * Side effects: Opens a read stream and writes bytes to the client.
+ */
 function serveFile(filePath, res) {
 	const ext = path.extname(filePath).toLowerCase();
 	const mimeType = MIME_TYPES[ext] || 'application/octet-stream';
@@ -83,6 +112,15 @@ function serveFile(filePath, res) {
 	});
 }
 
+/**
+ * Renders a simple HTML directory index when no `index.html` exists.
+ *
+ * @param {string} dirPath Absolute directory path on disk.
+ * @param {string} urlPath Request pathname used to build child links.
+ * @param {import('http').ServerResponse} res Response object for the current request.
+ * @returns {void}
+ * Side effects: Reads directory entries synchronously and writes an HTML page.
+ */
 function serveDirectoryListing(dirPath, urlPath, res) {
 	const entries = fs.readdirSync(dirPath, { withFileTypes: true });
 	const items = entries.map((entry) => {
@@ -107,6 +145,12 @@ function serveDirectoryListing(dirPath, urlPath, res) {
 	res.end(html);
 }
 
+/**
+ * Decodes a URL component without throwing on malformed input.
+ *
+ * @param {string} value Raw pathname segment from the request URL.
+ * @returns {string|null} Decoded text, or `null` when the request is invalid.
+ */
 function safeDecodeURIComponent(value) {
 	try {
 		return decodeURIComponent(value);
@@ -115,6 +159,12 @@ function safeDecodeURIComponent(value) {
 	}
 }
 
+/**
+ * Escapes untrusted text before inserting it into HTML.
+ *
+ * @param {unknown} value Text-like value to escape.
+ * @returns {string} HTML-safe string content.
+ */
 function escapeHtml(value) {
 	return String(value)
 		.replace(/&/g, '&amp;')

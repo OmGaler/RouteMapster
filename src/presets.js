@@ -1,4 +1,11 @@
 ﻿(() => {
+  /**
+   * Defines canned filter and analysis combinations for the UI.
+   *
+   * Presets provide quick entry points into common RouteMapster workflows
+   * without hard-coding those combinations inside the advanced filter or
+   * analytics modules.
+   */
   const PRESETS = [
     {
       id: "peak-hour-demand",
@@ -32,6 +39,11 @@
     }
   ];
 
+  /**
+   * Returns a shallow copy of the preset catalogue.
+   *
+   * @returns {Array<object>} Preset metadata safe for callers to iterate without mutating the source array.
+   */
   const getPresets = () => PRESETS.slice();
 
   window.RouteMapsterPresets = {

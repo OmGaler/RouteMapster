@@ -1,3 +1,4 @@
+"""Unit tests for route destination record selection and fallback rules."""
 from scripts.fetch_route_destinations import build_route_destination_record
 
 

@@ -1,3 +1,4 @@
+"""Unit tests for StopPoint normalisation into processed stop features."""
 from __future__ import annotations
 
 import json

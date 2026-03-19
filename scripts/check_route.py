@@ -249,6 +249,14 @@ def route_status(
 
 
 def main() -> int:
+    """Inspect one route across the processed RouteMapster datasets.
+
+    Returns:
+        Process exit code for CLI usage.
+
+    Side effects:
+        Reads processed files from disk and prints a human-readable report.
+    """
     ap = argparse.ArgumentParser()
     ap.add_argument("route", help="Route id (e.g. 1, 100, sl10)")
     ap.add_argument("--geom-dir", default=str(repo_root() / "data" / "processed" / "routes"))

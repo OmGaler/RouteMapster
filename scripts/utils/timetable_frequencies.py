@@ -1,3 +1,10 @@
+"""
+Derive route frequencies from cached TfL timetable payloads.
+
+The helpers in this module intentionally stay lightweight so scripts and tests
+can share the same frequency-band logic without pulling in the larger pipeline
+entry points.
+"""
 from __future__ import annotations
 
 import re
@@ -13,6 +20,7 @@ BAND_HOURS = {
 
 
 def _is_weekday_name(name: str) -> bool:
+    """Return whether a schedule label describes a weekday service."""
     text = re.sub(r"[^a-z]", "", name.lower())
     if "weekday" in text or "weekdays" in text:
         return True
@@ -20,6 +28,7 @@ def _is_weekday_name(name: str) -> bool:
 
 
 def _extract_schedules(timetable_data: Dict[str, Any]) -> Iterable[Dict[str, Any]]:
+    """Yield schedule dictionaries from the supported TfL timetable shapes."""
     schedules = []
     timetable = timetable_data.get("timetable")
     if isinstance(timetable, dict):
@@ -48,6 +57,7 @@ def _extract_schedules(timetable_data: Dict[str, Any]) -> Iterable[Dict[str, Any
 
 
 def _parse_journey_minutes(hour_value: Any, minute_value: Any) -> Optional[int]:
+    """Parse a timetable hour/minute pair into minutes after midnight."""
     try:
         hour = int(str(hour_value).strip())
         minute = int(str(minute_value).strip())
@@ -60,6 +70,7 @@ def _parse_journey_minutes(hour_value: Any, minute_value: Any) -> Optional[int]:
 
 
 def _classify_band(minutes: int) -> Optional[str]:
+    """Map minutes after midnight onto the RouteMapster reporting bands."""
     if 0 <= minutes < 300:
         return "overnight"  # 00:00-05:00
     if 300 <= minutes < 420:
@@ -76,12 +87,14 @@ def _classify_band(minutes: int) -> Optional[str]:
 
 
 def _normalize_route_type(route_type: str) -> str:
+    """Collapse route type spellings into a comparison-friendly token."""
     if not route_type:
         return ""
     return re.sub(r"[\s\-]", "", route_type.strip().lower())
 
 
 def _filter_bands_for_route_type(frequencies: Dict[str, float], route_type: str) -> Dict[str, float]:
+    """Drop irrelevant bands for route types that only run in certain periods."""
     key = _normalize_route_type(route_type)
     if key in ("night", "nightroute"):
         return {"overnight": frequencies.get("overnight", 0.0)}
@@ -99,9 +112,19 @@ def _filter_bands_for_route_type(frequencies: Dict[str, float], route_type: str)
 def calculate_route_frequencies(timetable_data: Dict[str, Any], route_type: str) -> Dict[str, float]:
     """Calculate buses-per-hour by time band from a TfL timetable payload.
 
-    - Uses only the Monday-to-Friday schedule (ignores weekend schedules).
-    - Handles hour >= 24 by wrapping to the next-day hour (e.g., "25" -> 01:00).
-    - Band boundaries are start-inclusive and end-exclusive (e.g., 16:30 is in pm_peak).
+    Args:
+        timetable_data: TfL timetable payload in one of the supported shapes.
+        route_type: Route type label used to drop irrelevant bands.
+
+    Returns:
+        Buses-per-hour values keyed by RouteMapster time band.
+
+    Side effects:
+        None.
+
+    Notes:
+        Uses only the Monday-to-Friday schedule, wraps hour values beyond 24,
+        and treats band boundaries as start-inclusive and end-exclusive.
     """
     counts = {band: 0 for band in BAND_HOURS}
     schedules = _extract_schedules(timetable_data if isinstance(timetable_data, dict) else {})

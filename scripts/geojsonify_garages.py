@@ -246,6 +246,15 @@ def features_to_feature_collection(features: List[Dict[str, Any]]) -> Dict[str, 
 
 
 def main() -> int:
+    """Convert a garage CSV file into a geocoded GeoJSON FeatureCollection.
+
+    Returns:
+        Process exit code for CLI usage.
+
+    Side effects:
+        Reads CSV input, performs postcode lookups, updates the cache, and
+        writes the GeoJSON output file.
+    """
     ap = argparse.ArgumentParser()
     ap.add_argument("input_csv", type=str, help="Input CSV path")
     ap.add_argument("output_geojson", type=str, help="Output GeoJSON path")

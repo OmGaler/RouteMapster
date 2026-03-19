@@ -1,3 +1,9 @@
+/**
+ * Covers the small shared utility bundle exposed to browser modules.
+ *
+ * The focus is on token normalisation and HTML escaping because those helpers
+ * are reused widely across the application.
+ */
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { loadBrowserModule } = require("./helpers/load_browser_module");
@@ -47,4 +53,12 @@ test("escapeHtml escapes critical characters", () => {
     escapeHtml('<div class="x">Tom & Jerry\'s</div>'),
     "&lt;div class=&quot;x&quot;&gt;Tom &amp; Jerry&#39;s&lt;/div&gt;"
   );
+});
+
+test("escapeHtml preserves zero values", () => {
+  const windowRef = loadBrowserModule("src/shared_utils.js");
+  const { escapeHtml } = windowRef.RouteMapsterUtils;
+
+  assert.equal(escapeHtml(0), "0");
+  assert.equal(escapeHtml("0"), "0");
 });

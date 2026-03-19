@@ -1,4 +1,10 @@
 #!/usr/bin/env python3
+"""
+Fetch ordered stop sequences for each route from the TfL API.
+
+This script builds a cache of route-stop ordering that downstream processing
+and diagnostics can reuse without repeatedly calling the live API.
+"""
 from __future__ import annotations
 
 import argparse
@@ -139,6 +145,7 @@ def extract_stop_ids(stop_points: Any) -> List[str]:
 
 @dataclass
 class SequenceRecord:
+    """One directional route sequence record ready for JSON serialisation."""
     route_id: str
     direction: str
     service_type: Optional[str]
@@ -184,6 +191,16 @@ def fetch_route_sequence(
 
 
 def build_records(payload: Dict[str, Any], fallback_route: str, fallback_direction: str) -> List[SequenceRecord]:
+    """Convert a TfL route sequence payload into cacheable records.
+
+    Args:
+        payload: Raw route sequence payload from the TfL API.
+        fallback_route: Route id to use when the payload omits one.
+        fallback_direction: Direction to use when the payload omits one.
+
+    Returns:
+        Sequence records containing ordered stop ids for each usable sequence.
+    """
     records: List[SequenceRecord] = []
     stop_sequences = payload.get("stopPointSequences")
     if not isinstance(stop_sequences, list):
@@ -211,6 +228,14 @@ def build_records(payload: Dict[str, Any], fallback_route: str, fallback_directi
 
 
 def main() -> int:
+    """Fetch route stop sequences and refresh the cached sequence outputs.
+
+    Returns:
+        Process exit code for CLI usage.
+
+    Side effects:
+        Calls the TfL API and writes JSON and JSONL cache files to disk.
+    """
     parser = argparse.ArgumentParser(description="Fetch TfL route stop sequences.")
     parser.add_argument("--routes-index", default=str(repo_root() / "data" / "processed" / "routes" / "index.json"))
     parser.add_argument("--line-ids", help="Comma-separated list of line ids to fetch.")

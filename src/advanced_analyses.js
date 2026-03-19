@@ -1,4 +1,11 @@
 ﻿(() => {
+  /**
+   * Renders advanced route analyses and synchronises their map overlays.
+   *
+   * This module consumes the analysis registry, formats tables and pill-based
+   * outputs, and translates analysis-specific overlay metadata into calls back
+   * into `RouteMapsterAPI`.
+   */
   const utils = window.RouteMapsterUtils || {};
   const escapeHtml = utils.escapeHtml || ((value) => String(value || ""));
   const downloadCsv = utils.downloadCsv || (() => {});
@@ -51,6 +58,13 @@
     return `hsl(${hue.toFixed(1)}, ${saturation}%, ${lightness}%)`;
   };
 
+  /**
+   * Normalises grouped-route overlays into a consistent renderable shape.
+   *
+   * @param {Array<object>} groups Overlay group definitions from an analysis result.
+   * @param {string} [overlayKey=""] Overlay grouping key such as `operator`.
+   * @returns {Array<object>} Sanitised groups with labels, route ids, and safe colours.
+   */
   const normaliseOverlayGroups = (groups, overlayKey = "") => {
     const key = normaliseOverlayLabel(overlayKey);
     return (Array.isArray(groups) ? groups : [])
@@ -76,6 +90,12 @@
       .filter((group) => group.label && group.routes.length > 0);
   };
 
+  /**
+   * Builds a lookup of overlay label to colour for result-table decoration.
+   *
+   * @param {object} result Analysis result payload.
+   * @returns {Map<string, string>|null} Lower-cased label-to-colour map, or `null` when no grouped overlay exists.
+   */
   const buildOverlayLegendByLabel = (result) => {
     const overlay = result?.mapOverlay;
     if (!overlay || overlay.type !== "grouped-routes") {
@@ -95,6 +115,13 @@
     return coloursByLabel;
   };
 
+  /**
+   * Renders a generic analysis table with optional overlay colour markers.
+   *
+   * @param {object} result Table-shaped analysis result.
+   * @param {string} [analysisId=""] Active analysis identifier.
+   * @returns {string} HTML fragment for insertion into the analysis panel.
+   */
   const renderTable = (result, analysisId = "") => {
     const columns = result.columns || [];
     const rows = result.rows || [];
@@ -318,6 +345,14 @@
     return Math.max(0, Math.min(1, sum / weightSum));
   };
 
+  /**
+   * Lazily fills in geometry-based confidence metrics for route family rows.
+   *
+   * @param {HTMLElement} rowEl Rendered pill row element.
+   * @param {object} group Route family group metadata from the analysis result.
+   * @returns {Promise<void>}
+   * Side effects: Fetches route geometry, updates loading UI, and mutates DOM content in-place.
+   */
   const hydrateRouteFamilyGeometry = async (rowEl, group) => {
     if (!rowEl || !group) {
       return;
@@ -675,6 +710,15 @@
     return state.allRows;
   };
 
+  /**
+   * Runs one or more registered analyses against the chosen scope.
+   *
+   * @param {string|string[]} analysisIds Analysis identifier or identifiers.
+   * @param {Array<object>} baseRows Rows for the chosen scope.
+   * @param {object|null} filterSpec Optional additional filter spec applied before analysis.
+   * @param {object} [context={}] Additional runtime context shared with analyses.
+   * @returns {Promise<Array<object>>} Render-ready analysis result wrappers.
+   */
   const runAnalyses = async (analysisIds, baseRows, filterSpec, context = {}) => {
     const engine = window.RouteMapsterQueryEngine;
     const registry = window.RouteMapsterAnalyses?.analysisRegistry || {};
@@ -753,6 +797,14 @@
     }
   };
 
+  /**
+   * Renders analysis output blocks and mirrors their overlays onto the map.
+   *
+   * @param {HTMLElement} container Output container element.
+   * @param {Array<object>} results Completed analysis result wrappers.
+   * @returns {void}
+   * Side effects: Rewrites DOM content, updates local caches, and may redraw map overlays.
+   */
   const renderResults = (container, results) => {
     state.resultsByKey.clear();
     state.analysisById.clear();
@@ -870,6 +922,14 @@
     }
   };
 
+  /**
+   * Initialises the advanced analyses panel and wires its event handlers.
+   *
+   * @param {HTMLElement} container Module container element.
+   * @param {object} appState Shared application state from `app.js`.
+   * @returns {Promise<void>}
+   * Side effects: Loads route summary data, binds DOM events, and updates analysis/map state.
+   */
   const initAdvancedAnalyses = async (container, appState) => {
     const engine = window.RouteMapsterQueryEngine;
     const analyses = window.RouteMapsterAnalyses;

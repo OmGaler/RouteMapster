@@ -1,3 +1,4 @@
+"""Unit tests for timetable-to-frequency conversion rules."""
 from __future__ import annotations
 
 from scripts.utils import timetable_frequencies as tf

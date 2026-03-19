@@ -1,3 +1,4 @@
+"""Unit tests for shared route identifier normalisation rules."""
 from __future__ import annotations
 
 import logging

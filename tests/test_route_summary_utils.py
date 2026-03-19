@@ -1,3 +1,9 @@
+"""
+Unit tests for the route summary helper module.
+
+The cases here focus on route token parsing, route ordering, geometry length
+aggregation, and cached destination enrichment.
+"""
 from __future__ import annotations
 
 import json
@@ -74,6 +80,7 @@ def test_geometry_length_and_route_length_aggregation() -> None:
 
 
 def _local_temp_dir() -> Path:
+    """Create an isolated temporary directory under the local pytest scratch area."""
     root = Path(".pytest_local_tmp")
     root.mkdir(exist_ok=True)
     path = root / f"route-summary-{uuid4().hex}"

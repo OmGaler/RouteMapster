@@ -1,4 +1,4 @@
-/* Basic layout for RouteMapster skeleton */
+/* Basic layout for the RouteMapster shell used by the lightweight local preview. */
 html,body,#app { height: 100%; margin: 0; padding: 0; font-family: Arial, sans-serif; }
 #app { display: grid; grid-template-columns: 320px 1fr 280px; grid-template-rows: 100%; }
 

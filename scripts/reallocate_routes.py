@@ -49,6 +49,7 @@ DESTINATION_FIELD = "TfL main network routes"
 
 
 class ReallocationError(Exception):
+    """Raised when a requested route move cannot be applied safely."""
     pass
 
 
@@ -234,6 +235,14 @@ def parse_moves_file(path: Path) -> List[Tuple[str, str, str]]:
 
 
 def main() -> int:
+    """Apply one or more garage reallocation moves to the processed GeoJSON.
+
+    Returns:
+        Process exit code for CLI usage.
+
+    Side effects:
+        Reads and rewrites the processed garage GeoJSON and logs any failures.
+    """
     ap = argparse.ArgumentParser()
     ap.add_argument("geojson", type=str, help="Garages GeoJSON FeatureCollection")
     ap.add_argument("move_spec", nargs="+", help="Either: ROUTE FROM TO OR a .txt file of moves")

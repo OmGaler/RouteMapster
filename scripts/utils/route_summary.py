@@ -1,3 +1,10 @@
+"""
+Build route-level summary data from processed RouteMapster inputs.
+
+This module underpins the route summary script and several tests by combining
+garage allocations, vehicle metadata, cached destinations, and route geometry
+into a single row-oriented representation.
+"""
 from __future__ import annotations
 
 import json
@@ -20,6 +27,7 @@ KM_TO_MILES = 0.621371
 
 
 def is_tram_feature(props: Dict[str, Any]) -> bool:
+    """Return whether a garage feature belongs to the tram network."""
     company = str(props.get("Company name") or "").strip().lower()
     group = str(props.get("Group name") or "").strip().lower()
     garage = str(props.get("Garage name") or "").strip().lower()
@@ -31,6 +39,14 @@ def is_tram_feature(props: Dict[str, Any]) -> bool:
 
 
 def parse_route_tokens(value: Any) -> List[str]:
+    """Parse and normalise route ids from a free-text allocation field.
+
+    Args:
+        value: Raw field value containing one or more route tokens.
+
+    Returns:
+        Normalised route ids in source order, excluding unsupported routes.
+    """
     if not value:
         return []
     tokens: List[str] = []
@@ -48,6 +64,14 @@ def parse_route_tokens(value: Any) -> List[str]:
 
 
 def build_route_sets(features: Sequence[Dict[str, Any]]) -> Dict[str, Set[str]]:
+    """Group allocated routes into the categories used by RouteMapster.
+
+    Args:
+        features: Garage GeoJSON features with allocation properties.
+
+    Returns:
+        Route id sets keyed by category, including a helper set for school overlaps.
+    """
     regular: Set[str] = set()
     night: Set[str] = set()
     school: Set[str] = set()
@@ -88,6 +112,7 @@ def build_route_sets(features: Sequence[Dict[str, Any]]) -> Dict[str, Set[str]]:
 
 
 def build_route_garage_map(features: Sequence[Dict[str, Any]]) -> Dict[str, Set[Tuple[str, str, str]]]:
+    """Map each route id to the garages and operators that claim it."""
     route_map: Dict[str, Set[Tuple[str, str, str]]] = {}
     for feature in features:
         props = feature.get("properties") or {}
@@ -106,6 +131,7 @@ def build_route_garage_map(features: Sequence[Dict[str, Any]]) -> Dict[str, Set[
 
 
 def classify_route(route_id: str, route_sets: Dict[str, Set[str]]) -> str:
+    """Classify a route using the precomputed route-category sets."""
     route = normalize_route_id(route_id)
     if route.startswith("N"):
         return "night"
@@ -121,6 +147,7 @@ def classify_route(route_id: str, route_sets: Dict[str, Set[str]]) -> str:
 
 
 def parse_routes_index(path: Path) -> List[str]:
+    """Load the canonical route list from the processed routes index."""
     if not path.exists():
         return []
     payload = json.loads(path.read_text(encoding="utf-8"))
@@ -136,6 +163,7 @@ def parse_prefix_number(value: str) -> int:
 
 
 def route_sort_key(route_id: str) -> Tuple[int, str, int, str]:
+    """Build a stable sort key matching the application's route ordering."""
     raw = normalize_route_id(route_id)
     if not raw:
         return (9, "", 0, "")
@@ -159,6 +187,7 @@ def route_sort_key(route_id: str) -> Tuple[int, str, int, str]:
 
 
 def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Return the great-circle distance between two coordinates in kilometres."""
     radius = 6371.0088
     phi1 = math.radians(lat1)
     phi2 = math.radians(lat2)
@@ -169,6 +198,7 @@ def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
 
 
 def line_length_km(coords: Iterable[Any]) -> float:
+    """Measure the length of a GeoJSON line in kilometres."""
     points: List[Tuple[float, float]] = []
     for point in coords:
         if not isinstance(point, (list, tuple)) or len(point) < 2:
@@ -189,6 +219,7 @@ def line_length_km(coords: Iterable[Any]) -> float:
 
 
 def geometry_length_km(geometry: Dict[str, Any]) -> float:
+    """Measure a GeoJSON line or multiline geometry in kilometres."""
     if not geometry or "type" not in geometry:
         return 0.0
     geom_type = geometry.get("type")
@@ -204,6 +235,7 @@ def geometry_length_km(geometry: Dict[str, Any]) -> float:
 
 
 def route_length_km(route_geojson: Dict[str, Any]) -> Optional[float]:
+    """Estimate a route length from the mean length of its line features."""
     features = route_geojson.get("features")
     if not isinstance(features, list):
         return None
@@ -220,6 +252,7 @@ def route_length_km(route_geojson: Dict[str, Any]) -> Optional[float]:
 
 
 def format_join(values: Iterable[str]) -> str:
+    """Join unique non-empty strings with the project-standard separator."""
     uniq = sorted({value for value in values if value})
     return "; ".join(uniq)
 
@@ -231,6 +264,7 @@ def collect_route_ids(
     route_garages: Dict[str, Set[Tuple[str, str, str]]],
     vehicles: Optional[Dict[str, str]] = None,
 ) -> Set[str]:
+    """Collect the complete route universe from processed pipeline inputs."""
     route_ids: Set[str] = set()
     route_ids.update(parse_routes_index(routes_index))
     route_ids.update(normalize_route_id(route_id) for route_id in frequencies.keys())
@@ -247,6 +281,7 @@ def collect_route_ids(
 
 
 def load_vehicles_map(path: Path) -> Dict[str, str]:
+    """Load the route-to-vehicle lookup from the committed vehicle mapping."""
     if not path.exists():
         return {}
     payload = json.loads(path.read_text(encoding="utf-8"))
@@ -262,6 +297,7 @@ def load_vehicles_map(path: Path) -> Dict[str, str]:
 
 
 def load_route_destinations_map(path: Path) -> Dict[str, Dict[str, str]]:
+    """Load cached route destination text keyed by normalised route id."""
     if not path.exists():
         return {}
     payload = json.loads(path.read_text(encoding="utf-8"))
@@ -286,6 +322,7 @@ def load_route_destinations_map(path: Path) -> Dict[str, Dict[str, str]]:
 
 
 def split_suffix_route(route_id: str) -> Tuple[str, str]:
+    """Split route ids such as `108D` into base and suffix components."""
     match = SUFFIX_ROUTE_RE.match(route_id)
     if not match:
         return route_id, ""
@@ -302,6 +339,24 @@ def build_route_summary_rows(
     include_excluded: bool = False,
     include_length: bool = True,
 ) -> List[Dict[str, Any]]:
+    """Build route summary rows from processed pipeline artefacts.
+
+    Args:
+        garages_path: Path to processed garage allocations.
+        frequencies_path: Path to cached per-band frequency values.
+        routes_dir: Directory containing processed route geometries.
+        routes_index_path: Path to the processed route index.
+        vehicles_path: Path to the vehicle lookup JSON.
+        destinations_path: Path to cached route destination text.
+        include_excluded: Whether to keep excluded special routes.
+        include_length: Whether to calculate route length from geometry.
+
+    Returns:
+        Route summary rows ready for DataFrame conversion or CSV export.
+
+    Side effects:
+        Reads several processed JSON and GeoJSON files from disk.
+    """
     if garages_path.exists():
         garages = json.loads(garages_path.read_text(encoding="utf-8"))
         features = garages.get("features") or []
@@ -330,6 +385,8 @@ def build_route_summary_rows(
     for route_id in candidates:
         base, suffix = split_suffix_route(route_id)
         if suffix:
+            # Suffix variants are counted as additional journeys on the base route
+            # so the summary keeps one primary row per public route id.
             additional_journeys.setdefault(base, set()).add(route_id)
             filtered_route_ids.add(base)
         else:
@@ -424,6 +481,24 @@ def build_route_summary_df(
     include_excluded: bool = False,
     include_length: bool = True,
 ) -> pd.DataFrame:
+    """Build the route summary as a pandas DataFrame.
+
+    Args:
+        garages_path: Path to processed garage allocations.
+        frequencies_path: Path to cached per-band frequency values.
+        routes_dir: Directory containing processed route geometries.
+        routes_index_path: Path to the processed route index.
+        vehicles_path: Path to the vehicle lookup JSON.
+        destinations_path: Path to cached route destination text.
+        include_excluded: Whether to keep excluded special routes.
+        include_length: Whether to calculate route length from geometry.
+
+    Returns:
+        A DataFrame with stable columns used by the browser application.
+
+    Side effects:
+        Imports `pandas` lazily and reads processed pipeline artefacts from disk.
+    """
     import pandas as pd
 
     garages = Path(garages_path)

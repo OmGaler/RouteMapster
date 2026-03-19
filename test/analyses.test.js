@@ -1,3 +1,9 @@
+/**
+ * Covers the browser-side route analysis registry.
+ *
+ * The tests exercise analysis output in isolation by loading the browser
+ * module into a minimal simulated `window` object.
+ */
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { loadBrowserModule } = require("./helpers/load_browser_module");
@@ -24,6 +30,11 @@ const boroughsGeojson = {
   ]
 };
 
+/**
+ * Load the analysis registry with the browser globals it depends on.
+ *
+ * @returns {object} `RouteMapsterAnalyses` registry exposed by the browser module.
+ */
 const loadAnalyses = () => {
   const windowRef = {};
   loadBrowserModule("src/shared_utils.js", { window: windowRef });

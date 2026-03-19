@@ -1,4 +1,12 @@
 (() => {
+  /**
+   * Provides the bus stop analytics module and its map overlays.
+   *
+   * This file owns the stop-level dataset loading, filter state, summary
+   * calculations, and analysis registry for the dedicated bus stop panel. It
+   * depends on shared utilities, geographic helpers, and selected callbacks
+   * exposed by the main application API.
+   */
   const STOP_GEOJSON_PATH = "/data/processed/stops.geojson";
   const BOROUGHS_GEOJSON_PATH = "/data/boroughs.geojson";
   const FREQUENCY_DATA_PATH = "/data/processed/frequencies.json";
@@ -517,6 +525,12 @@
     return rows;
   };
 
+  /**
+   * Renders a stop-analysis table, including optional row metadata hooks.
+   *
+   * @param {object} result Table-shaped analysis result.
+   * @returns {string} HTML fragment for the analysis output panel.
+   */
   const renderTable = (result) => {
     const columns = result.columns || [];
     const rows = result.rows || [];
@@ -664,6 +678,12 @@
     return Array.from(summary.entries());
   };
 
+  /**
+   * Registry of stop analyses exposed to the bus stop analytics UI.
+   *
+   * Each entry returns a renderable payload and may declare additional dataset
+   * requirements such as frequency availability.
+   */
   const analysisRegistry = {
     "top-stops-routes": {
       id: "top-stops-routes",
@@ -1002,6 +1022,14 @@
     `;
   };
 
+  /**
+   * Runs one or more registered stop analyses against the filtered stop set.
+   *
+   * @param {string|string[]} analysisIds Analysis identifier or identifiers.
+   * @param {Array<object>} rows Stop rows in scope.
+   * @param {object} context Runtime context such as frequency availability.
+   * @returns {Array<object>} Render-ready result wrappers.
+   */
   const runAnalyses = (analysisIds, rows, context) => {
     const ids = Array.isArray(analysisIds) ? analysisIds : [analysisIds];
     return ids
@@ -1030,6 +1058,14 @@
       .filter(Boolean);
   };
 
+  /**
+   * Renders the current stop-analysis results into the output container.
+   *
+   * @param {HTMLElement} container Output container element.
+   * @param {Array<object>} results Completed analysis result wrappers.
+   * @returns {void}
+   * Side effects: Rewrites DOM content and refreshes the local export lookup.
+   */
   const renderResults = (container, results) => {
     state.resultsByKey.clear();
     if (!container) {
@@ -1160,6 +1196,12 @@
     }
   };
 
+  /**
+   * Derives the stop subset and legend state for the current map mode.
+   *
+   * @param {Array<object>} rows Filtered stop rows.
+   * @returns {{stops: Array<object>, note: string, showLegend: boolean, options: object}} Map display configuration.
+   */
   const buildMapDisplay = (rows) => {
     const highlightedNameStops = getHighlightedNameStops(rows);
     if (highlightedNameStops.length > 0) {
@@ -1315,6 +1357,13 @@
     }, DEBOUNCE_MS);
   };
 
+  /**
+   * Initialises the stop analytics panel and wires its controls.
+   *
+   * @param {HTMLElement} container Module container element.
+   * @returns {Promise<void>}
+   * Side effects: Loads stop datasets, binds DOM events, updates map overlays, and mutates module state.
+   */
   const initStopAnalyses = async (container) => {
     if (!container) {
       return;

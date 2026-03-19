@@ -1,3 +1,10 @@
+"""
+Regression tests for invariants across committed processed datasets.
+
+These checks guard against accidental pipeline regressions by validating that
+route geometry, allocations, vehicles, and cached frequencies remain internally
+consistent.
+"""
 from __future__ import annotations
 
 import json

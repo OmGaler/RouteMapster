@@ -1,7 +1,19 @@
+/**
+ * Covers the browser-side query engine used by route filtering and analysis.
+ *
+ * The tests validate canonicalisation, filtering, derived metrics, and the
+ * lightweight CSV-loading path used by the browser bundle.
+ */
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { loadBrowserModule } = require("./helpers/load_browser_module");
 
+/**
+ * Load the browser-side query engine with optional mocked globals.
+ *
+ * @param {{window?: object, fetch?: Function}} [options={}] Optional globals to inject before loading.
+ * @returns {object} `RouteMapsterQueryEngine` API exposed by the browser module.
+ */
 const loadEngine = (options = {}) => {
   const windowRef = loadBrowserModule("src/query_engine.js", options);
   return windowRef.RouteMapsterQueryEngine;

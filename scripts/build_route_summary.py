@@ -24,6 +24,15 @@ except ModuleNotFoundError:  # pragma: no cover - script execution fallback
 
 
 def main() -> int:
+    """Build the route summary dataset from processed pipeline inputs.
+
+    Returns:
+        Process exit code for CLI usage.
+
+    Side effects:
+        Reads processed datasets, writes CSV or JSON output, and prints a short
+        completion message to stdout.
+    """
     parser = argparse.ArgumentParser(description="Build route summary table.")
     parser.add_argument("--garages", default="data/processed/garages.geojson", help="Garages GeoJSON.")
     parser.add_argument("--frequencies", default="data/processed/frequencies.json", help="Frequencies JSON.")

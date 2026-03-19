@@ -1,4 +1,12 @@
 #!/usr/bin/env python3
+"""
+Summarise data changes between two RouteMapster revisions.
+
+This CLI compares route geometry, garage allocations, and cached frequency
+values so maintainers can quickly review what changed between pipeline runs.
+It depends on the processed datasets already committed in the repository and
+uses Git for historical lookups.
+"""
 from __future__ import annotations
 
 import argparse
@@ -253,6 +261,12 @@ def print_details() -> None:
 
 
 def main() -> None:
+    """Print a change summary for the requested repository comparison.
+
+    Side effects:
+        Reads processed files from disk, shells out to Git, and writes the
+        summary to stdout.
+    """
     parser = argparse.ArgumentParser(description="Summarize processed data changes.")
     parser.add_argument("--summary", action="store_true", help="Print one-line summary.")
     parser.add_argument("--details", action="store_true", help="Print detailed change log.")

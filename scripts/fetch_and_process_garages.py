@@ -389,6 +389,15 @@ def write_geojson(path: Path, features: List[Dict[str, Any]], metadata: Dict[str
 
 
 def main() -> int:
+    """Fetch garage source data and rebuild the processed garage GeoJSON.
+
+    Returns:
+        Process exit code for CLI usage.
+
+    Side effects:
+        Downloads upstream garage data, refreshes geocoding cache entries, and
+        writes raw and processed outputs to disk.
+    """
     parser = argparse.ArgumentParser(description="Fetch and process London bus garages data.")
     parser.add_argument("--page-url", default=GARAGES_PAGE, help="Source page URL for garages data.")
     parser.add_argument("--csv-url", default=GARAGES_CSV, help="CSV download URL for garages data.")

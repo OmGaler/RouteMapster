@@ -1,4 +1,12 @@
 ﻿(() => {
+  /**
+   * Coordinates the advanced route filter UI, result panel, and map highlights.
+   *
+   * The module sits between the DOM, `RouteMapsterQueryEngine`, geographic
+   * helpers, and the main application API. It is responsible for translating
+   * user input into canonical filter specs and keeping the filtered route
+   * subset in sync with map state.
+   */
   const FILTER_HASH_KEY = "filters";
   const MAP_HIGHLIGHT_COLOUR = "#10b981";
   const MAP_HIGHLIGHT_WEIGHT = 4;
@@ -459,6 +467,12 @@
     return data;
   };
 
+  /**
+   * Derives route-to-borough coverage from the stop dataset.
+   *
+   * @param {GeoJSON.FeatureCollection|object|null} geojson Stop GeoJSON with borough-enriched properties.
+   * @returns {{routeBoroughs: Map<string, Set<string>>, boroughLookup: Map<string, string>}} Borough tokens keyed by route.
+   */
   const buildRouteBoroughIndex = (geojson) => {
     const routeBoroughs = new Map();
     const boroughLookup = new Map();
@@ -638,6 +652,14 @@
     }
   };
 
+  /**
+   * Draws every currently filtered route on the map, subject to safety caps.
+   *
+   * @param {object} els Cached DOM elements for the module.
+   * @param {object} appState Shared application state from `app.js`.
+   * @returns {Promise<void>}
+   * Side effects: Loads route geometries, mutates visible map layers, and updates warning text.
+   */
   const showAllFilteredRoutes = async (els, appState) => {
     if (!els || !appState) {
       return;
@@ -658,6 +680,8 @@
     if (toShow.length > 0) {
       let index = 0;
       const concurrency = Math.max(1, Math.min(SHOW_ALL_MAP_CONCURRENCY, toShow.length));
+      // Batching geometry fetches keeps the UI responsive without serialising
+      // every route draw when the filtered subset is large.
       const worker = async () => {
         while (index < toShow.length) {
           const routeId = toShow[index];
@@ -1196,6 +1220,13 @@
     }
   };
 
+  /**
+   * Hides the results panel and optionally clears map highlights.
+   *
+   * @param {{restoreMap?: boolean}} [options={}] Whether to remove map highlights and reset route-return state.
+   * @returns {void}
+   * Side effects: Mutates module state, DOM visibility, map overlays, and dispatches `routeFiltersUpdated`.
+   */
   const dismissResults = (options = {}) => {
     const restoreMap = options && options.restoreMap === true;
     state.resultsDismissed = true;
@@ -1210,6 +1241,12 @@
     }
   };
 
+  /**
+   * Re-opens the results panel after a previous dismissal.
+   *
+   * @returns {void}
+   * Side effects: Updates module state and DOM visibility.
+   */
   const showResults = () => {
     state.resultsDismissed = false;
     if (state.elements) {
@@ -1305,6 +1342,15 @@
     });
   };
 
+  /**
+   * Applies a filter specification to the loaded route dataset and refreshes the UI.
+   *
+   * @param {object} appState Shared application state from `app.js`.
+   * @param {object} els Cached DOM elements for the module.
+   * @param {{filterSpec?: object, applySpec?: object, baseRows?: Array<object>}} [options={}] Optional precomputed filter inputs.
+   * @returns {void}
+   * Side effects: Mutates module state, redraws the results list, updates map layers, and dispatches `routeFiltersUpdated`.
+   */
   const applyFilters = (appState, els, options = {}) => {
     const filterSpec = options.filterSpec || buildFilterSpecFromUI(els);
     const normalizedSpec = window.RouteMapsterQueryEngine.normalizeFilterSpec(filterSpec);
@@ -1354,6 +1400,14 @@
     document.dispatchEvent(new CustomEvent("routeFiltersUpdated", { detail: { rows: derived, filterSpec: normalizedSpec } }));
   };
 
+  /**
+   * Builds a filter spec from the current form state and applies it.
+   *
+   * @param {object} appState Shared application state from `app.js`.
+   * @param {object} els Cached DOM elements for the module.
+   * @returns {Promise<void>}
+   * Side effects: May load spatial metrics, mutate filter state, and redraw the map.
+   */
   const applyFromUI = async (appState, els) => {
     const engine = window.RouteMapsterQueryEngine;
     if (!engine) {
@@ -1364,6 +1418,8 @@
     let baseRows = null;
     let applySpec = spec;
     if (normalized.borough_mode === "within" && Array.isArray(normalized.boroughs) && normalized.boroughs.length > 0) {
+      // "Wholly within" cannot be inferred from stop coverage alone, so switch
+      // to geometry-based membership before reapplying the remaining filters.
       const boroughSet = new Set(normalized.boroughs.map((token) => String(token).toLowerCase()));
       const allowed = await computeRoutesWhollyWithin(state.rows, boroughSet);
       if (allowed instanceof Set) {
@@ -1453,6 +1509,15 @@
     refreshMobileMultiFallbacks(els);
   };
 
+  /**
+   * Applies a provided filter spec, typically from Explorer or a preset.
+   *
+   * @param {object} filterSpec Filter specification to mirror into the UI.
+   * @param {object} appState Shared application state from `app.js`.
+   * @param {{openModule?: boolean}} [options={}] Optional UI behaviour flags.
+   * @returns {Promise<void>}
+   * Side effects: Updates form controls, filter state, results, and map overlays.
+   */
   const applyFilterSpec = async (filterSpec, appState, options = {}) => {
     const engine = window.RouteMapsterQueryEngine;
     if (!engine) {
@@ -1476,6 +1541,8 @@
     let baseRows = null;
     let applySpec = normalized;
     if (normalized.borough_mode === "within" && Array.isArray(normalized.boroughs) && normalized.boroughs.length > 0) {
+      // Reuse the same geometry-backed path as manual UI application so deep
+      // links and presets behave identically.
       const boroughSet = new Set(normalized.boroughs.map((token) => String(token).toLowerCase()));
       const allowed = await computeRoutesWhollyWithin(state.rows, boroughSet);
       if (allowed instanceof Set) {
@@ -1496,6 +1563,14 @@
     }
   };
 
+  /**
+   * Initialises the advanced filter module once and wires all DOM events.
+   *
+   * @param {HTMLElement} container `<details>` container hosting the filter controls.
+   * @param {object} appState Shared application state from `app.js`.
+   * @returns {Promise<void>}
+   * Side effects: Loads datasets, caches DOM references, binds event listeners, and updates global app state.
+   */
   const initAdvancedFilters = async (container, appState) => {
     const engine = window.RouteMapsterQueryEngine;
     if (!container || !engine) {

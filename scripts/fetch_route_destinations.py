@@ -1,4 +1,11 @@
 #!/usr/bin/env python3
+"""
+Fetch and cache passenger-facing route destination labels from the TfL API.
+
+The resulting JSON is consumed by the browser application and route summary
+builder so route detail panels can show outbound and inbound destination text
+without calling the live API at runtime.
+"""
 from __future__ import annotations
 
 import argparse
@@ -184,6 +191,16 @@ def extract_route_context(payload: Any) -> Tuple[List[str], List[str]]:
 
 
 def build_route_destination_record(route_id: str, stop_payloads: Sequence[Any], service_types: Sequence[str]) -> Optional[Dict[str, Any]]:
+    """Build the cached destination record for one route.
+
+    Args:
+        route_id: Normalised route id being summarised.
+        stop_payloads: Route payloads fetched for the route's origin and destination stops.
+        service_types: Service types discovered while fetching the route context.
+
+    Returns:
+        A serialisable destination summary, or `None` when no usable text is available.
+    """
     direction_pairs: Dict[str, Counter[Tuple[str, str]]] = defaultdict(Counter)
     fallback_pairs: Dict[str, Counter[Tuple[str, str]]] = defaultdict(Counter)
     for payload in stop_payloads:
@@ -207,6 +224,8 @@ def build_route_destination_record(route_id: str, stop_payloads: Sequence[Any], 
             if qualifier:
                 fallback_pairs[direction][(qualifier, "")] += 1
 
+    # Prefer passenger-facing blind text when it exists anywhere; only fall
+    # back to stop destination names when no better wording is available.
     active_pairs = direction_pairs if any(direction_pairs.values()) else fallback_pairs
 
     directions: Dict[str, Dict[str, str]] = {}
@@ -243,6 +262,15 @@ def load_existing_routes(path: Path) -> Dict[str, Any]:
 
 
 def main() -> int:
+    """Fetch route destination text and refresh the cached JSON file.
+
+    Returns:
+        Process exit code for CLI usage.
+
+    Side effects:
+        Calls the TfL API, merges with any existing cache, and writes the
+        destination cache back to disk.
+    """
     parser = argparse.ArgumentParser(description="Fetch cached passenger-facing route destinations from TfL.")
     parser.add_argument("--routes-index", default=str(repo_root() / "data" / "processed" / "routes" / "index.json"))
     parser.add_argument("--output", default=str(repo_root() / "data" / "processed" / "route_destinations.json"))

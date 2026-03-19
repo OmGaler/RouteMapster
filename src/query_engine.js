@@ -1,4 +1,12 @@
 ﻿(() => {
+  /**
+   * Loads and normalises the route summary dataset used across RouteMapster.
+   *
+   * This module is the canonical source for turning raw CSV and stop GeoJSON
+   * into stable route rows, derived metrics, and serialisable filter
+   * specifications. Browser UI modules call into it through
+   * `window.RouteMapsterQueryEngine`.
+   */
   const ROUTE_SUMMARY_PATHS = [
     "/data/processed/route_summary.csv",
     "/route_summary.csv",
@@ -14,6 +22,12 @@
   let routeStopStatsPromise = null;
   const routeIdPartsCache = new Map();
 
+  /**
+   * Parses the small route summary CSV without pulling a browser CSV dependency.
+   *
+   * @param {string} text Raw CSV text.
+   * @returns {string[][]} Parsed rows in source order.
+   */
   const parseCsv = (text) => {
     const rows = [];
     let row = [];
@@ -122,6 +136,12 @@
     return String(raw || "").trim();
   };
 
+  /**
+   * Counts total and route-only stops for each route in the stop dataset.
+   *
+   * @param {GeoJSON.FeatureCollection|object|null} geojson Stop GeoJSON payload.
+   * @returns {{totalCounts: Map<string, number>, exclusiveCounts: Map<string, number>}} Aggregated stop counts by route.
+   */
   const buildRouteStopStats = (geojson) => {
     const features = Array.isArray(geojson?.features) ? geojson.features : [];
     const stopRoutesByKey = new Map();
@@ -164,6 +184,12 @@
     return { totalCounts, exclusiveCounts };
   };
 
+  /**
+   * Loads and caches stop-based route statistics used by downstream analyses.
+   *
+   * @returns {Promise<{totalCounts: Map<string, number>, exclusiveCounts: Map<string, number>}>} Cached stop statistics.
+   * Side effects: Fetches the stop GeoJSON once and memoises the result.
+   */
   const loadRouteStopStats = async () => {
     if (routeStopStatsCache) {
       return routeStopStatsCache;
@@ -389,6 +415,12 @@
     };
   };
 
+  /**
+   * Loads, normalises, and enriches the route summary rows.
+   *
+   * @returns {Promise<Array<object>>} Normalised route rows ready for filtering and analysis.
+   * Side effects: Fetches CSV and stop datasets, then updates the module cache.
+   */
   const loadRouteSummary = async () => {
     if (Array.isArray(cachedRows) && cachedRows.length > 0) {
       return cachedRows;
@@ -408,7 +440,7 @@
             return text;
           }
         } catch (_) {
-          // try next path
+          // The repository serves the summary from different paths in local and deployed builds.
         }
       }
       return "";
@@ -473,6 +505,12 @@
     return sum / count;
   };
 
+  /**
+   * Computes lightweight derived fields that several filters and analyses share.
+   *
+   * @param {Array<object>} rows Normalised route rows.
+   * @returns {Array<object>} New row objects with derived metrics appended.
+   */
   const computeDerivedFields = (rows) => {
     const list = Array.isArray(rows) ? rows : [];
     return list.map((row) => {
@@ -495,6 +533,12 @@
     });
   };
 
+  /**
+   * Canonicalises a filter specification from UI, presets, or query text.
+   *
+   * @param {object} filterSpec Untrusted filter input with possible aliases.
+   * @returns {object} Normalised filter spec with consistent keys and value shapes.
+   */
   const normalizeFilterSpec = (filterSpec) => {
     const spec = filterSpec && typeof filterSpec === "object" ? filterSpec : {};
     const lengthSpec = spec.length_miles && typeof spec.length_miles === "object"
@@ -571,6 +615,13 @@
     return normalised;
   };
 
+  /**
+   * Applies the current filter specification to a set of route rows.
+   *
+   * @param {Array<object>} rows Candidate route rows.
+   * @param {object} filterSpec Filter specification from UI or deep link state.
+   * @returns {Array<object>} Rows that satisfy every active filter.
+   */
   const applyFilters = (rows, filterSpec) => {
     const list = Array.isArray(rows) ? rows : [];
     const spec = normalizeFilterSpec(filterSpec);
@@ -619,6 +670,8 @@
       : null;
     const hasBoroughMatchers = Array.isArray(boroughMatchers) && boroughMatchers.length > 0;
 
+    // Apply inexpensive attribute filters first; ranking and extremity filters
+    // are resolved afterwards against the narrowed subset.
     let filtered = list.filter((row) => {
       if (!row || !row.route_id_norm) {
         return false;
@@ -736,6 +789,8 @@
       return true;
     });
     if (spec.extreme) {
+      // Extremity filters are relative to the already filtered subset rather than
+      // the whole network, which matches how the UI describes "most easterly" etc.
       const fieldByExtreme = {
         north: "northmost_lat",
         south: "southmost_lat",
@@ -767,6 +822,8 @@
       filtered = filtered.filter((row) => Number.isFinite(row?.[field]) && Math.abs(row[field] - target) <= epsilon);
     }
     if (spec.length_rank) {
+      // Ranking filters deliberately replace the existing order with a strict
+      // top-N slice so callers get deterministic results.
       const direction = spec.length_rank.mode === "longest" ? "longest" : "shortest";
       const limit = Number.isFinite(spec.length_rank.count) ? Math.round(spec.length_rank.count) : 0;
       if (limit > 0) {
@@ -893,11 +950,23 @@
     return cleaned;
   };
 
+  /**
+   * Serialises a filter spec for URL-safe storage.
+   *
+   * @param {object} filterSpec Filter specification to encode.
+   * @returns {string} Percent-encoded JSON payload.
+   */
   const serializeFilterSpec = (filterSpec) => {
     const compact = compactFilterSpec(filterSpec);
     return encodeURIComponent(JSON.stringify(compact));
   };
 
+  /**
+   * Parses a serialised filter spec from the URL hash.
+   *
+   * @param {string} value Encoded JSON payload.
+   * @returns {object} Normalised filter specification, or an empty object on failure.
+   */
   const parseFilterSpec = (value) => {
     if (!value) {
       return {};
@@ -911,6 +980,14 @@
     }
   };
 
+  /**
+   * Collects distinct values from a row set using a selector and optional normaliser.
+   *
+   * @param {Array<object>} rows Source rows.
+   * @param {(row: object) => unknown} selector Extracts one value or an array of values from each row.
+   * @param {(value: unknown) => string} [normaliser] Optional value normaliser.
+   * @returns {string[]} Distinct non-empty values.
+   */
   const getUniqueValues = (rows, selector, normaliser) => {
     const list = Array.isArray(rows) ? rows : [];
     const set = new Set();

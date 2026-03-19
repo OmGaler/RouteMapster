@@ -1,4 +1,12 @@
 ﻿(() => {
+  /**
+   * Defines route-level analysis routines for the advanced analytics module.
+   *
+   * Each registry entry accepts already-normalised route rows and returns a
+   * renderable payload for the UI. When summary data is insufficient, the
+   * analyses can call back into `RouteMapsterAPI` to fetch route geometry or
+   * spatial metrics.
+   */
   const asNumber = (value) => (Number.isFinite(value) ? value : null);
   const utils = window.RouteMapsterUtils || {};
   const formatNumber = utils.formatNumber || ((value, digits = 1) => {
@@ -109,6 +117,14 @@
     result: null
   };
 
+  /**
+   * Estimates how much of each selected route is shared with the comparison set.
+   *
+   * @param {Array<object>} rows Focus rows to score.
+   * @param {{allRows?: Array<object>}} [context={}] Optional comparison universe.
+   * @returns {Promise<{scores?: Array<object>, note?: string}>} Coverage scores or a note when geometry is unavailable.
+   * Side effects: May fetch route geometry and show the shared loading modal.
+   */
   const computeRouteOverlapCoverageScores = async (rows, context = {}) => {
     const api = window.RouteMapsterAPI;
     if (!api || typeof api.loadRouteGeometry !== "function") {
@@ -175,6 +191,8 @@
       return { scores: selectedScores };
     };
 
+    // Cache against the comparison universe because the geometry pass is the
+    // expensive part; different filtered subsets can then reuse the same base work.
     const cacheKey = comparisonRouteIds
       .slice()
       .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
@@ -457,6 +475,12 @@
     }
   };
 
+  /**
+   * Registry of route analyses exposed to the advanced analytics UI.
+   *
+   * Keys are treated as stable identifiers across the UI, exported CSVs, and
+   * deep links, so new analyses should preserve that contract.
+   */
   const analysisRegistry = {
     "routes-by-operator": {
       id: "routes-by-operator",
@@ -2125,6 +2149,14 @@
     }
   };
 
+  /**
+   * Runs a single registered analysis.
+   *
+   * @param {string} analysisId Registry key to execute.
+   * @param {Array<object>} rows Route rows within the chosen scope.
+   * @param {object} context Additional runtime context for the analysis.
+   * @returns {object|null} Analysis payload, or `null` when the id is unknown.
+   */
   const runAnalysis = (analysisId, rows, context) => {
     const entry = analysisRegistry[analysisId];
     if (!entry) {
@@ -2133,6 +2165,11 @@
     return entry.run(rows || [], context || {});
   };
 
+  /**
+   * Lists available analyses for UI population.
+   *
+   * @returns {Array<object>} Registered analysis descriptors in declaration order.
+   */
   const getAnalyses = () => Object.values(analysisRegistry);
 
   window.RouteMapsterAnalyses = {

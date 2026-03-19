@@ -1,7 +1,18 @@
+/**
+ * Covers the browser-side geographic helper module.
+ *
+ * The tests focus on borough lookup and polygon containment because those
+ * routines feed both the UI filters and the stop analytics pipeline.
+ */
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { loadBrowserModule } = require("./helpers/load_browser_module");
 
+/**
+ * Load the geographic helpers with the minimal shared utilities they expect.
+ *
+ * @returns {object} `RouteMapsterGeo` API exposed by the browser module.
+ */
 const loadGeo = () => {
   const windowRef = loadBrowserModule("src/geo_utils.js", {
     window: {

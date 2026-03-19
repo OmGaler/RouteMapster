@@ -1,5 +1,12 @@
-// RouteMapster 
-// Initialises Leaflet map 
+/**
+ * Runs the RouteMapster browser application.
+ *
+ * This file is the integration point for the Leaflet map, processed datasets,
+ * smaller browser modules exposed on `window`, and the shared UI state that
+ * ties them together. It owns startup, cross-module coordination, and the
+ * richer interaction flows that do not fit cleanly into the focused helper
+ * modules under `src/`.
+ */
 const GEOCODE_DELAY_MS = 1100;
 const LONDON_BOUNDS = {
 	minLat: 51.28,
@@ -114,6 +121,13 @@ const STOP_REGION_BY_BOROUGH = window.RouteMapsterGeo?.REGION_BY_BOROUGH || new 
 	["bromley", "SE"]
 ]);
 
+/**
+ * Creates the named Leaflet panes used throughout the application.
+ *
+ * @param {L.Map} map Leaflet map instance.
+ * @returns {void}
+ * Side effects: Mutates the map by creating panes and setting z-index/pointer behaviour.
+ */
 function configureMapPanes(map) {
 	if (!map) {
 		return;
@@ -152,6 +166,12 @@ function refreshStopsPanePriority() {
 	setStopsPanePriority(false);
 }
 
+/**
+ * Preloads the geometry index so route availability is known before the first draw.
+ *
+ * @returns {Promise<void>}
+ * Side effects: Fetches the route geometry index and updates the status banner text.
+ */
 async function initialiseRouteGeometryIndex() {
 	const routeIds = await loadRouteGeometryRouteIds();
 	if (routeIds && routeIds.size) {
@@ -161,6 +181,12 @@ async function initialiseRouteGeometryIndex() {
 	updateSelectedInfo("Route geometry index unavailable.");
 }
 
+/**
+ * Creates the base Leaflet map and tile layer.
+ *
+ * @returns {L.Map} Initialised map instance centred on London.
+ * Side effects: Creates DOM-backed Leaflet state.
+ */
 function initMap() {
 	const map = L.map('map', { preferCanvas: true }).setView([51.5074, -0.1278], 11);
 
@@ -173,6 +199,8 @@ function initMap() {
 	return map;
 }
 
+// Shared mutable state for the single-page application. Smaller modules read
+// selected parts of this object through `window.RouteMapsterAPI`.
 const appState = {
 	map: null,
 	routes: [],
@@ -378,7 +406,7 @@ function escapeHtml(value) {
 	if (window.RouteMapsterUtils?.escapeHtml) {
 		return window.RouteMapsterUtils.escapeHtml(value);
 	}
-	return String(value || "")
+	return String(value == null ? "" : value)
 		.replace(/&/g, "&amp;")
 		.replace(/</g, "&lt;")
 		.replace(/>/g, "&gt;")
@@ -1587,7 +1615,15 @@ function buildGarageGroupDetails(group) {
 	return { label, subtitle, searchTokens, operators: operatorList, codes: codeList };
 }
 
+/**
+ * Builds the Explorer search index from routes, stops, stations, garages, and operators.
+ *
+ * @returns {Promise<Array<object>>} Searchable items consumed by the omni-search UI.
+ * Side effects: Loads several datasets and may prime route-set caches for pill styling.
+ */
 async function buildOmniSearchIndex() {
+	// Load the core reference datasets up front so every result type is scored
+	// against the same snapshot and the Explorer feels consistent.
 	const [routeIds, stations, garagesGeojson, summaryRows, stopsGeojson] = await Promise.all([
 		loadRouteGeometryRouteIds(),
 		loadBusStationData().catch(() => []),
@@ -1942,6 +1978,12 @@ function renderOmniResults(items, totalCount) {
 	}
 }
 
+/**
+ * Parses an Explorer query into a scoped search request.
+ *
+ * @param {string} query Raw Explorer input.
+ * @returns {{type: string|null, tokens: string[], matchMode: string}} Scoped type, search tokens, and token matching mode.
+ */
 function parseOmniQuery(query) {
 	const trimmed = String(query || "").trim();
 	if (!trimmed) {
@@ -2007,6 +2049,12 @@ const ADVANCED_FILTER_BANDS = new Map([
 	["night", "overnight"]
 ]);
 
+/**
+ * Tokenises advanced-filter text while preserving quoted phrases.
+ *
+ * @param {string} query Raw advanced-filter expression.
+ * @returns {string[]} Tokens split on whitespace outside quotes.
+ */
 function tokenizeAdvancedFilterQuery(query) {
 	const text = String(query || "").trim();
 	if (!text) {
@@ -2390,6 +2438,12 @@ function buildAdvancedFilterSummary(spec) {
 	return parts.join(" · ");
 }
 
+/**
+ * Parses Explorer `key:value` syntax into an advanced filter specification.
+ *
+ * @param {string} query Raw Explorer input.
+ * @returns {object} Parsed filter state plus activity metadata for the caller.
+ */
 function parseAdvancedFilterQuery(query) {
 	const trimmed = String(query || "").trim();
 	if (!trimmed) {
@@ -3797,6 +3851,13 @@ async function waitForBusStopsGeojsonPromise(promise, showLoadingModal) {
 	}
 }
 
+/**
+ * Loads the bus stop dataset once and shares the in-flight promise across callers.
+ *
+ * @param {{showLoadingModal?: boolean}} [options={}] Whether to show the delayed loading modal while waiting.
+ * @returns {Promise<object|null>} Stop GeoJSON, or `null` when unavailable.
+ * Side effects: Fetches stop and borough datasets, initialises caches, and may toggle the loading modal.
+ */
 async function loadBusStopsGeojson(options = {}) {
 	if (appState.busStopsGeojson) {
 		return appState.busStopsGeojson;
@@ -3995,6 +4056,13 @@ function findBoroughForPoint(lon, lat, index) {
 	return "";
 }
 
+/**
+ * Backfills borough names onto stop features when the source dataset omits them.
+ *
+ * @param {GeoJSON.FeatureCollection|object|null} geojson Stop GeoJSON to enrich in-place.
+ * @returns {Promise<void>}
+ * Side effects: Loads borough boundaries and mutates stop feature properties.
+ */
 async function hydrateStopBoroughs(geojson) {
 	if (!geojson || !Array.isArray(geojson.features)) {
 		return;
@@ -4749,6 +4817,12 @@ function buildGarageSelectKey(features) {
 	return "";
 }
 
+/**
+ * Groups nearby garage features that represent the same real-world site.
+ *
+ * @param {GeoJSON.FeatureCollection|object|null} geojson Garage dataset.
+ * @returns {Array<object>} Garage groups with averaged marker coordinates.
+ */
 function groupGaragesByLocation(geojson) {
 	const groups = [];
 	if (!geojson || !Array.isArray(geojson.features)) {
@@ -5247,6 +5321,12 @@ function collectPrefixRoutes(prefixRoutes, routes) {
 	});
 }
 
+/**
+ * Builds the route-type lookup sets used for colouring and filtering.
+ *
+ * @returns {Promise<object>} Route id sets keyed by network category.
+ * Side effects: Loads summary and garage datasets, then caches the result on `appState`.
+ */
 async function loadNetworkRouteSets() {
 	if (appState.networkRouteSets) {
 		return appState.networkRouteSets;
@@ -5386,6 +5466,15 @@ function buildEndpointPairKey(start, end) {
 	return startKey < endKey ? `${startKey}|${endKey}` : `${endKey}|${startKey}`;
 }
 
+/**
+ * Computes coarse spatial metrics for a route geometry.
+ *
+ * The endpoint pair is taken from the longest segment so short branch stubs do
+ * not dominate the route family and shared-endpoint analyses.
+ *
+ * @param {Array<Array<Array<number>>>} segments Route geometry segments in `[lat, lon]` order.
+ * @returns {object|null} Bounding, endpoint, and key statistics, or `null` when geometry is unusable.
+ */
 function computeSpatialStats(segments) {
 	if (!Array.isArray(segments) || segments.length === 0) {
 		return null;
@@ -5632,7 +5721,7 @@ function getFrequencyLineWeight(segment, context) {
 		return null;
 	}
 	const t = Math.min(total / context.maxTotal, 1);
-	// Emphasize differences near the top end to create a thicker/thinner contrast.
+	// Emphasise differences near the top end to create a clearer thick/thin contrast.
 	const scaled = Math.pow(t, 1.5);
 	const minWeight = 1.0;
 	const maxWeight = 36;
@@ -5649,6 +5738,13 @@ function formatFrequencyValue(total) {
 	return `${perHour.toFixed(1)} buses/hr (${headwayText} headway)`;
 }
 
+/**
+ * Aggregates per-segment frequency totals for the currently visible route set.
+ *
+ * @param {Iterable<string>} routeIds Route ids to include in the corridor total.
+ * @returns {Promise<{segmentTotals: Map<string, {total: number}>|null, maxTotal: number, segmentsByRoute: Map<string, Array>|undefined}|null>} Frequency context for line styling and hover details.
+ * Side effects: Loads frequency data and route geometries, then updates cached overlay state on `appState`.
+ */
 async function buildFrequencyContext(routeIds) {
 	if (!appState.showFrequencyLayer) {
 		appState.frequencySegmentTotals = null;
@@ -5918,6 +6014,13 @@ async function getSelectedNetworkCategories() {
 	return orderRouteCategories(categories);
 }
 
+/**
+ * Draws the currently selected route categories onto the main map.
+ *
+ * @param {number} loadToken Monotonic token used to discard stale async renders.
+ * @returns {Promise<void>}
+ * Side effects: Clears and recreates route layers, loads route geometry, and updates route counters.
+ */
 async function renderNetworkRoutes(loadToken) {
 	if (appState.focusRouteId || appState.suppressNetworkRoutes) {
 		clearNetworkRoutes();
@@ -6038,6 +6141,13 @@ async function renderNetworkRoutes(loadToken) {
 	await Promise.all(tasks);
 }
 
+/**
+ * Loads and caches the geometry for a single route.
+ *
+ * @param {string} routeId Route identifier.
+ * @returns {Promise<Array<Array<Array<number>>>|null>} Route geometry segments in `[lat, lon]` order, or `null` when unavailable.
+ * Side effects: Fetches processed route GeoJSON and populates the geometry cache.
+ */
 async function loadRouteGeometry(routeId) {
 	const normalised = String(routeId || "").toUpperCase();
 	if (!normalised || isExcludedRoute(normalised)) {
@@ -6067,6 +6177,13 @@ async function loadRouteGeometry(routeId) {
 	return segments;
 }
 
+/**
+ * Computes and caches coarse spatial metrics for a route.
+ *
+ * @param {string} routeId Route identifier.
+ * @returns {Promise<object|null>} Spatial stats used by extremity and similarity analyses.
+ * Side effects: Loads route geometry on demand and populates the spatial cache.
+ */
 async function loadRouteSpatialStats(routeId) {
 	const normalised = String(routeId || "").toUpperCase();
 	if (!normalised || isExcludedRoute(normalised)) {
@@ -6131,6 +6248,15 @@ function formatGarageRoutes(props) {
 	return `Routes:<br/>${lines.join('<br/>')}`;
 }
 
+/**
+ * Binds a hover popup that tracks pointer movement along a layer.
+ *
+ * @param {L.Layer} layer Leaflet layer to decorate.
+ * @param {string|Function} html Static HTML or callback returning HTML content.
+ * @param {{hoverSupported?: boolean}} [options={}] Behaviour flags for touch-first devices.
+ * @returns {void}
+ * Side effects: Attaches Leaflet popup state and pointer event handlers to the layer.
+ */
 function bindHoverPopup(layer, html, options = {}) {
 	if (!layer || !html) {
 		return;
@@ -6698,6 +6824,13 @@ function getStationCoordsFromStops(stopIds, stopCoordLookup) {
 	return { lat: latSum / count, lon: lonSum / count };
 }
 
+/**
+ * Builds bus station records by combining station anchor features with stop detail data.
+ *
+ * @param {GeoJSON.FeatureCollection|object|null} stationGeojson Station anchor dataset.
+ * @param {GeoJSON.FeatureCollection|object|null} busStopsGeojson Full bus stop dataset.
+ * @returns {Array<object>} Derived station records with stop and route membership.
+ */
 function buildBusStationsFromAnchors(stationGeojson, busStopsGeojson) {
 	const features = Array.isArray(stationGeojson?.features) ? stationGeojson.features : [];
 	if (features.length === 0) {
@@ -6910,6 +7043,12 @@ function buildBusStationClusters(geojson) {
 	});
 }
 
+/**
+ * Loads and caches the derived bus station dataset.
+ *
+ * @returns {Promise<Array<object>>} Station records ready for map rendering and Explorer search.
+ * Side effects: Loads station and stop datasets, then memoises the derived station list.
+ */
 async function loadBusStationData() {
 	if (appState.busStationData) {
 		return appState.busStationData;
@@ -7592,6 +7731,12 @@ function getGarageMarkerRadius(value, scaleEnabled, maxPercent) {
 	return minRadius + (maxRadius - minRadius) * t;
 }
 
+/**
+ * Enables drag-to-resize behaviour for the left sidebar.
+ *
+ * @returns {void}
+ * Side effects: Binds mouse and touch listeners and mutates CSS custom properties during drags.
+ */
 function setupSidebarResize() {
 	const sidebar = document.getElementById("sidebar");
 	const handle = document.getElementById("sidebarResizeHandle");
@@ -7683,6 +7828,12 @@ function setupSidebarResize() {
 }
 
 
+/**
+ * Wires all top-level UI modules and shared event handlers.
+ *
+ * @returns {void}
+ * Side effects: Binds DOM listeners across the page and initialises module-specific controls.
+ */
 function setupUI() {
 	setupModuleAccordion();
 	setupFrequencyModule();
@@ -9386,6 +9537,12 @@ window.RouteMapsterAPI = {
 	clearAdvancedStops: () => clearAdvancedStopsLayer()
 };
 
+/**
+ * Boots the application once the DOM is ready.
+ *
+ * @returns {Promise<void>}
+ * Side effects: Initialises the map, loads reference data, wires the UI, and renders the initial route view.
+ */
 async function start() {
 	setLoadingModalMessage(LOADING_MODAL_DEFAULT_TITLE, LOADING_MODAL_DEFAULT_SUBTITLE);
 	setLoadingModalVisible(true);

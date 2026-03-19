@@ -110,6 +110,15 @@ def write_latest_file(path: Path, date_token: str, zip_key: str, count: int) -> 
 
 
 def main() -> int:
+    """Download and extract the latest TfL route geometry archive.
+
+    Returns:
+        Process exit code for CLI usage.
+
+    Side effects:
+        Calls the TfL S3 listing, downloads a ZIP archive, and extracts XML
+        files into the raw data directory.
+    """
     parser = argparse.ArgumentParser(description="Fetch latest TfL bus route geometry XML files.")
     parser.add_argument(
         "--output-root",
