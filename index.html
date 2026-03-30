@@ -1321,6 +1321,78 @@
       border: 1px solid #b26300;
     }
 
+    .route-destination-expander {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .route-destination-toggle-all {
+      border: 1px solid var(--panel-border);
+      background: #ffffff;
+      color: var(--ink);
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .route-destination-toggle-all[aria-expanded="true"] {
+      background: #f1f5f9;
+    }
+
+    .route-destination-details {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      width: 100%;
+    }
+
+    .route-destination-details[hidden] {
+      display: none;
+    }
+
+    .route-destination-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .route-destination-feature-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--ink);
+    }
+
+    .route-destination-route {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding: 8px 10px;
+      border-radius: 12px;
+      border: 1px solid var(--panel-border);
+      background: #ffffff;
+    }
+
+    .route-destination-route__pill .route-pill-group {
+      gap: 0;
+    }
+
+    .route-destination-route__lines {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .route-destination-line {
+      font-size: 13px;
+      line-height: 1.35;
+      color: var(--ink);
+    }
+
     .garage-route-category {
       display: flex;
       flex-direction: column;

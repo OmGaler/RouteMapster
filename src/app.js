@@ -601,6 +601,27 @@ function setInfoPanelVisible(visible) {
 	appRoot.classList.toggle("has-details", visible);
 }
 
+function bindInfoPanelBodyInteractions(bodyEl) {
+	if (!bodyEl) {
+		return;
+	}
+	bodyEl.querySelectorAll(".route-destination-toggle-all").forEach((button) => {
+		button.addEventListener("click", (event) => {
+			event.preventDefault();
+			event.stopPropagation();
+			const wrapper = button.closest(".route-destination-expander");
+			const panel = wrapper?.querySelector(".route-destination-details");
+			if (!panel) {
+				return;
+			}
+			const expanded = button.getAttribute("aria-expanded") === "true";
+			button.setAttribute("aria-expanded", expanded ? "false" : "true");
+			button.textContent = expanded ? "Show destinations" : "Hide destinations";
+			panel.hidden = expanded;
+		});
+	});
+}
+
 function setInfoPanel({ title, titleHtml, subtitle, bodyHtml }) {
 	const titleEl = document.getElementById("infoTitle");
 	const subtitleEl = document.getElementById("infoSubtitle");
@@ -623,6 +644,7 @@ function setInfoPanel({ title, titleHtml, subtitle, bodyHtml }) {
 	}
 	if (bodyEl) {
 		bodyEl.innerHTML = bodyHtml || "";
+		bindInfoPanelBodyInteractions(bodyEl);
 	}
 	setInfoPanelVisible(true);
 }
@@ -667,7 +689,10 @@ async function refreshSelectedInfoPanel() {
 		return;
 	}
 	const { type, data, token } = appState.selectedFeature;
-	const routeSets = appState.useRouteTypeColours ? await loadNetworkRouteSets() : null;
+	const [routeSets, summaryIndex] = await Promise.all([
+		appState.useRouteTypeColours ? loadNetworkRouteSets() : Promise.resolve(null),
+		(type === "station" || type === "garage") ? ensureRouteSummaryIndex().catch(() => null) : Promise.resolve(null)
+	]);
 	if (!appState.selectedFeature || token !== appState.selectedFeature.token) {
 		return;
 	}
@@ -680,13 +705,13 @@ async function refreshSelectedInfoPanel() {
 	if (type === "station") {
 		clearRouteInfoPanelContext();
 		appState.infoPanelKind = "station";
-		setInfoPanel(buildBusStationInfoHtml(data, routeSets));
+		setInfoPanel(buildBusStationInfoHtml(data, routeSets, summaryIndex));
 		return;
 	}
 	if (type === "garage") {
 		clearRouteInfoPanelContext();
 		appState.infoPanelKind = "garage";
-		setInfoPanel(buildGarageInfoHtml(data, routeSets));
+		setInfoPanel(buildGarageInfoHtml(data, routeSets, summaryIndex));
 	}
 }
 
@@ -1235,6 +1260,133 @@ function getRouteDestinationSummaryText(row) {
 
 function hasRouteSummaryDestinations(row) {
 	return getRouteDestinationLinesFromRow(row).length > 0;
+}
+
+function normaliseRouteDestinationMatchToken(value) {
+	return String(value || "")
+		.toLowerCase()
+		.replace(/&/g, " and ")
+		.replace(/['’]/g, "")
+		.replace(/\bbus station\b/g, " ")
+		.replace(/\bstation\b/g, " ")
+		.replace(/\bstn\b/g, " ")
+		.replace(/[^a-z0-9]+/g, " ")
+		.replace(/\s+/g, " ")
+		.trim();
+}
+
+function buildStandardRouteDestinationEntries(row) {
+	if (!row || typeof row !== "object") {
+		return [];
+	}
+	const definitions = [
+		{
+			direction: "outbound",
+			label: cleanRouteDestinationLabel(row.destination_outbound)
+				|| cleanRouteDestinationLabel(row.destination_outbound_full)
+				|| cleanRouteDestinationLabel(row.destination_outbound_qualifier),
+			matchCandidates: [
+				row.destination_outbound,
+				row.destination_outbound_full,
+				row.destination_outbound_qualifier
+			]
+		},
+		{
+			direction: "inbound",
+			label: cleanRouteDestinationLabel(row.destination_inbound)
+				|| cleanRouteDestinationLabel(row.destination_inbound_full)
+				|| cleanRouteDestinationLabel(row.destination_inbound_qualifier),
+			matchCandidates: [
+				row.destination_inbound,
+				row.destination_inbound_full,
+				row.destination_inbound_qualifier
+			]
+		}
+	];
+	return definitions
+		.map((entry) => ({
+			direction: entry.direction,
+			label: entry.label,
+			matchCandidates: entry.matchCandidates
+				.map((value) => cleanRouteDestinationLabel(value))
+				.filter(Boolean)
+		}))
+		.filter((entry) => entry.label);
+}
+
+function dedupeRouteDestinationEntries(entries) {
+	const seen = new Set();
+	return (Array.isArray(entries) ? entries : []).filter((entry) => {
+		const key = String(entry?.label || "").trim().toLowerCase();
+		if (!key || seen.has(key)) {
+			return false;
+		}
+		seen.add(key);
+		return true;
+	});
+}
+
+function getRouteDestinationDisplayEntries(row, options = {}) {
+	const baseEntries = dedupeRouteDestinationEntries(buildStandardRouteDestinationEntries(row));
+	if (baseEntries.length === 0 || options?.entityType !== "station") {
+		return baseEntries;
+	}
+	const stationToken = normaliseRouteDestinationMatchToken(options.stationName);
+	if (!stationToken) {
+		return baseEntries;
+	}
+	const filteredEntries = baseEntries.filter((entry) => !(entry.matchCandidates || []).some((value) => (
+		normaliseRouteDestinationMatchToken(value) === stationToken
+	)));
+	return filteredEntries.length > 0 ? filteredEntries : baseEntries;
+}
+
+function getRouteDestinationDisplayLines(row, options = {}) {
+	return getRouteDestinationDisplayEntries(row, options).map((entry) => entry.label);
+}
+
+function renderRouteDestinationDetailsHtml(routes, routeSets, summaryIndex, options = {}) {
+	const list = Array.isArray(routes) ? routes : Array.from(routes || []);
+	const unique = Array.from(new Set(list.map((route) => String(route)).filter(Boolean)))
+		.filter((route) => !isExcludedRoute(route));
+	if (unique.length === 0) {
+		return "";
+	}
+	const sorted = sortRouteIds(unique);
+	return sorted.map((route) => {
+		const normalised = String(route || "").trim().toUpperCase();
+		const row = summaryIndex?.get(normalised) || null;
+		const destinationLines = getRouteDestinationDisplayLines(row, options);
+		if (destinationLines.length === 0) {
+			return "";
+		}
+		return `
+			<div class="route-destination-route">
+				<div class="route-destination-route__pill">${renderRoutePills([route], routeSets)}</div>
+				<div class="route-destination-route__lines">
+					${destinationLines.map((line) => `<div class="route-destination-line">${escapeHtml(line)}</div>`).join("")}
+				</div>
+			</div>
+		`;
+	}).filter(Boolean).join("");
+}
+
+function renderRouteDestinationsExpanderHtml(detailsHtml) {
+	if (!detailsHtml) {
+		return "";
+	}
+	return `
+		<div class="route-destination-expander">
+			<button
+				type="button"
+				class="route-destination-toggle-all"
+				aria-expanded="false"
+			>Show destinations</button>
+			<div class="route-destination-details" hidden>
+				${detailsHtml}
+			</div>
+		</div>
+	`;
 }
 
 async function ensureRouteDestinationData(routeId) {
@@ -4943,7 +5095,7 @@ function buildGarageRouteCategoryHtml(label, tokens, routeSets) {
 	`;
 }
 
-function buildGarageInfoHtml(features, routeSets) {
+function buildGarageInfoHtml(features, routeSets, summaryIndex) {
 	if (!features || features.length === 0) {
 		return {
 			title: "Garage details",
@@ -4962,6 +5114,7 @@ function buildGarageInfoHtml(features, routeSets) {
 		introParts.push(`${routeCount} ${routeCount === 1 ? "route" : "routes"}`);
 	}
 	const intro = introParts.join(" · ");
+	const destinationPanels = [];
 	const sections = displayFeatures.map((feature) => {
 		const p = feature.properties || {};
 		const name = p["Garage name"] || p["TfL garage code"] || "Garage";
@@ -4980,10 +5133,38 @@ function buildGarageInfoHtml(features, routeSets) {
 			buildGarageRouteCategoryHtml("School/mobility routes", schoolRoutes, routeSets),
 			buildGarageRouteCategoryHtml("Other routes", otherRoutes, routeSets)
 		].filter(Boolean).join("");
+		const destinationBlocks = [
+			{ label: "Main routes", tokens: mainRoutes },
+			{ label: "Night routes", tokens: nightRoutes },
+			{ label: "School/mobility routes", tokens: schoolRoutes },
+			{ label: "Other routes", tokens: otherRoutes }
+		]
+			.map(({ label, tokens }) => {
+				const detailsHtml = renderRouteDestinationDetailsHtml(tokens, routeSets, summaryIndex);
+				if (!detailsHtml) {
+					return "";
+				}
+				return `
+					<div class="route-destination-group">
+						<div class="info-label">${escapeHtml(label)}</div>
+						${detailsHtml}
+					</div>
+				`;
+			})
+			.filter(Boolean)
+			.join("");
 
 		const routeSection = routeBlocks
 			? `<div class="info-section"><div class="info-label">Routes</div>${routeBlocks}</div>`
 			: '<div class="info-section"><div class="info-label">Routes</div><div class="info-empty">No routes listed.</div></div>';
+		if (destinationBlocks) {
+			destinationPanels.push(`
+				<div class="route-destination-group">
+					<div class="route-destination-feature-title">${escapeHtml(name)} <strong>${escapeHtml(code)}</strong></div>
+					${destinationBlocks}
+				</div>
+			`);
+		}
 
 		return `
 			<div class="info-section">
@@ -4995,11 +5176,19 @@ function buildGarageInfoHtml(features, routeSets) {
 			${routeSection}
 		`;
 	}).join("");
+	const destinationsSection = destinationPanels.length > 0
+		? `
+			<div class="info-section">
+				<div class="info-label">Destinations</div>
+				${renderRouteDestinationsExpanderHtml(destinationPanels.join(""))}
+			</div>
+		`
+		: "";
 
 	return {
 		title: "Garage details",
 		subtitle: intro,
-		bodyHtml: sections
+		bodyHtml: `${sections}${destinationsSection}`
 	};
 }
 
@@ -7073,7 +7262,7 @@ function buildBusStationPopup(station) {
 	`;
 }
 
-function buildBusStationInfoHtml(station, routeSets) {
+function buildBusStationInfoHtml(station, routeSets, summaryIndex) {
 	const routes = Array.from(station.routes || []);
 	const stopCount = Number.isFinite(station.stopCount) ? station.stopCount : 0;
 	const routeCount = routes.length;
@@ -7088,12 +7277,19 @@ function buildBusStationInfoHtml(station, routeSets) {
 	return {
 		title: station.name || "Bus station",
 		subtitle,
-		bodyHtml: `
-			<div class="info-section">
-				<div class="info-label">Routes serving</div>
-				${renderRoutePills(routes, routeSets)}
-			</div>
-		`
+		bodyHtml: (() => {
+			const destinationDetailsHtml = renderRouteDestinationDetailsHtml(routes, routeSets, summaryIndex, {
+				entityType: "station",
+				stationName: station.name
+			});
+			return `
+				<div class="info-section">
+					<div class="info-label">Routes serving</div>
+					${renderRoutePills(routes, routeSets)}
+					${renderRouteDestinationsExpanderHtml(destinationDetailsHtml)}
+				</div>
+			`;
+		})()
 	};
 }
 
@@ -8427,7 +8623,27 @@ function setupUI() {
 	const infoBody = document.getElementById("infoBody");
 	if (infoBody) {
 		infoBody.addEventListener("click", (event) => {
-			const target = event.target.closest(".route-pill");
+			const eventTarget = event.target instanceof Element
+				? event.target
+				: event.target?.parentElement;
+			if (!eventTarget) {
+				return;
+			}
+			const destinationToggle = eventTarget.closest(".route-destination-toggle-all");
+			if (destinationToggle) {
+				event.preventDefault();
+				const wrapper = destinationToggle.closest(".route-destination-expander");
+				const panel = wrapper?.querySelector(".route-destination-details");
+				if (!panel) {
+					return;
+				}
+				const expanded = destinationToggle.getAttribute("aria-expanded") === "true";
+				destinationToggle.setAttribute("aria-expanded", expanded ? "false" : "true");
+				destinationToggle.textContent = expanded ? "Show destinations" : "Hide destinations";
+				panel.hidden = expanded;
+				return;
+			}
+			const target = eventTarget.closest(".route-pill");
 			if (!target) {
 				return;
 			}
@@ -9527,6 +9743,7 @@ window.RouteMapsterAPI = {
 	compareRouteIds,
 	getRoutePillClass,
 	getRouteDestinationSummaryText,
+	getRouteDestinationDisplayLines,
 	escapeHtml,
 	setLoadingModalVisible,
 	showEndpointPairOnMap,
