@@ -61,3 +61,25 @@ test("station route destination display lines match qualifier-only station names
 
   assert.deepEqual(lines, ["Hampstead Heath"]);
 });
+
+test("bus stop display features return the focused stop when it has coordinates", () => {
+  const api = loadAppApi();
+  const first = { properties: { NAPTAN_ID: "s1" }, geometry: { coordinates: [-0.1, 51.5] } };
+  const second = { properties: { NAPTAN_ID: "s2" }, geometry: { coordinates: [-0.11, 51.51] } };
+
+  const features = api.getBusStopDisplayFeatures([first, second], second);
+
+  assert.equal(features.length, 1);
+  assert.equal(features[0], second);
+});
+
+test("bus stop display features fall back to all filtered stops when the focused stop is invalid", () => {
+  const api = loadAppApi();
+  const first = { properties: { NAPTAN_ID: "s1" }, geometry: { coordinates: [-0.1, 51.5] } };
+  const second = { properties: { NAPTAN_ID: "s2" }, geometry: { coordinates: [-0.11, 51.51] } };
+  const invalid = { properties: { NAPTAN_ID: "sx" }, geometry: { coordinates: [] } };
+
+  const features = api.getBusStopDisplayFeatures([first, second], invalid);
+
+  assert.deepEqual(features, [first, second]);
+});

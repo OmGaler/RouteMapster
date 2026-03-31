@@ -222,6 +222,10 @@ const appState = {
 	busStopFilterBoroughs: [],
 	busStopFilterRouteCount: "any",
 	busStopBoroughLookup: new Map(),
+	activeBusStopFeature: null,
+	activeBusStopRoutes: null,
+	busStopRouteLayer: null,
+	busStopRouteLoadToken: 0,
 	advancedStopsLayer: null,
 	busStopRenderer: null,
 	garageRenderer: null,
@@ -3640,6 +3644,14 @@ function clearGarageRoutes() {
 	closeRouteHoverPopup();
 }
 
+function clearBusStopRoutes() {
+	if (appState.busStopRouteLayer && appState.map) {
+		appState.map.removeLayer(appState.busStopRouteLayer);
+		appState.busStopRouteLayer = null;
+	}
+	closeRouteHoverPopup();
+}
+
 function clearBusStopsLayer() {
 	if (appState.busStopLayer && appState.map) {
 		appState.map.removeLayer(appState.busStopLayer);
@@ -3658,6 +3670,7 @@ function hideBusStopsIfVisible() {
 	}
 	showBusStops.checked = false;
 	appState.busStopLoadToken += 1;
+	clearBusStopRouteSelection({ restoreLayer: false, restoreNetwork: false });
 	clearBusStopsLayer();
 	refreshStopsPanePriority();
 	updateBusStopVisibilityNote();
@@ -3783,6 +3796,15 @@ function buildStopPropsFromAdvancedStop(stop) {
 	};
 }
 
+function getBusStopDisplayFeatures(features, activeFeature) {
+	const list = Array.isArray(features) ? features : [];
+	const coords = activeFeature?.geometry?.coordinates;
+	if (!Array.isArray(coords) || coords.length < 2) {
+		return list;
+	}
+	return [activeFeature];
+}
+
 function buildAdvancedStopPopup(stop, options = {}) {
 	const name = stop?.name || "Bus stop";
 	const routes = Array.isArray(stop?.routes) ? stop.routes : [];
@@ -3901,7 +3923,9 @@ async function addBusStopsLayer(map, options = {}) {
 		}
 
 		clearBusStopsLayer();
-		const routeSets = appState.useRouteTypeColours ? await loadNetworkRouteSets() : null;
+		if (appState.useRouteTypeColours) {
+			await loadNetworkRouteSets();
+		}
 		const result = filterBusStops(
 			geojson,
 			appState.busStopFilterDistrict,
@@ -3910,11 +3934,11 @@ async function addBusStopsLayer(map, options = {}) {
 		);
 		const hoverSupported = supportsHoverInteractions();
 		const renderer = createInteractivePointRenderer(STOP_PANE, hoverSupported);
-		const radius = getTouchFriendlyMarkerRadius(4, 6, hoverSupported);
+		const displayFeatures = getBusStopDisplayFeatures(result.features, appState.activeBusStopFeature);
 		appState.busStopRenderer = renderer;
 		const layerGroup = L.layerGroup();
 
-		result.features.forEach((feature) => {
+		displayFeatures.forEach((feature) => {
 			const coords = feature?.geometry?.coordinates;
 			if (!Array.isArray(coords) || coords.length < 2) {
 				return;
@@ -3924,12 +3948,13 @@ async function addBusStopsLayer(map, options = {}) {
 			if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
 				return;
 			}
+			const isFocused = feature === appState.activeBusStopFeature;
 			const marker = L.circleMarker([lat, lon], {
-				radius,
-				weight: 1,
-				color: "#1d4ed8",
-				fillColor: "#2563eb",
-				fillOpacity: 0.8,
+				radius: getTouchFriendlyMarkerRadius(isFocused ? 6 : 4, 6, hoverSupported),
+				weight: isFocused ? 1.6 : 1,
+				color: isFocused ? "#0f766e" : "#1d4ed8",
+				fillColor: isFocused ? "#22c55e" : "#2563eb",
+				fillOpacity: isFocused ? 0.9 : 0.8,
 				pane: STOP_PANE,
 				renderer,
 				interactive: true
@@ -3939,8 +3964,15 @@ async function addBusStopsLayer(map, options = {}) {
 				const props = feature.properties || {};
 				setSelectedFeature("stop", props);
 				refreshSelectedInfoPanel().catch(() => {});
+				selectBusStopRoutes(feature);
 				ensureStopPointRoutes(props)
-					.then(() => refreshSelectedInfoPanel().catch(() => {}))
+					.then(() => {
+						refreshSelectedInfoPanel().catch(() => {});
+						if (appState.activeBusStopFeature === feature) {
+							appState.busStopRouteLoadToken += 1;
+							renderBusStopRoutes(appState.busStopRouteLoadToken);
+						}
+					})
 					.catch(() => {});
 			}, { priority: 1 });
 			marker.on("click", handleTap);
@@ -5227,6 +5259,7 @@ function getGarageCodes(features) {
 }
 
 function clearActiveRouteSelections() {
+	clearBusStopRouteSelection({ restoreLayer: false, restoreNetwork: false });
 	if (appState.activeGarageRoutes) {
 		appState.routeLoadToken += 1;
 		clearGarageRoutes();
@@ -5241,9 +5274,50 @@ function clearActiveRouteSelections() {
 	}
 }
 
+function clearBusStopRouteSelection(options = {}) {
+	const restoreLayer = options?.restoreLayer === true;
+	const restoreNetwork = options?.restoreNetwork === true;
+	const hadActiveSelection = Boolean(appState.activeBusStopRoutes || appState.activeBusStopFeature);
+	if (hadActiveSelection) {
+		appState.busStopRouteLoadToken += 1;
+		clearBusStopRoutes();
+		appState.activeBusStopRoutes = null;
+		appState.activeBusStopFeature = null;
+		if (!appState.activeGarageRoutes && !appState.activeBusStationRoutes && !appState.focusRouteId) {
+			updateSelectedRouteCount(0);
+		}
+	}
+	if (restoreLayer && appState.map && document.getElementById("showBusStops")?.checked) {
+		appState.busStopLoadToken += 1;
+		addBusStopsLayer(appState.map, { showLoadingModal: false }).catch(() => {});
+	}
+	if (
+		restoreNetwork
+		&& appState.suppressNetworkRoutes
+		&& !appState.activeGarageRoutes
+		&& !appState.activeBusStationRoutes
+		&& !appState.advancedFiltersActive
+		&& !appState.analysisActive
+		&& !appState.omniActive
+	) {
+		appState.suppressNetworkRoutes = false;
+		if (appState.showNetworkRoutes) {
+			appState.networkRouteLoadToken += 1;
+			renderNetworkRoutes(appState.networkRouteLoadToken);
+		}
+		updateRouteFilterVisibilityNote();
+	}
+}
+
 function clearDetailsRouteHighlights() {
+	const restoreBusStops = Boolean(appState.activeBusStopRoutes || appState.activeBusStopFeature)
+		&& Boolean(document.getElementById("showBusStops")?.checked);
 	clearFocusedRoute();
 	clearActiveRouteSelections();
+	if (restoreBusStops && appState.map) {
+		appState.busStopLoadToken += 1;
+		addBusStopsLayer(appState.map, { showLoadingModal: false }).catch(() => {});
+	}
 	clearOmniSearchLayers({ restoreNetwork: true });
 	setGarageSelectValue("");
 	if (appState.analysisActive) {
@@ -6768,6 +6842,9 @@ function shouldUseRouteHoverFallback() {
 	if (appState.activeGarageRoutes && appState.garageRouteLayer) {
 		return true;
 	}
+	if (appState.activeBusStopRoutes && appState.busStopRouteLayer) {
+		return true;
+	}
 	if (appState.activeBusStationRoutes && appState.busStationRouteLayer) {
 		return true;
 	}
@@ -6780,6 +6857,9 @@ function getActiveHoverLayerGroup() {
 	}
 	if (appState.activeGarageRoutes && appState.garageRouteLayer) {
 		return appState.garageRouteLayer;
+	}
+	if (appState.activeBusStopRoutes && appState.busStopRouteLayer) {
+		return appState.busStopRouteLayer;
 	}
 	if (appState.activeBusStationRoutes && appState.busStationRouteLayer) {
 		return appState.busStationRouteLayer;
@@ -7570,9 +7650,11 @@ async function focusRoute(routeId) {
 	const loadToken = appState.focusRouteLoadToken;
 
 	appState.routeLoadToken += 1;
+	appState.busStopRouteLoadToken += 1;
 	appState.busStationRouteLoadToken += 1;
 	appState.networkRouteLoadToken += 1;
 	clearGarageRoutes();
+	clearBusStopRoutes();
 	clearBusStationRoutes();
 	clearNetworkRoutes();
 
@@ -7609,6 +7691,10 @@ function clearFocusedRoute() {
 	if (appState.activeGarageRoutes) {
 		appState.routeLoadToken += 1;
 		renderGarageRoutes(appState.routeLoadToken);
+	}
+	if (appState.activeBusStopRoutes) {
+		appState.busStopRouteLoadToken += 1;
+		renderBusStopRoutes(appState.busStopRouteLoadToken);
 	}
 	if (appState.activeBusStationRoutes) {
 		appState.busStationRouteLoadToken += 1;
@@ -7773,6 +7859,28 @@ function selectBusStationRoutes(station) {
 	updateSelectedInfo(`Bus station: ${station.name}`);
 }
 
+function selectBusStopRoutes(feature) {
+	const props = feature?.properties || {};
+	const routes = getStopRouteTokens(props);
+	clearOmniSearchLayers({ restoreNetwork: false });
+	if (!appState.suppressNetworkRoutes) {
+		appState.suppressNetworkRoutes = true;
+	}
+	appState.networkRouteLoadToken += 1;
+	clearNetworkRoutes();
+	clearActiveRouteSelections();
+	if (appState.focusRouteId) {
+		clearFocusedRoute();
+	}
+	appState.activeBusStopFeature = feature || null;
+	appState.activeBusStopRoutes = routes;
+	appState.busStopLoadToken += 1;
+	addBusStopsLayer(appState.map, { showLoadingModal: false }).catch(() => {});
+	appState.busStopRouteLoadToken += 1;
+	renderBusStopRoutes(appState.busStopRouteLoadToken);
+	updateSelectedInfo(`Bus stop: ${getStopDisplayName(props)}`);
+}
+
 function ensureBusStationsVisible() {
 	const checkbox = document.getElementById("showBusStations");
 	if (!checkbox) {
@@ -7811,6 +7919,84 @@ function setGarageSelectValue(key) {
 		return;
 	}
 	select.value = key || "";
+}
+
+async function renderBusStopRoutes(loadToken) {
+	if (appState.focusRouteId) {
+		return;
+	}
+	clearBusStopRoutes();
+	if (!appState.map || !appState.activeBusStopRoutes) {
+		return;
+	}
+	const filteredRoutes = filterRouteSet(appState.activeBusStopRoutes, appState.routeFilterTokens);
+	if (filteredRoutes.length === 0 && appState.routeFilterTokens.length > 0) {
+		filteredRoutes.splice(0, filteredRoutes.length, ...filterRouteSet(appState.activeBusStopRoutes, []));
+	}
+	const initialSelectedRoutes = new Set(filteredRoutes);
+	if (initialSelectedRoutes.size === 0) {
+		updateSelectedRouteCount(0);
+		return;
+	}
+
+	let frequencyContext = null;
+	if (appState.showFrequencyLayer) {
+		frequencyContext = await buildFrequencyContext(initialSelectedRoutes);
+		if (loadToken !== appState.busStopRouteLoadToken) {
+			return;
+		}
+	} else {
+		appState.frequencySegmentTotals = null;
+		appState.frequencyMaxTotal = 0;
+	}
+
+	let displayRoutes = filteredRoutes;
+	if (appState.showFrequencyLayer && appState.frequencyData) {
+		const band = appState.frequencyBand || "peak_am";
+		displayRoutes = filterRoutesByFrequency(filteredRoutes, band);
+	}
+	const selectedRoutes = new Set(displayRoutes);
+	if (selectedRoutes.size === 0) {
+		updateSelectedRouteCount(0);
+		return;
+	}
+	updateSelectedRouteCount(selectedRoutes.size);
+
+	const routeSets = appState.useRouteTypeColours ? await loadNetworkRouteSets() : null;
+	const layerGroup = L.layerGroup().addTo(appState.map);
+	appState.busStopRouteLayer = layerGroup;
+	const hasFrequency = Boolean(frequencyContext?.segmentTotals && frequencyContext.maxTotal > 0);
+	const baseWeight = hasFrequency ? 1.8 : 4;
+
+	const tasks = displayRoutes.map((routeId) => {
+		const segmentPromise = frequencyContext?.segmentsByRoute?.has(routeId)
+			? Promise.resolve(frequencyContext.segmentsByRoute.get(routeId))
+			: loadRouteGeometry(routeId);
+		return segmentPromise
+			.then((segments) => {
+				if (loadToken !== appState.busStopRouteLoadToken) {
+					return;
+				}
+				if (!segments || segments.length === 0) {
+					return;
+				}
+				segments.forEach((segment) => {
+					const weighted = hasFrequency ? getFrequencyLineWeight(segment, frequencyContext) : null;
+					const line = L.polyline(segment, {
+						color: resolveRouteColour(getBusStationRouteColour(routeId, routeSets)),
+						weight: weighted ?? baseWeight,
+						opacity: 0.85,
+						interactive: true,
+						pane: ROUTE_PANE
+					}).addTo(layerGroup);
+					line._routeId = routeId;
+					bindRouteHoverPopup(line, layerGroup);
+				});
+			})
+			.catch(() => {});
+	});
+
+	await Promise.all(tasks);
 }
 
 async function renderBusStationRoutes(loadToken) {
@@ -8288,6 +8474,7 @@ function setupUI() {
 			refreshStopsPanePriority();
 			updateSelectedInfo("Bus stops hidden.");
 			updateBusStopVisibilityNote();
+			clearBusStopRouteSelection({ restoreLayer: false, restoreNetwork: true });
 			if (appState.selectedFeature?.type === "stop") {
 				resetInfoPanel();
 			}
@@ -8343,6 +8530,10 @@ function setupUI() {
 			if (appState.activeGarageRoutes) {
 				appState.routeLoadToken += 1;
 				renderGarageRoutes(appState.routeLoadToken);
+			}
+			if (appState.activeBusStopRoutes) {
+				appState.busStopRouteLoadToken += 1;
+				renderBusStopRoutes(appState.busStopRouteLoadToken);
 			}
 			if (appState.activeBusStationRoutes) {
 				appState.busStationRouteLoadToken += 1;
@@ -8474,6 +8665,10 @@ function setupUI() {
 					appState.routeLoadToken += 1;
 					renderGarageRoutes(appState.routeLoadToken);
 				}
+				if (appState.activeBusStopRoutes) {
+					appState.busStopRouteLoadToken += 1;
+					renderBusStopRoutes(appState.busStopRouteLoadToken);
+				}
 				if (appState.activeBusStationRoutes) {
 					appState.busStationRouteLoadToken += 1;
 					renderBusStationRoutes(appState.busStationRouteLoadToken);
@@ -8535,6 +8730,7 @@ function setupUI() {
 			appState.garageLoadToken += 1;
 			appState.busStopLoadToken += 1;
 			appState.busStationLoadToken += 1;
+			appState.busStopRouteLoadToken += 1;
 			appState.busStationRouteLoadToken += 1;
 			appState.networkRouteLoadToken += 1;
 
@@ -8553,6 +8749,7 @@ function setupUI() {
 
 			clearGarageMarkers();
 			clearGarageRoutes();
+			clearBusStopRoutes();
 			clearBusStopsLayer();
 			clearAdvancedStopsLayer();
 			clearBusStationsLayer();
@@ -8566,6 +8763,8 @@ function setupUI() {
 			appState.frequencySegmentTotals = null;
 			appState.frequencyMaxTotal = 0;
 			appState.showNetworkRoutes = false;
+			appState.activeBusStopFeature = null;
+			appState.activeBusStopRoutes = null;
 			appState.activeGarageRoutes = null;
 			appState.activeBusStationRoutes = null;
 			appState.suppressNetworkRoutes = false;
@@ -8582,10 +8781,12 @@ function setupUI() {
 			resetRouteCheckboxes();
 			syncNetworkFilters();
 			appState.routeLoadToken += 1;
+			appState.busStopRouteLoadToken += 1;
 			appState.busStationRouteLoadToken += 1;
 			appState.networkRouteLoadToken += 1;
 
 			clearGarageRoutes();
+			clearBusStopRouteSelection({ restoreLayer: false, restoreNetwork: false });
 			clearBusStationRoutes();
 			clearNetworkRoutes();
 			clearOmniSearchLayers({ restoreNetwork: false });
@@ -8594,10 +8795,16 @@ function setupUI() {
 			}
 			appState.frequencySegmentTotals = null;
 			appState.frequencyMaxTotal = 0;
+			appState.activeBusStopFeature = null;
+			appState.activeBusStopRoutes = null;
 			appState.activeGarageRoutes = null;
 			appState.activeBusStationRoutes = null;
 			appState.showNetworkRoutes = false;
 			appState.suppressNetworkRoutes = false;
+			if (document.getElementById("showBusStops")?.checked) {
+				appState.busStopLoadToken += 1;
+				addBusStopsLayer(appState.map, { showLoadingModal: false }).catch(() => {});
+			}
 			updateSelectedInfo("All routes cleared.");
 		});
 	}
@@ -8609,6 +8816,10 @@ function setupUI() {
 			if (appState.activeGarageRoutes) {
 				appState.routeLoadToken += 1;
 				renderGarageRoutes(appState.routeLoadToken);
+			}
+			if (appState.activeBusStopRoutes) {
+				appState.busStopRouteLoadToken += 1;
+				renderBusStopRoutes(appState.busStopRouteLoadToken);
 			}
 			if (appState.activeBusStationRoutes) {
 				appState.busStationRouteLoadToken += 1;
@@ -8685,6 +8896,10 @@ function setupUI() {
 			}
 			if (appState.focusRouteId) {
 				clearFocusedRoute();
+				return;
+			}
+			if (appState.activeBusStopRoutes) {
+				clearBusStopRouteSelection({ restoreLayer: true, restoreNetwork: true });
 			}
 		});
 	}
@@ -8727,6 +8942,10 @@ function setupRouteFilterInput() {
 		if (appState.activeGarageRoutes) {
 			appState.routeLoadToken += 1;
 			renderGarageRoutes(appState.routeLoadToken);
+		}
+		if (appState.activeBusStopRoutes) {
+			appState.busStopRouteLoadToken += 1;
+			renderBusStopRoutes(appState.busStopRouteLoadToken);
 		}
 		if (appState.activeBusStationRoutes) {
 			appState.busStationRouteLoadToken += 1;
@@ -9691,7 +9910,7 @@ function setupFrequencyModule() {
 			return;
 		}
 		const hasVisibleRoutes = Boolean(
-			appState.activeGarageRoutes || appState.activeBusStationRoutes || appState.showNetworkRoutes
+			appState.activeGarageRoutes || appState.activeBusStopRoutes || appState.activeBusStationRoutes || appState.showNetworkRoutes
 		);
 		if (hasVisibleRoutes) {
 			return;
@@ -9713,6 +9932,10 @@ function setupFrequencyModule() {
 		if (appState.activeGarageRoutes) {
 			appState.routeLoadToken += 1;
 			renderGarageRoutes(appState.routeLoadToken);
+		}
+		if (appState.activeBusStopRoutes) {
+			appState.busStopRouteLoadToken += 1;
+			renderBusStopRoutes(appState.busStopRouteLoadToken);
 		}
 		if (appState.activeBusStationRoutes) {
 			appState.busStationRouteLoadToken += 1;
@@ -9751,7 +9974,8 @@ window.RouteMapsterAPI = {
 	showAnalysisRoutes,
 	clearAnalysisRoutes,
 	showAdvancedStops: (stops, options) => renderAdvancedStopsLayer(stops, options),
-	clearAdvancedStops: () => clearAdvancedStopsLayer()
+	clearAdvancedStops: () => clearAdvancedStopsLayer(),
+	getBusStopDisplayFeatures
 };
 
 /**
