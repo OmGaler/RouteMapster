@@ -2,8 +2,8 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { loadBrowserModule } = require("./helpers/load_browser_module");
 
-function loadAppApi() {
-  const windowRef = {};
+function loadAppApi(options = {}) {
+  const windowRef = options.window || {};
   global.document = {
     addEventListener: () => {}
   };
@@ -242,4 +242,86 @@ test("endpoint entries are derived from rendered route layers", () => {
     { routeId: "25", lat: 51.52, lon: -0.12 },
     { routeId: "25", lat: 51.53, lon: -0.13 }
   ]);
+});
+
+test("supports hover interactions when any fine hover pointer is available", () => {
+  const api = loadAppApi({
+    window: {
+      matchMedia(query) {
+        if (query === "(any-hover: hover) and (any-pointer: fine)") {
+          return { matches: true };
+        }
+        if (query === "(hover: hover) and (pointer: fine)") {
+          return { matches: false };
+        }
+        return { matches: false };
+      }
+    }
+  });
+
+  assert.equal(api.supportsHoverInteractions(), true);
+});
+
+test("supports hover interactions on desktop-width layouts even when hover media queries fail", () => {
+  const api = loadAppApi({
+    window: {
+      matchMedia(query) {
+        if (query === "(max-width: 900px)") {
+          return { matches: false };
+        }
+        return { matches: false };
+      }
+    }
+  });
+
+  assert.equal(api.supportsHoverInteractions(), true);
+});
+
+test("configure map panes leaves non-highlight panes at Leaflet defaults", () => {
+  const api = loadAppApi();
+  const panes = new Map();
+  const map = {
+    createPane(name) {
+      const pane = { style: {} };
+      panes.set(name, pane);
+      return pane;
+    }
+  };
+
+  api.configureMapPanes(map);
+
+  assert.equal(panes.get("highlight-pane").style.pointerEvents, "none");
+  assert.equal(Object.prototype.hasOwnProperty.call(panes.get("routes-pane").style, "pointerEvents"), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(panes.get("stops-pane").style, "pointerEvents"), false);
+});
+
+test("interactive point renderer does not force pointer events on the root svg", () => {
+  const renderer = {
+    _container: {
+      style: {}
+    }
+  };
+  const api = loadAppApi({
+    window: {
+      L: {
+        svg(options) {
+          renderer.options = options;
+          return renderer;
+        }
+      }
+    }
+  });
+  global.L = {
+    svg(options) {
+      renderer.options = options;
+      return renderer;
+    }
+  };
+
+  const result = api.createInteractivePointRenderer("stops-pane", false);
+
+  assert.equal(result, renderer);
+  assert.equal(renderer.options.pane, "stops-pane");
+  assert.equal(renderer.options.tolerance, 10);
+  assert.equal(Object.prototype.hasOwnProperty.call(renderer._container.style, "pointerEvents"), false);
 });

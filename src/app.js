@@ -149,8 +149,6 @@ function configureMapPanes(map) {
 			if (name === HIGHLIGHT_PANE) {
 				// Prevent highlight overlay from blocking interactions with markers/routes.
 				pane.style.pointerEvents = "none";
-			} else {
-				pane.style.pointerEvents = "auto";
 			}
 		}
 	});
@@ -442,7 +440,13 @@ function supportsHoverInteractions() {
 	if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
 		return true;
 	}
-	return window.matchMedia("(hover: hover) and (pointer: fine)").matches;
+	if (window.matchMedia("(any-hover: hover) and (any-pointer: fine)").matches) {
+		return true;
+	}
+	if (window.matchMedia("(hover: hover) and (pointer: fine)").matches) {
+		return true;
+	}
+	return !isCompactMobileLayout();
 }
 
 function getTouchFriendlyHitTolerance(hoverSupported = supportsHoverInteractions()) {
@@ -462,14 +466,10 @@ function getTouchFriendlyMarkerRadius(baseRadius, minimumTouchRadius, hoverSuppo
 }
 
 function createInteractivePointRenderer(pane, hoverSupported = supportsHoverInteractions()) {
-	const renderer = L.svg({
+	return L.svg({
 		pane,
 		tolerance: getTouchFriendlyHitTolerance(hoverSupported)
 	});
-	if (renderer?._container) {
-		renderer._container.style.pointerEvents = "auto";
-	}
-	return renderer;
 }
 
 function attachPointTapHandler(marker, onTap, options = {}) {
@@ -7171,6 +7171,9 @@ function closeRouteHoverPopup() {
 }
 
 function shouldUseRouteHoverFallback() {
+	if (supportsHoverInteractions()) {
+		return false;
+	}
 	if (!appState.map || appState.focusRouteId) {
 		return false;
 	}
@@ -10507,7 +10510,10 @@ window.RouteMapsterAPI = {
 	clearAnalysisRoutes,
 	showAdvancedStops: (stops, options) => renderAdvancedStopsLayer(stops, options),
 	clearAdvancedStops: () => clearAdvancedStopsLayer(),
-	getBusStopDisplayFeatures
+	getBusStopDisplayFeatures,
+	supportsHoverInteractions,
+	configureMapPanes,
+	createInteractivePointRenderer
 };
 
 /**
