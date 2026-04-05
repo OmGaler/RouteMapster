@@ -178,7 +178,7 @@ route,route_type,garage_code,garage_name,operator,vehicle,destination_outbound,d
 183,regular,SO,Harrow,First,DD,Pinner,Golders Green,Pinner Station / Bridge Street,Golders Green Station,Pinner,Golders Green,,6.0,6.0,6.0,0.0,5.0,17.395,10.809
 184,regular,NP,Northumberland Park,Go-Ahead,SD,"Barnet, Chesterfield Road",Turnpike Lane Station,Chesterfield Road,,"Barnet, Chesterfield Road",Turnpike Lane Station,,5.5,5.5,6.0,0.0,5.0,16.152,10.037
 185,regular,Q,Camberwell,Go-Ahead,DD,Victoria,"Lewisham, Shopping Centre",Victoria Station,Lewisham Station,Victoria,"Lewisham, Shopping Centre, Lewisham Station",,6.0,6.5,6.5,0.0,4.5,15.697,9.753
-186,regular,HD,Harrow Weald,Metroline,DD,"Brent Cross, Shopping Centre",Northwick Park Hospital,,Northwick Park Hospital Social Club,"Brent Cross, Shopping Centre",Northwick Park Hospital,,4.5,5.0,5.0,0.0,4.5,20.559,12.775
+186,regular,HD,Harrow Weald,Metroline,DD,"Brent Cross, Shopping Centre",Northwick Park Hospital,,Northwick Park Hospital Social Club,"Brent Cross, Shopping Centre",Northwick Park Hospital,,5.0,5.0,5.0,0.0,4.0,20.559,12.775
 187,regular,WJ,Willesden Junction,Metroline,SD,"Finchley Road, O2 Centre",Central Middlesex Hospital,O2 Centre / Sainsbury's,,"Finchley Road, O2 Centre, O2 Centre / Sainsbury's",Central Middlesex Hospital,,4.0,4.0,4.0,0.0,3.0,12.81,7.96
 188,twentyfour,Q,Camberwell,Go-Ahead,DD,Tottenham Court Road,North Greenwich,,North Greenwich Station,Tottenham Court Road,North Greenwich,,6.5,6.0,6.0,3.5,5.0,16.131,10.024
 189,twentyfour,W,Cricklewood,Metroline,DD,Marble Arch,"Brent Cross, Shopping Centre",Marble Arch Station,,Marble Arch,"Brent Cross, Shopping Centre",,6.5,6.5,6.0,2.0,5.0,11.984,7.447
@@ -191,7 +191,7 @@ route,route_type,garage_code,garage_name,operator,vehicle,destination_outbound,d
 196,regular,N,Norwood,Arriva,DD,Norwood Junction,Elephant & Castle,Norwood Junction Station,Elephant & Castle / Newington Causeway,Norwood Junction,Elephant & Castle,,5.0,5.0,5.0,0.0,3.0,15.296,9.504
 197,regular,PM,Peckham,Go-Ahead,DD,Croydon Town Centre,Peckham,Fairfield Halls,Peckham Bus Station,"Croydon Town Centre, Fairfield Halls",Peckham,,5.0,5.0,5.0,0.0,3.0,16.108,10.009
 198,regular,N,Norwood,Arriva,DD,"Thornton Heath, High Street",Shrublands,Talbot Road,Shrublands / Bramble Close,"Thornton Heath, High Street, Talbot Road",Shrublands,,5.0,5.0,5.0,0.0,3.0,11.192,6.955
-199,regular,TL,Catford,Stagecoach London,DD,"Bellingham, Catford Bus Garage",Canada Water,Catford Garage,Canada Water Bus Station,"Bellingham, Catford Bus Garage, Catford Garage",Canada Water,,5.0,5.0,5.0,0.0,4.0,10.756,6.683
+199,regular,TL,Catford,Stagecoach London,DD,"Bellingham, Catford Bus Garage",Canada Water,Catford Garage,Canada Water Bus Station,"Bellingham, Catford Bus Garage, Catford Garage",Canada Water,,,,,,0.0,10.756,6.683
 200,regular,AL,Merton,Go-Ahead,DD,Mitcham,Raynes Park,Mitcham Fair Green,Lambton Road,Mitcham,"Raynes Park, Lambton Road",,6.5,7.0,6.5,0.0,5.0,12.013,7.465
 201,regular,BC,Beddington,Transport UK,SD,Herne Hill,Morden,Dulwich Road,London Road / Morden Station,"Herne Hill, Dulwich Road",Morden,,3.5,3.5,3.5,0.0,3.0,12.923,8.03
 202,regular,N,Norwood,Arriva,DD,"Blackheath, Royal Standard",Crystal Palace,,Crystal Palace Parade,"Blackheath, Royal Standard",Crystal Palace,,6.5,6.0,6.0,0.0,4.0,13.467,8.368
@@ -199,7 +199,7 @@ route,route_type,garage_code,garage_name,operator,vehicle,destination_outbound,d
 204,regular,EW,Edgware,Metroline,DD,Edgware,Sudbury Town Station,Edgware Station,,Edgware,Sudbury Town Station,,6.0,5.5,6.0,0.0,4.0,14.287,8.878
 205,regular,BW,Bow,Stagecoach London,DD,Bow Church,Marble Arch,Bow Church Station,Marble Arch Station,Bow Church,Marble Arch,,5.5,5.5,5.5,0.0,5.0,12.959,8.052
 206,regular,WJ,Willesden Junction,Metroline,SD,Kilburn Park,"Wembley Park, The Paddocks",Kilburn Park Station,The Paddocks,Kilburn Park,"Wembley Park, The Paddocks",,5.0,4.5,4.5,0.0,3.0,14.544,9.037
-207,regular,GW,Southall,Transport UK,DD,White City,Hayes By-Pass,White City Bus Station,,White City,Hayes By-Pass,,9.0,9.0,9.0,0.0,7.5,14.286,8.877
+207,regular,GW,Southall,Transport UK,DD,White City,Hayes By-Pass,White City Bus Station,,White City,Hayes By-Pass,,7.5,7.5,7.5,0.0,6.0,14.286,8.877
 208,regular,MB,Orpington,Go-Ahead,DD,"Orpington, Perry Hall Road",Lewisham Station,,,"Orpington, Perry Hall Road",Lewisham Station,,5.0,5.0,5.0,0.0,4.0,18.596,11.555
 209,regular,SW,Stockwell,Go-Ahead,SD,Putney Bridge,Mortlake,Lonsdale Road,Mortlake Bus Station,"Putney Bridge, Lonsdale Road",Mortlake,,2.0,2.0,2.0,0.0,2.0,3.064,1.904
 210,regular,W,Cricklewood,Metroline,DD,"Brent Cross, Shopping Centre",Finsbury Park Station,,,"Brent Cross, Shopping Centre",Finsbury Park Station,,6.0,6.0,6.0,0.0,5.0,12.141,7.544
@@ -607,7 +607,7 @@ SL4,regular,DS,Henley Road,Go-Ahead,DD,Grove Park,Canary Wharf,Grove Park Bus St
 SL5,regular,TC,Croydon,Arriva,DD,Croydon Town Centre,Bromley North,Park Street,Bromley North Station,"Croydon Town Centre, Park Street",Bromley North,,5.0,5.0,5.0,0.0,4.0,12.513,7.775
 SL6,regular,N,Norwood,Arriva,DD,Russell Square,West Croydon,,West Croydon Bus Station,Russell Square,West Croydon,,2.5,0.0,0.0,0.0,0.0,18.957,11.779
 SL7,regular,C,Croydon,Go-Ahead,DD,Heathrow Central,West Croydon,Heathrow Central Bus Station,West Croydon Bus Station,Heathrow Central,West Croydon,,4.0,4.0,4.0,0.0,4.0,41.198,25.599
-SL8,regular,G,Greenford,Metroline,DD,White City,Uxbridge,White City Bus Station,Belmont Road,White City,"Uxbridge, Belmont Road",,6.0,6.5,6.0,0.0,5.0,21.467,13.339
+SL8,regular,G,Greenford,Metroline,DD,White City,Uxbridge,White City Bus Station,Belmont Road,White City,"Uxbridge, Belmont Road",,7.5,7.0,7.5,0.0,6.5,21.467,13.339
 SL9,regular,SO,Harrow,First,DD,Harrow Bus Station,Heathrow Central,,Heathrow Central Bus Station,Harrow Bus Station,Heathrow Central,,4.5,4.5,4.5,0.0,4.0,16.869,10.482
 SL10,regular,SO,Harrow,First,DD,Harrow Bus Station,North Finchley,,North Finchley Bus Station,Harrow Bus Station,North Finchley,,5.0,5.0,5.0,0.0,4.0,14.708,9.139
 SL11,regular,MG,Morden Wharf (Greenwich),Go-Ahead,DD,Gayton Road / Abbey Wood Station,North Greenwich Station,,,Gayton Road / Abbey Wood Station,North Greenwich Station,,10.0,10.0,10.0,0.0,5.0,14.783,9.186
