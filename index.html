@@ -1321,6 +1321,61 @@
       border: 1px solid #b26300;
     }
 
+    .leaflet-div-icon.endpoint-route-pill-overlay-icon {
+      background: transparent;
+      border: 0;
+      box-shadow: none;
+      width: auto !important;
+      height: auto !important;
+      margin-left: 0 !important;
+      margin-top: 0 !important;
+      overflow: visible !important;
+      pointer-events: none;
+    }
+
+    .endpoint-route-pill-overlay {
+      display: flex;
+      justify-content: center;
+      width: max-content;
+      max-width: 264px;
+      padding: 0;
+      background: transparent;
+      border: 0;
+      box-shadow: none;
+      backdrop-filter: none;
+      transform: translate(-50%, calc(-100% - 10px));
+      pointer-events: none;
+    }
+
+    .endpoint-route-pill-overlay .route-pill-group {
+      gap: 4px;
+      justify-content: center;
+    }
+
+    .endpoint-route-pill-overlay .route-pill {
+      min-width: 40px;
+      padding: 3px 8px;
+      text-align: center;
+      cursor: pointer;
+      box-shadow: 0 3px 10px rgba(15, 23, 42, 0.24);
+      pointer-events: auto;
+    }
+
+    .endpoint-route-pill-overflow {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 32px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.16);
+      color: #fff;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      white-space: nowrap;
+    }
+
     .route-destination-expander {
       display: flex;
       flex-direction: column;
@@ -2266,6 +2321,10 @@
           <label class="toggle">
             <span>Colour routes by type</span>
             <input type="checkbox" id="colourRoutesByType" checked />
+          </label>
+          <label class="toggle">
+            <span>Show endpoint markers</span>
+            <input type="checkbox" id="showEndpointMarkers" />
           </label>
           <div class="module-note">When off, all route types render in red.</div>
         </div>

@@ -867,11 +867,14 @@
         });
         if (routeIds.size > 0) {
           if (overlayKey === "garage") {
-            api.showAnalysisRoutes(Array.from(routeIds));
+            api.showAnalysisRoutes(Array.from(routeIds), {
+              endpointMarkerMode: "base-threshold"
+            });
           } else {
             api.showAnalysisRoutes(Array.from(routeIds), {
               groups,
-              groupLabel: grouped.key || "group"
+              groupLabel: grouped.key || "group",
+              endpointMarkerMode: overlayKey === "operator" ? "base-threshold" : "filtered"
             });
           }
         } else if (typeof api.clearAnalysisRoutes === "function") {
@@ -899,9 +902,13 @@
       }
 
       const routeIds = new Set();
+      let endpointMarkerMode = "filtered";
       results.forEach((entry) => {
         if (entry?.result?.type !== "route-pills") {
           return;
+        }
+        if (entry?.id === "route-families") {
+          endpointMarkerMode = "base-threshold";
         }
         const groups = Array.isArray(entry.result.groups) ? entry.result.groups : [];
         groups.forEach((group) => {
@@ -915,7 +922,7 @@
         });
       });
       if (routeIds.size > 0) {
-        api.showAnalysisRoutes(Array.from(routeIds));
+        api.showAnalysisRoutes(Array.from(routeIds), { endpointMarkerMode });
       } else if (typeof api.clearAnalysisRoutes === "function") {
         api.clearAnalysisRoutes();
       }
@@ -1096,7 +1103,9 @@
           } else if (routeIdsRaw) {
             const routeIds = routeIdsRaw.split("|").map((token) => token.trim()).filter(Boolean);
             if (routeIds.length > 0 && typeof api.showAnalysisRoutes === "function") {
-              api.showAnalysisRoutes(routeIds);
+              api.showAnalysisRoutes(routeIds, {
+                endpointMarkerMode: analysisId === "route-families" ? "base-threshold" : "filtered"
+              });
             }
           }
           Array.from(els.output.querySelectorAll(".analysis-pill-row")).forEach((el) => {

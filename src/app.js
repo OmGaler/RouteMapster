@@ -68,13 +68,23 @@ const STOP_PANE = "stops-pane";
 const STATION_PANE = "stations-pane";
 const GARAGE_PANE = "garages-pane";
 const HIGHLIGHT_PANE = "highlight-pane";
+const ENDPOINT_PILL_PANE = "endpoint-pill-pane";
 const MOBILE_POINT_TAP_FALLBACK_DISTANCE = 24;
+const ENDPOINT_CLUSTER_DISTANCE_METERS = 220;
+const ENDPOINT_CLUSTER_MAX_VISIBLE_ROUTES = 6;
+const SAME_ENDPOINT_DUPLICATE_THRESHOLD_METERS = 30;
+const ENDPOINT_CLUSTER_MIN_METERS = 220;
+const ENDPOINT_CLUSTER_MAX_METERS = 4200;
+const ENDPOINT_CLUSTER_PIXEL_RADIUS = 112;
+const ENDPOINT_CLUSTER_VIEW_PADDING = 0.02;
+const ENDPOINT_MARKERS_MIN_ZOOM = 14;
 const MAP_PANE_ORDER = [
 	{ name: ROUTE_PANE, zIndex: 410 },
 	{ name: STOP_PANE, zIndex: 420 },
 	{ name: STATION_PANE, zIndex: 430 },
 	{ name: GARAGE_PANE, zIndex: 440 },
-	{ name: HIGHLIGHT_PANE, zIndex: 450 }
+	{ name: HIGHLIGHT_PANE, zIndex: 450 },
+	{ name: ENDPOINT_PILL_PANE, zIndex: 460 }
 ];
 
 const STOP_REGION_LABELS = window.RouteMapsterGeo?.REGION_LABELS || {
@@ -249,6 +259,8 @@ const appState = {
 	busStationHighlightLayer: null,
 	garageSelectMap: null,
 	endpointHighlightLayer: null,
+	endpointHighlightLoadToken: 0,
+	showEndpointMarkers: false,
 	routeGeometryCache: new Map(),
 	routeSpatialCache: new Map(),
 	routeSpatialPromises: new Map(),
@@ -278,6 +290,7 @@ const appState = {
 	analysisRouteLayer: null,
 	analysisRouteLoadToken: 0,
 	analysisActive: false,
+	analysisEndpointMarkerMode: "filtered",
 	analysisPrevSuppress: null,
 	advancedFiltersActive: false,
 	advancedFiltersPrevSuppress: null,
@@ -3012,6 +3025,7 @@ function clearOmniRouteLayer() {
 		appState.map.removeLayer(appState.omniRouteLayer);
 		appState.omniRouteLayer = null;
 	}
+	refreshEndpointPillsForVisibleRoutes().catch(() => {});
 }
 
 function clearOmniSearchLayers(options = {}) {
@@ -3089,6 +3103,7 @@ async function showOmniRoutes(routeIds, contextLabel = "Explorer") {
 	if (loadToken !== appState.omniRouteLoadToken) {
 		return;
 	}
+	refreshEndpointPillsForVisibleRoutes().catch(() => {});
 	updateSelectedInfo(`${contextLabel}: ${routes.length} routes`);
 }
 
@@ -3661,6 +3676,7 @@ function clearGarageRoutes() {
 		appState.garageRouteLayer = null;
 	}
 	closeRouteHoverPopup();
+	refreshEndpointPillsForVisibleRoutes().catch(() => {});
 }
 
 function clearBusStopRoutes() {
@@ -3669,6 +3685,7 @@ function clearBusStopRoutes() {
 		appState.busStopRouteLayer = null;
 	}
 	closeRouteHoverPopup();
+	refreshEndpointPillsForVisibleRoutes().catch(() => {});
 }
 
 function clearBusStopsLayer() {
@@ -4549,9 +4566,270 @@ function renderRoutePills(routes, routeSets) {
 		.map((route) => {
 			const className = getRoutePillClass(route, routeSets);
 			return `<span class="route-pill route-pill--${className}" data-route="${escapeHtml(route)}">${escapeHtml(route)}</span>`;
+	})
+		.join("");
+	return `<div class="route-pill-group">${pills}</div>`;
+}
+
+function buildEndpointClusterPillsHtml(routes, routeSets) {
+	const list = Array.isArray(routes) ? routes : Array.from(routes || []);
+	const unique = sortRouteIds(Array.from(new Set(
+		list
+			.map((routeId) => String(routeId || "").trim().toUpperCase())
+			.filter((routeId) => routeId && !isExcludedRoute(routeId))
+	)));
+	if (unique.length === 0) {
+		return "";
+	}
+	const pills = unique
+		.map((routeId) => {
+			const className = getRoutePillClass(routeId, routeSets);
+			return `<span class="route-pill route-pill--${className}" data-route="${escapeHtml(routeId)}">${escapeHtml(routeId)}</span>`;
 		})
 		.join("");
 	return `<div class="route-pill-group">${pills}</div>`;
+}
+
+function buildEndpointRouteClusters(points, options = {}) {
+	const thresholdMeters = Number.isFinite(options?.thresholdMeters)
+		? Math.max(1, Number(options.thresholdMeters))
+		: ENDPOINT_CLUSTER_DISTANCE_METERS;
+	const entries = (Array.isArray(points) ? points : [])
+		.map((point) => ({
+			routeId: String(point?.routeId || "").trim().toUpperCase(),
+			lat: Number(point?.lat),
+			lon: Number(point?.lon)
+		}))
+		.filter((point) => point.routeId && Number.isFinite(point.lat) && Number.isFinite(point.lon) && !isExcludedRoute(point.routeId));
+	const clusters = [];
+	entries.forEach((point) => {
+		let bestCluster = null;
+		let bestDistance = Infinity;
+		clusters.forEach((cluster) => {
+			const distanceMeters = haversineKm(point.lat, point.lon, cluster.lat, cluster.lon) * 1000;
+			if (distanceMeters <= thresholdMeters && distanceMeters < bestDistance) {
+				bestCluster = cluster;
+				bestDistance = distanceMeters;
+			}
+		});
+		if (!bestCluster) {
+			clusters.push({
+				lat: point.lat,
+				lon: point.lon,
+				latSum: point.lat,
+				lonSum: point.lon,
+				pointCount: 1,
+				routeIds: new Set([point.routeId])
+			});
+			return;
+		}
+		bestCluster.latSum += point.lat;
+		bestCluster.lonSum += point.lon;
+		bestCluster.pointCount += 1;
+		bestCluster.lat = bestCluster.latSum / bestCluster.pointCount;
+		bestCluster.lon = bestCluster.lonSum / bestCluster.pointCount;
+		bestCluster.routeIds.add(point.routeId);
+	});
+	return clusters
+		.map((cluster) => ({
+			lat: cluster.lat,
+			lon: cluster.lon,
+			routeIds: sortRouteIds(Array.from(cluster.routeIds))
+		}))
+		.filter((cluster) => cluster.routeIds.length > 0)
+		.sort((a, b) => {
+			if (b.routeIds.length !== a.routeIds.length) {
+				return b.routeIds.length - a.routeIds.length;
+			}
+			if (a.lat !== b.lat) {
+				return a.lat - b.lat;
+			}
+			return a.lon - b.lon;
+		});
+}
+
+function getEndpointClusterTargetCountForZoom(zoom) {
+	const level = Number.isFinite(zoom) ? Number(zoom) : 12;
+	if (level <= 9) {
+		return 8;
+	}
+	if (level <= 10) {
+		return 12;
+	}
+	if (level <= 11) {
+		return 18;
+	}
+	if (level <= 12) {
+		return 28;
+	}
+	if (level <= 13) {
+		return 42;
+	}
+	return 64;
+}
+
+function getEndpointClusterRenderLimitForZoom(zoom) {
+	const level = Number.isFinite(zoom) ? Number(zoom) : 12;
+	if (level <= 9) {
+		return 6;
+	}
+	if (level <= 10) {
+		return 8;
+	}
+	if (level <= 11) {
+		return 12;
+	}
+	if (level <= 12) {
+		return 18;
+	}
+	if (level <= 13) {
+		return 28;
+	}
+	return 40;
+}
+
+function limitEndpointClustersForZoom(clusters, zoom) {
+	const limit = getEndpointClusterRenderLimitForZoom(zoom);
+	return (Array.isArray(clusters) ? clusters : []).slice(0, Math.max(1, limit));
+}
+
+function isFilteredRouteSetActive(context = {}) {
+	const routeFilterTokens = Array.isArray(context?.routeFilterTokens) ? context.routeFilterTokens : [];
+	if (context?.focusRouteId || context?.activeGarageRoutes || context?.activeBusStopRoutes || context?.activeBusStationRoutes) {
+		return true;
+	}
+	if (context?.analysisActive) {
+		return context?.analysisEndpointMarkerMode !== "base-threshold";
+	}
+	if (context?.omniActive) {
+		return true;
+	}
+	if (routeFilterTokens.length > 0) {
+		return true;
+	}
+	const deckAll = context?.showAllDeckers;
+	if (deckAll === false) {
+		return true;
+	}
+	if (context?.showAllRoutes === true) {
+		return false;
+	}
+	const routeTypeToggles = Array.isArray(context?.routeTypeToggles) ? context.routeTypeToggles : [];
+	if (routeTypeToggles.length === 0) {
+		return false;
+	}
+	return routeTypeToggles.some((enabled) => enabled !== true);
+}
+
+function shouldRenderEndpointMarkers(showEndpointMarkers, zoom, filteredRouteSetActive = false, frequencyMode = false) {
+	if (frequencyMode) {
+		return false;
+	}
+	return Boolean(showEndpointMarkers) && (Boolean(filteredRouteSetActive) || (Number.isFinite(zoom) && Number(zoom) >= ENDPOINT_MARKERS_MIN_ZOOM));
+}
+
+function buildAdaptiveEndpointRouteClusters(points, options = {}) {
+	const targetClusterCount = Number.isFinite(options?.targetClusterCount)
+		? Math.max(1, Math.round(Number(options.targetClusterCount)))
+		: 64;
+	const maxThresholdMeters = Number.isFinite(options?.maxThresholdMeters)
+		? Math.max(1, Number(options.maxThresholdMeters))
+		: ENDPOINT_CLUSTER_MAX_METERS;
+	let thresholdMeters = Number.isFinite(options?.thresholdMeters)
+		? Math.max(1, Number(options.thresholdMeters))
+		: ENDPOINT_CLUSTER_DISTANCE_METERS;
+	let clusters = buildEndpointRouteClusters(points, { thresholdMeters });
+	while (clusters.length > targetClusterCount && thresholdMeters < maxThresholdMeters) {
+		thresholdMeters = Math.min(maxThresholdMeters, Math.max(thresholdMeters + 1, Math.round(thresholdMeters * 1.35)));
+		clusters = buildEndpointRouteClusters(points, { thresholdMeters });
+	}
+	return {
+		clusters,
+		thresholdMeters
+	};
+}
+
+function collectEndpointPillRouteIdsFromLayers(layers) {
+	const routeIds = new Set();
+	const visitLayer = (layer) => {
+		if (!layer) {
+			return;
+		}
+		const routeId = String(layer._routeId || "").trim().toUpperCase();
+		if (routeId && !isExcludedRoute(routeId)) {
+			routeIds.add(routeId);
+		}
+		if (typeof layer.eachLayer === "function") {
+			layer.eachLayer((child) => visitLayer(child));
+		}
+	};
+	(Array.isArray(layers) ? layers : [layers]).forEach((layer) => visitLayer(layer));
+	return sortRouteIds(Array.from(routeIds));
+}
+
+function appendEndpointEntriesForRoute(endpointEntries, routeId, stats) {
+	const startLat = Number(stats?.endpoint_start_lat);
+	const startLon = Number(stats?.endpoint_start_lon);
+	const endLat = Number(stats?.endpoint_end_lat);
+	const endLon = Number(stats?.endpoint_end_lon);
+	if (Number.isFinite(startLat) && Number.isFinite(startLon)) {
+		endpointEntries.push({ routeId, lat: startLat, lon: startLon });
+	}
+	if (!Number.isFinite(endLat) || !Number.isFinite(endLon)) {
+		return;
+	}
+	const duplicateStart = Number.isFinite(startLat)
+		&& Number.isFinite(startLon)
+		&& (haversineKm(startLat, startLon, endLat, endLon) * 1000) <= SAME_ENDPOINT_DUPLICATE_THRESHOLD_METERS;
+	if (!duplicateStart) {
+		endpointEntries.push({ routeId, lat: endLat, lon: endLon });
+	}
+}
+
+function collectEndpointEntriesFromLayers(layers, routeIds = null) {
+	const allowedRouteIds = Array.isArray(routeIds)
+		? new Set(routeIds.map((routeId) => String(routeId || "").trim().toUpperCase()).filter(Boolean))
+		: null;
+	const segmentsByRoute = new Map();
+	const visitLayer = (layer) => {
+		if (!layer) {
+			return;
+		}
+		const routeId = String(layer._routeId || "").trim().toUpperCase();
+		if (routeId && (!allowedRouteIds || allowedRouteIds.has(routeId)) && typeof layer.getLatLngs === "function") {
+			const latLngSegments = [];
+			collectPolylineSegments(layer.getLatLngs(), latLngSegments);
+			if (latLngSegments.length > 0) {
+				const routeSegments = segmentsByRoute.get(routeId) || [];
+				latLngSegments.forEach((segment) => {
+					const normalisedSegment = Array.isArray(segment)
+						? segment
+							.map((point) => [Number(point?.lat), Number(point?.lng)])
+							.filter((point) => Number.isFinite(point[0]) && Number.isFinite(point[1]))
+						: [];
+					if (normalisedSegment.length > 0) {
+						routeSegments.push(normalisedSegment);
+					}
+				});
+				if (routeSegments.length > 0) {
+					segmentsByRoute.set(routeId, routeSegments);
+				}
+			}
+		}
+		if (typeof layer.eachLayer === "function") {
+			layer.eachLayer((child) => visitLayer(child));
+		}
+	};
+	(Array.isArray(layers) ? layers : [layers]).forEach((layer) => visitLayer(layer));
+	const endpointEntries = [];
+	segmentsByRoute.forEach((segments, routeId) => {
+		const stats = computeSpatialStats(segments);
+		if (!stats) {
+			return;
+		}
+		appendEndpointEntriesForRoute(endpointEntries, routeId, stats);
+	});
+	return endpointEntries;
 }
 
 function renderStopRoutePills(props, routes, routeSets) {
@@ -6195,6 +6473,9 @@ async function renderGarageRoutes(loadToken) {
 	});
 
 	await Promise.all(tasks);
+	if (loadToken === appState.routeLoadToken) {
+		refreshEndpointPillsForVisibleRoutes().catch(() => {});
+	}
 }
 
 function getSelectedRouteCategories() {
@@ -6231,6 +6512,7 @@ function clearNetworkRoutes() {
 		appState.map.removeLayer(appState.networkRouteLayer);
 		appState.networkRouteLayer = null;
 	}
+	refreshEndpointPillsForVisibleRoutes().catch(() => {});
 }
 
 async function getSelectedNetworkCategories() {
@@ -6421,6 +6703,9 @@ async function renderNetworkRoutes(loadToken) {
 	});
 
 	await Promise.all(tasks);
+	if (loadToken === appState.networkRouteLoadToken) {
+		refreshEndpointPillsForVisibleRoutes().catch(() => {});
+	}
 }
 
 /**
@@ -6493,6 +6778,40 @@ async function loadRouteSpatialStats(routeId) {
 		});
 	appState.routeSpatialPromises.set(normalised, promise);
 	return promise;
+}
+
+function getRouteEndpointStatsFromRow(row) {
+	const startLat = Number(row?.endpoint_start_lat);
+	const startLon = Number(row?.endpoint_start_lon);
+	const endLat = Number(row?.endpoint_end_lat);
+	const endLon = Number(row?.endpoint_end_lon);
+	const hasStart = Number.isFinite(startLat) && Number.isFinite(startLon);
+	const hasEnd = Number.isFinite(endLat) && Number.isFinite(endLon);
+	if (!hasStart && !hasEnd) {
+		return null;
+	}
+	return {
+		endpoint_start_lat: hasStart ? startLat : null,
+		endpoint_start_lon: hasStart ? startLon : null,
+		endpoint_end_lat: hasEnd ? endLat : null,
+		endpoint_end_lon: hasEnd ? endLon : null
+	};
+}
+
+async function resolveRouteEndpointStats(routeId, summaryIndex) {
+	const normalised = String(routeId || "").trim().toUpperCase();
+	if (!normalised || isExcludedRoute(normalised)) {
+		return null;
+	}
+	const summaryStats = getRouteEndpointStatsFromRow(summaryIndex?.get(normalised));
+	const hasSummaryEndpoints = Number.isFinite(summaryStats?.endpoint_start_lat)
+		&& Number.isFinite(summaryStats?.endpoint_start_lon)
+		&& Number.isFinite(summaryStats?.endpoint_end_lat)
+		&& Number.isFinite(summaryStats?.endpoint_end_lon);
+	if (hasSummaryEndpoints) {
+		return summaryStats;
+	}
+	return loadRouteSpatialStats(normalised);
 }
 
 function formatGaragePvr(props) {
@@ -7430,10 +7749,164 @@ function highlightBusStation(station) {
 }
 
 function clearEndpointHighlight() {
+	appState.endpointHighlightLoadToken += 1;
 	if (appState.endpointHighlightLayer && appState.map) {
 		appState.map.removeLayer(appState.endpointHighlightLayer);
 		appState.endpointHighlightLayer = null;
 	}
+}
+
+function getVisibleEndpointPillSourceLayers() {
+	return [
+		appState.analysisRouteLayer,
+		appState.omniRouteLayer,
+		appState.focusRouteLayer,
+		appState.garageRouteLayer,
+		appState.busStopRouteLayer,
+		appState.busStationRouteLayer,
+		appState.networkRouteLayer
+	];
+}
+
+function getVisibleEndpointPillRouteIds() {
+	return collectEndpointPillRouteIdsFromLayers(getVisibleEndpointPillSourceLayers());
+}
+
+function getEndpointMarkerVisibilityContext() {
+	const routeTypeIds = [
+		"showNetworkRegularRoutes",
+		"showNetworkPrefixRoutes",
+		"showNetwork24hrRoutes",
+		"showNetworkNightRoutes",
+		"showNetworkSchoolRoutes"
+	];
+	return {
+		focusRouteId: appState.focusRouteId,
+		activeGarageRoutes: appState.activeGarageRoutes,
+		activeBusStopRoutes: appState.activeBusStopRoutes,
+		activeBusStationRoutes: appState.activeBusStationRoutes,
+		analysisActive: appState.analysisActive,
+		analysisEndpointMarkerMode: appState.analysisEndpointMarkerMode,
+		omniActive: appState.omniActive,
+		routeFilterTokens: appState.routeFilterTokens,
+		showFrequencyLayer: appState.showFrequencyLayer,
+		showAllRoutes: document.getElementById("showAllRoutes")?.checked === true,
+		showAllDeckers: document.getElementById("showAllDeckers")?.checked === true,
+		routeTypeToggles: routeTypeIds.map((id) => document.getElementById(id)?.checked === true)
+	};
+}
+
+async function renderEndpointPillsFromEntries(endpointEntries) {
+	clearEndpointHighlight();
+	const loadToken = appState.endpointHighlightLoadToken;
+	const entries = Array.isArray(endpointEntries) ? endpointEntries : [];
+	if (entries.length === 0) {
+		return;
+	}
+	const zoom = appState.map?.getZoom?.() ?? 12;
+	const viewportBounds = appState.map?.getBounds?.()?.pad(ENDPOINT_CLUSTER_VIEW_PADDING) || null;
+	const viewportEntries = viewportBounds
+		? entries.filter((entry) => viewportBounds.contains([entry.lat, entry.lon]))
+		: entries;
+	if (viewportEntries.length === 0) {
+		return;
+	}
+	const mapCenter = appState.map?.getCenter?.();
+	let thresholdMeters = ENDPOINT_CLUSTER_DISTANCE_METERS;
+	if (mapCenter && appState.map?.latLngToContainerPoint && appState.map?.containerPointToLatLng && appState.map?.distance) {
+		const centrePoint = appState.map.latLngToContainerPoint(mapCenter);
+		const offsetLatLng = appState.map.containerPointToLatLng([centrePoint.x + ENDPOINT_CLUSTER_PIXEL_RADIUS, centrePoint.y]);
+		const measured = appState.map.distance(mapCenter, offsetLatLng);
+		if (Number.isFinite(measured) && measured > 0) {
+			thresholdMeters = Math.max(ENDPOINT_CLUSTER_MIN_METERS, Math.min(ENDPOINT_CLUSTER_MAX_METERS, measured));
+		}
+	}
+	const routeSets = appState.useRouteTypeColours
+		? (appState.networkRouteSets || await loadNetworkRouteSets().catch(() => null))
+		: null;
+	const { clusters } = buildAdaptiveEndpointRouteClusters(viewportEntries, {
+		thresholdMeters,
+		maxThresholdMeters: ENDPOINT_CLUSTER_MAX_METERS,
+		targetClusterCount: getEndpointClusterTargetCountForZoom(zoom)
+	});
+	const visibleClusters = limitEndpointClustersForZoom(clusters, zoom);
+	if (loadToken !== appState.endpointHighlightLoadToken || visibleClusters.length === 0) {
+		return;
+	}
+	const layer = L.layerGroup().addTo(appState.map);
+	visibleClusters.forEach((cluster) => {
+		const marker = L.marker([cluster.lat, cluster.lon], {
+			interactive: true,
+			keyboard: false,
+			pane: ENDPOINT_PILL_PANE,
+			icon: L.divIcon({
+				className: "endpoint-route-pill-overlay-icon",
+				iconSize: [0, 0],
+				iconAnchor: [0, 0],
+				html: `
+					<div class="endpoint-route-pill-overlay">
+						${buildEndpointClusterPillsHtml(cluster.routeIds, routeSets)}
+					</div>
+				`
+			})
+		}).addTo(layer);
+		marker.on("click", (event) => {
+			if (event?.originalEvent && window.L?.DomEvent?.stop) {
+				window.L.DomEvent.stop(event.originalEvent);
+			}
+		});
+	});
+	appState.endpointHighlightLayer = layer;
+}
+
+async function refreshEndpointPillsForVisibleRoutes() {
+	if (!appState.map) {
+		return;
+	}
+	const zoom = appState.map.getZoom?.();
+	const filteredRouteSetActive = isFilteredRouteSetActive(getEndpointMarkerVisibilityContext());
+	if (!shouldRenderEndpointMarkers(appState.showEndpointMarkers, zoom, filteredRouteSetActive, appState.showFrequencyLayer)) {
+		clearEndpointHighlight();
+		return;
+	}
+	const sourceLayers = getVisibleEndpointPillSourceLayers();
+	const routeIds = collectEndpointPillRouteIdsFromLayers(sourceLayers);
+	const endpointEntries = collectEndpointEntriesFromLayers(sourceLayers, routeIds);
+	if (endpointEntries.length > 0) {
+		await renderEndpointPillsFromEntries(endpointEntries);
+		return;
+	}
+	await showRouteEndpointPillsOnMap(routeIds);
+}
+
+async function showRouteEndpointPillsOnMap(routeIds) {
+	if (!appState.map) {
+		return;
+	}
+	const list = Array.isArray(routeIds)
+		? Array.from(new Set(
+			routeIds
+				.map((routeId) => String(routeId || "").trim().toUpperCase())
+				.filter((routeId) => routeId && !isExcludedRoute(routeId))
+		))
+		: [];
+	if (list.length === 0) {
+		clearEndpointHighlight();
+		return;
+	}
+	const summaryIndex = await ensureRouteSummaryIndex().catch(() => null);
+	const endpointEntries = [];
+	const statsByRoute = await Promise.all(list.map(async (routeId) => ({
+		routeId,
+		stats: await resolveRouteEndpointStats(routeId, summaryIndex)
+	})));
+	statsByRoute.forEach(({ routeId, stats }) => {
+		if (!stats) {
+			return;
+		}
+		appendEndpointEntriesForRoute(endpointEntries, routeId, stats);
+	});
+	await renderEndpointPillsFromEntries(endpointEntries);
 }
 
 function showEndpointPairOnMap(pair) {
@@ -7451,6 +7924,7 @@ function showEndpointPairOnMap(pair) {
 		return;
 	}
 	clearEndpointHighlight();
+	const loadToken = appState.endpointHighlightLoadToken;
 	const layer = L.layerGroup().addTo(appState.map);
 	const styles = [
 		{ color: "#0ea5e9", fill: "#7dd3fc" },
@@ -7468,6 +7942,10 @@ function showEndpointPairOnMap(pair) {
 			pane: HIGHLIGHT_PANE
 		}).addTo(layer);
 	});
+	if (loadToken !== appState.endpointHighlightLoadToken) {
+		appState.map.removeLayer(layer);
+		return;
+	}
 	appState.endpointHighlightLayer = layer;
 	if (points.length > 1) {
 		const bounds = L.latLngBounds(points).pad(0.25);
@@ -7484,6 +7962,8 @@ function clearAnalysisRoutes() {
 	}
 	closeRouteHoverPopup();
 	appState.analysisRouteLoadToken += 1;
+	appState.analysisEndpointMarkerMode = "filtered";
+	refreshEndpointPillsForVisibleRoutes().catch(() => {});
 	if (!appState.analysisActive) {
 		return;
 	}
@@ -7552,6 +8032,9 @@ async function showAnalysisRoutes(routeIds, options = {}) {
 		appState.analysisPrevSuppress = appState.suppressNetworkRoutes;
 	}
 	appState.analysisActive = true;
+	appState.analysisEndpointMarkerMode = String(options.endpointMarkerMode || "filtered").trim().toLowerCase() === "base-threshold"
+		? "base-threshold"
+		: "filtered";
 	appState.suppressNetworkRoutes = true;
 	appState.networkRouteLoadToken += 1;
 	clearNetworkRoutes();
@@ -7605,6 +8088,7 @@ async function showAnalysisRoutes(routeIds, options = {}) {
 	};
 	await Promise.all(Array.from({ length: concurrency }, () => worker()));
 	if (loadToken === appState.analysisRouteLoadToken) {
+		refreshEndpointPillsForVisibleRoutes().catch(() => {});
 		if (groupedRoutes.length > 0) {
 			const groupLabel = String(options.groupLabel || "group").trim();
 			const suffix = groupedRoutes.length === 1 ? "" : "s";
@@ -7621,6 +8105,7 @@ function clearBusStationRoutes() {
 		appState.busStationRouteLayer = null;
 	}
 	closeRouteHoverPopup();
+	refreshEndpointPillsForVisibleRoutes().catch(() => {});
 }
 
 function clearFocusedRouteLayer() {
@@ -7628,6 +8113,7 @@ function clearFocusedRouteLayer() {
 		appState.map.removeLayer(appState.focusRouteLayer);
 		appState.focusRouteLayer = null;
 	}
+	refreshEndpointPillsForVisibleRoutes().catch(() => {});
 }
 
 function getFocusedRouteColour(routeId, routeSets) {
@@ -7695,6 +8181,7 @@ async function focusRoute(routeId) {
 		line._routeId = normalised;
 		bindRouteHoverPopup(line, layerGroup);
 	});
+	refreshEndpointPillsForVisibleRoutes().catch(() => {});
 	updateSelectedInfo(`Focused route: ${normalised}`);
 }
 
@@ -8016,6 +8503,9 @@ async function renderBusStopRoutes(loadToken) {
 	});
 
 	await Promise.all(tasks);
+	if (loadToken === appState.busStopRouteLoadToken) {
+		refreshEndpointPillsForVisibleRoutes().catch(() => {});
+	}
 }
 
 async function renderBusStationRoutes(loadToken) {
@@ -8094,6 +8584,9 @@ async function renderBusStationRoutes(loadToken) {
 	});
 
 	await Promise.all(tasks);
+	if (loadToken === appState.busStationRouteLoadToken) {
+		refreshEndpointPillsForVisibleRoutes().catch(() => {});
+	}
 }
 
 function parseNetworkPercentage(props) {
@@ -8431,9 +8924,6 @@ function setupUI() {
 		if (window.RouteMapsterAPI?.clearAnalysisRoutes) {
 			window.RouteMapsterAPI.clearAnalysisRoutes();
 		}
-		if (window.RouteMapsterAPI?.clearEndpointHighlight) {
-			window.RouteMapsterAPI.clearEndpointHighlight();
-		}
 	};
 
 	if (appState.map) {
@@ -8452,6 +8942,11 @@ function setupUI() {
 		["mouseout", "dragstart", "zoomstart", "click"].forEach((eventName) => {
 			appState.map.on(eventName, () => {
 				closeRouteHoverPopup();
+			});
+		});
+		["moveend", "zoomend"].forEach((eventName) => {
+			appState.map.on(eventName, () => {
+				refreshEndpointPillsForVisibleRoutes().catch(() => {});
 			});
 		});
 	}
@@ -8776,7 +9271,9 @@ function setupUI() {
 			clearBusStationRoutes();
 			clearNetworkRoutes();
 			clearOmniSearchLayers({ restoreNetwork: false });
-			if (window.RouteMapsterAdvancedFilters?.clearMapHighlights) {
+			if (window.RouteMapsterAdvancedFilters?.dismissResults) {
+				window.RouteMapsterAdvancedFilters.dismissResults({ restoreMap: true });
+			} else if (window.RouteMapsterAdvancedFilters?.clearMapHighlights) {
 				window.RouteMapsterAdvancedFilters.clearMapHighlights(appState);
 			}
 			appState.frequencySegmentTotals = null;
@@ -8890,7 +9387,7 @@ function setupUI() {
 		const mapContainer = appState.map.getContainer();
 		if (mapContainer) {
 			mapContainer.addEventListener("click", (event) => {
-				const target = event.target.closest(".hover-popup .route-pill");
+				const target = event.target.closest(".hover-popup .route-pill, .endpoint-route-pill-overlay .route-pill");
 				if (!target) {
 					return;
 				}
@@ -8920,6 +9417,15 @@ function setupUI() {
 			if (appState.activeBusStopRoutes) {
 				clearBusStopRouteSelection({ restoreLayer: true, restoreNetwork: true });
 			}
+		});
+	}
+
+	const showEndpointMarkers = document.getElementById("showEndpointMarkers");
+	if (showEndpointMarkers) {
+		showEndpointMarkers.checked = appState.showEndpointMarkers;
+		showEndpointMarkers.addEventListener("change", (event) => {
+			appState.showEndpointMarkers = event.target.checked;
+			refreshEndpointPillsForVisibleRoutes().catch(() => {});
 		});
 	}
 }
@@ -9984,6 +10490,13 @@ window.RouteMapsterAPI = {
 	sortRouteIds,
 	compareRouteIds,
 	getRoutePillClass,
+	buildEndpointRouteClusters,
+	buildAdaptiveEndpointRouteClusters,
+	limitEndpointClustersForZoom,
+	isFilteredRouteSetActive,
+	shouldRenderEndpointMarkers,
+	collectEndpointPillRouteIdsFromLayers,
+	collectEndpointEntriesFromLayers,
 	getRouteDestinationSummaryText,
 	getRouteDestinationDisplayLines,
 	escapeHtml,

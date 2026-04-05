@@ -83,3 +83,163 @@ test("bus stop display features fall back to all filtered stops when the focused
 
   assert.deepEqual(features, [first, second]);
 });
+
+test("endpoint route clusters group nearby termini and deduplicate route ids", () => {
+  const api = loadAppApi();
+  const clusters = api.buildEndpointRouteClusters(
+    [
+      { routeId: "12", lat: 51.5000, lon: -0.1000 },
+      { routeId: "25", lat: 51.5005, lon: -0.1003 },
+      { routeId: "N5", lat: 51.5004, lon: -0.0998 },
+      { routeId: "12", lat: 51.5001, lon: -0.1001 },
+      { routeId: "99", lat: 51.5100, lon: -0.1200 }
+    ],
+    { thresholdMeters: 120 }
+  );
+
+  assert.equal(clusters.length, 2);
+  assert.deepEqual(clusters[0].routeIds, ["12", "25", "N5"]);
+  assert.deepEqual(clusters[1].routeIds, ["99"]);
+});
+
+test("adaptive endpoint clustering reduces marker count when the target is low", () => {
+  const api = loadAppApi();
+  const points = [
+    { routeId: "1", lat: 51.5000, lon: -0.1000 },
+    { routeId: "2", lat: 51.5008, lon: -0.1000 },
+    { routeId: "3", lat: 51.5016, lon: -0.1000 },
+    { routeId: "4", lat: 51.5024, lon: -0.1000 }
+  ];
+
+  const result = api.buildAdaptiveEndpointRouteClusters(points, {
+    thresholdMeters: 30,
+    maxThresholdMeters: 300,
+    targetClusterCount: 2
+  });
+
+  assert.equal(result.clusters.length, 2);
+  assert.ok(result.thresholdMeters > 30);
+});
+
+test("endpoint cluster render limit trims low-zoom overlays", () => {
+  const api = loadAppApi();
+  const clusters = Array.from({ length: 12 }, (_, index) => ({
+    lat: 51.5 + (index * 0.001),
+    lon: -0.1,
+    routeIds: [`R${index + 1}`]
+  }));
+
+  const limited = api.limitEndpointClustersForZoom(clusters, 9);
+
+  assert.equal(limited.length, 6);
+  assert.deepEqual(limited[0], clusters[0]);
+  assert.deepEqual(limited[5], clusters[5]);
+});
+
+test("endpoint markers stay hidden until the minimum zoom threshold", () => {
+  const api = loadAppApi();
+
+  assert.equal(api.shouldRenderEndpointMarkers(true, 13), false);
+  assert.equal(api.shouldRenderEndpointMarkers(true, 14), true);
+  assert.equal(api.shouldRenderEndpointMarkers(false, 15), false);
+  assert.equal(api.shouldRenderEndpointMarkers(true, 12, true), true);
+  assert.equal(api.shouldRenderEndpointMarkers(true, 16, true, true), false);
+});
+
+test("filtered route-set detection ignores the broad all-routes view", () => {
+  const api = loadAppApi();
+
+  assert.equal(api.isFilteredRouteSetActive({
+    showAllRoutes: true,
+    showAllDeckers: true,
+    routeTypeToggles: [true, true, true, true, true],
+    routeFilterTokens: []
+  }), false);
+
+  assert.equal(api.isFilteredRouteSetActive({
+    activeBusStopRoutes: ["12", "25"],
+    showAllRoutes: true,
+    showAllDeckers: true,
+    routeTypeToggles: [true, true, true, true, true],
+    routeFilterTokens: []
+  }), true);
+
+  assert.equal(api.isFilteredRouteSetActive({
+    analysisActive: true,
+    analysisEndpointMarkerMode: "base-threshold",
+    showAllRoutes: true,
+    showAllDeckers: true,
+    routeTypeToggles: [true, true, true, true, true],
+    routeFilterTokens: []
+  }), false);
+
+  assert.equal(api.isFilteredRouteSetActive({
+    showAllRoutes: false,
+    showAllDeckers: true,
+    routeTypeToggles: [true, false, true, true, true],
+    routeFilterTokens: []
+  }), true);
+});
+
+test("endpoint pill route ids are collected from visible layer groups", () => {
+  const api = loadAppApi();
+  const layers = [
+    {
+      eachLayer(callback) {
+        callback({ _routeId: "25" });
+        callback({
+          eachLayer(innerCallback) {
+            innerCallback({ _routeId: "N5" });
+            innerCallback({ _routeId: "25" });
+          }
+        });
+      }
+    },
+    {
+      eachLayer(callback) {
+        callback({ _routeId: "12" });
+      }
+    }
+  ];
+
+  const routeIds = api.collectEndpointPillRouteIdsFromLayers(layers);
+
+  assert.deepEqual(routeIds, ["12", "25", "N5"]);
+});
+
+test("endpoint entries are derived from rendered route layers", () => {
+  const api = loadAppApi();
+  const layers = [
+    {
+      eachLayer(callback) {
+        callback({
+          _routeId: "12",
+          getLatLngs() {
+            return [
+              { lat: 51.5, lng: -0.1 },
+              { lat: 51.51, lng: -0.11 }
+            ];
+          }
+        });
+        callback({
+          _routeId: "25",
+          getLatLngs() {
+            return [
+              { lat: 51.52, lng: -0.12 },
+              { lat: 51.53, lng: -0.13 }
+            ];
+          }
+        });
+      }
+    }
+  ];
+
+  const entries = api.collectEndpointEntriesFromLayers(layers);
+
+  assert.deepEqual(entries, [
+    { routeId: "12", lat: 51.5, lon: -0.1 },
+    { routeId: "12", lat: 51.51, lon: -0.11 },
+    { routeId: "25", lat: 51.52, lon: -0.12 },
+    { routeId: "25", lat: 51.53, lon: -0.13 }
+  ]);
+});
