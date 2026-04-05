@@ -1,3 +1,7 @@
+node_modules/
+playwright-report/
+test-results/
+
 data/raw/
 !data/raw/stops/
 !data/raw/stops/postcode_cache.json
