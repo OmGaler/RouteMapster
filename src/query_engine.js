@@ -140,7 +140,7 @@
    * Counts total and route-only stops for each route in the stop dataset.
    *
    * @param {GeoJSON.FeatureCollection|object|null} geojson Stop GeoJSON payload.
-   * @returns {{totalCounts: Map<string, number>, exclusiveCounts: Map<string, number>}} Aggregated stop counts by route.
+   * @returns {{totalCounts: Map<string, number>, exclusiveCounts: Map<string, number>, connectedRoutesByRoute: Map<string, Set<string>>}} Aggregated stop counts and route adjacency by route.
    */
   const buildRouteStopStats = (geojson) => {
     const features = Array.isArray(geojson?.features) ? geojson.features : [];
@@ -165,29 +165,159 @@
     });
     const totalCounts = new Map();
     const exclusiveCounts = new Map();
+    const connectedRoutesByRoute = new Map();
     stopRoutesByKey.forEach((routes) => {
-      let onlyRoute = "";
-      let onlyCount = 0;
-      routes.forEach((routeIdRaw) => {
-        const routeId = String(routeIdRaw || "").trim().toUpperCase();
-        if (!routeId) {
-          return;
-        }
-        onlyRoute = routeId;
-        onlyCount += 1;
+      const routeList = Array.from(routes)
+        .map((routeIdRaw) => String(routeIdRaw || "").trim().toUpperCase())
+        .filter(Boolean);
+      routeList.forEach((routeId) => {
         totalCounts.set(routeId, (totalCounts.get(routeId) || 0) + 1);
       });
-      if (onlyCount === 1 && onlyRoute) {
+      if (routeList.length === 1) {
+        const [onlyRoute] = routeList;
         exclusiveCounts.set(onlyRoute, (exclusiveCounts.get(onlyRoute) || 0) + 1);
+        return;
+      }
+      routeList.forEach((routeId) => {
+        let connected = connectedRoutesByRoute.get(routeId);
+        if (!connected) {
+          connected = new Set();
+          connectedRoutesByRoute.set(routeId, connected);
+        }
+        routeList.forEach((peerRouteId) => {
+          if (peerRouteId !== routeId) {
+            connected.add(peerRouteId);
+          }
+        });
+      });
+    });
+    return { totalCounts, exclusiveCounts, connectedRoutesByRoute };
+  };
+
+  const normaliseConnectedRouteCounts = (row) => {
+    const regular = Number.isFinite(row?.connected_routes_regular) ? row.connected_routes_regular : null;
+    const night = Number.isFinite(row?.connected_routes_night) ? row.connected_routes_night : null;
+    const school = Number.isFinite(row?.connected_routes_school) ? row.connected_routes_school : null;
+    const parsedTotal = Number.isFinite(row?.connected_routes_total) ? row.connected_routes_total : null;
+    const total = Number.isFinite(parsedTotal)
+      ? parsedTotal
+      : [regular, night, school].every(Number.isFinite)
+        ? regular + night + school
+        : null;
+    return {
+      regular,
+      night,
+      school,
+      total
+    };
+  };
+
+  const applyStopDerivedRouteMetrics = (rows, routeStopStats) => {
+    const list = Array.isArray(rows) ? rows : [];
+    const totalCounts = routeStopStats?.totalCounts;
+    const exclusiveCounts = routeStopStats?.exclusiveCounts;
+    const connectedRoutesByRoute = routeStopStats?.connectedRoutesByRoute;
+    const hasStopData = routeStopStats?.hasData === true;
+    const canApplyStopCounts = hasStopData
+      && totalCounts && typeof totalCounts.get === "function"
+      && exclusiveCounts && typeof exclusiveCounts.get === "function";
+    const canApplyConnections = hasStopData
+      && connectedRoutesByRoute && typeof connectedRoutesByRoute.get === "function";
+    const rowsById = new Map();
+    list.forEach((row) => {
+      const routeId = String(row?.route_id_norm || "").trim().toUpperCase();
+      if (routeId) {
+        rowsById.set(routeId, row);
       }
     });
-    return { totalCounts, exclusiveCounts };
+
+    const classifyConnectedRoute = (routeId) => {
+      const normalisedRouteId = String(routeId || "").trim().toUpperCase();
+      if (!normalisedRouteId || isExcludedRoute(normalisedRouteId)) {
+        return "";
+      }
+      const routeType = normaliseRouteType(rowsById.get(normalisedRouteId)?.route_type || "");
+      if (routeType === "night" || normalisedRouteId.startsWith("N")) {
+        return "night";
+      }
+      if (routeType === "school") {
+        return "school";
+      }
+      return "regular";
+    };
+
+    list.forEach((row) => {
+      const routeId = String(row?.route_id_norm || "").trim().toUpperCase();
+      if (!routeId) {
+        row.unique_stops = null;
+        row.total_stops = null;
+        row.unique_stops_pct = null;
+        row.connected_routes_regular = null;
+        row.connected_routes_night = null;
+        row.connected_routes_school = null;
+        row.connected_routes_total = null;
+        return;
+      }
+
+      if (canApplyStopCounts) {
+        const totalStops = totalCounts.get(routeId) ?? 0;
+        const uniqueStops = exclusiveCounts.get(routeId) ?? 0;
+        row.unique_stops = uniqueStops;
+        row.total_stops = totalStops;
+        row.unique_stops_pct = totalStops > 0 ? uniqueStops / totalStops : 0;
+      } else {
+        if (!Number.isFinite(row.unique_stops)) {
+          row.unique_stops = null;
+        }
+        if (!Number.isFinite(row.total_stops)) {
+          row.total_stops = null;
+        }
+        if (!Number.isFinite(row.unique_stops_pct)) {
+          row.unique_stops_pct = Number.isFinite(row.unique_stops) && Number.isFinite(row.total_stops) && row.total_stops > 0
+            ? row.unique_stops / row.total_stops
+            : null;
+        }
+      }
+
+      if (canApplyConnections) {
+        let regular = 0;
+        let night = 0;
+        let school = 0;
+        const connectedRoutes = connectedRoutesByRoute.get(routeId);
+        connectedRoutes?.forEach((peerRouteId) => {
+          switch (classifyConnectedRoute(peerRouteId)) {
+            case "night":
+              night += 1;
+              break;
+            case "school":
+              school += 1;
+              break;
+            case "regular":
+              regular += 1;
+              break;
+            default:
+              break;
+          }
+        });
+        row.connected_routes_regular = regular;
+        row.connected_routes_night = night;
+        row.connected_routes_school = school;
+        row.connected_routes_total = regular + night + school;
+        return;
+      }
+
+      const fallbackCounts = normaliseConnectedRouteCounts(row);
+      row.connected_routes_regular = fallbackCounts.regular;
+      row.connected_routes_night = fallbackCounts.night;
+      row.connected_routes_school = fallbackCounts.school;
+      row.connected_routes_total = fallbackCounts.total;
+    });
   };
 
   /**
    * Loads and caches stop-based route statistics used by downstream analyses.
    *
-   * @returns {Promise<{totalCounts: Map<string, number>, exclusiveCounts: Map<string, number>}>} Cached stop statistics.
+   * @returns {Promise<{totalCounts: Map<string, number>, exclusiveCounts: Map<string, number>, connectedRoutesByRoute: Map<string, Set<string>>, hasData: boolean}>} Cached stop statistics.
    * Side effects: Fetches the stop GeoJSON once and memoises the result.
    */
   const loadRouteStopStats = async () => {
@@ -200,11 +330,19 @@
     routeStopStatsPromise = fetch(STOPS_GEOJSON_PATH)
       .then((response) => response.ok ? response.json() : null)
       .then((geojson) => {
-        routeStopStatsCache = buildRouteStopStats(geojson);
+        routeStopStatsCache = {
+          ...buildRouteStopStats(geojson),
+          hasData: Boolean(geojson)
+        };
         return routeStopStatsCache;
       })
       .catch(() => {
-        routeStopStatsCache = { totalCounts: new Map(), exclusiveCounts: new Map() };
+        routeStopStatsCache = {
+          totalCounts: new Map(),
+          exclusiveCounts: new Map(),
+          connectedRoutesByRoute: new Map(),
+          hasData: false
+        };
         return routeStopStatsCache;
       })
       .finally(() => {
@@ -343,6 +481,10 @@
     const uniqueStops = parseNumber(resolveField(row, ["unique_stops", "uniqueStops", "stop_count", "stopCount"]));
     const totalStops = parseNumber(resolveField(row, ["total_stops", "totalStops", "route_stop_count", "routeStopCount"]));
     const uniqueStopsPct = parseNumber(resolveField(row, ["unique_stops_pct", "uniqueStopsPct", "exclusive_stop_pct", "exclusiveStopPct"]));
+    const connectedRoutesRegular = parseNumber(resolveField(row, ["connected_routes_regular", "connectedRoutesRegular", "shared_stop_routes_regular", "sharedStopRoutesRegular"]));
+    const connectedRoutesNight = parseNumber(resolveField(row, ["connected_routes_night", "connectedRoutesNight", "shared_stop_routes_night", "sharedStopRoutesNight"]));
+    const connectedRoutesSchool = parseNumber(resolveField(row, ["connected_routes_school", "connectedRoutesSchool", "shared_stop_routes_school", "sharedStopRoutesSchool"]));
+    const connectedRoutesTotal = parseNumber(resolveField(row, ["connected_routes_total", "connectedRoutesTotal", "shared_stop_routes_total", "sharedStopRoutesTotal"]));
     const lengthMiles = Number.isFinite(lengthMilesRaw)
       ? lengthMilesRaw
       : Number.isFinite(lengthKm)
@@ -403,6 +545,10 @@
       unique_stops: uniqueStops,
       total_stops: totalStops,
       unique_stops_pct: uniqueStopsPct,
+      connected_routes_regular: connectedRoutesRegular,
+      connected_routes_night: connectedRoutesNight,
+      connected_routes_school: connectedRoutesSchool,
+      connected_routes_total: connectedRoutesTotal,
       northmost_lat: northmostLat,
       southmost_lat: southmostLat,
       eastmost_lon: eastmostLon,
@@ -447,7 +593,12 @@
     };
     loadPromise = Promise.all([
       loadSummaryText(),
-      loadRouteStopStats().catch(() => ({ totalCounts: new Map(), exclusiveCounts: new Map() }))
+      loadRouteStopStats().catch(() => ({
+        totalCounts: new Map(),
+        exclusiveCounts: new Map(),
+        connectedRoutesByRoute: new Map(),
+        hasData: false
+      }))
     ])
       .then(([text, routeStopStats]) => {
         if (!text) {
@@ -456,24 +607,7 @@
         const parsed = parseCsv(text);
         const objects = toObjects(parsed);
         const rows = objects.map((row) => normaliseRow(row));
-        const totalCounts = routeStopStats?.totalCounts;
-        const exclusiveCounts = routeStopStats?.exclusiveCounts;
-        if (totalCounts && typeof totalCounts.get === "function" && exclusiveCounts && typeof exclusiveCounts.get === "function") {
-          rows.forEach((row) => {
-            const routeId = String(row?.route_id_norm || "").trim().toUpperCase();
-            if (!routeId) {
-              row.unique_stops = null;
-              row.total_stops = null;
-              row.unique_stops_pct = null;
-              return;
-            }
-            const totalStops = totalCounts.get(routeId) ?? 0;
-            const uniqueStops = exclusiveCounts.get(routeId) ?? 0;
-            row.unique_stops = uniqueStops;
-            row.total_stops = totalStops;
-            row.unique_stops_pct = totalStops > 0 ? uniqueStops / totalStops : 0;
-          });
-        }
+        applyStopDerivedRouteMetrics(rows, routeStopStats);
         if (rows.length > 0) {
           cachedRows = rows;
         }

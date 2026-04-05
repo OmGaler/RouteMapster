@@ -80,3 +80,46 @@ test("routes wholly within one borough analysis sorts by descending length and s
     routeIds: ["R2", "R1"]
   });
 });
+
+test("most stop-connected routes analysis ranks by shared-stop totals", async () => {
+  const analyses = loadAnalyses();
+
+  const result = await analyses.runAnalysis("most-stop-connected-routes", [
+    {
+      route_id: "12",
+      route_id_norm: "12",
+      connected_routes_regular: 5,
+      connected_routes_night: 2,
+      connected_routes_school: 1,
+      connected_routes_total: 8
+    },
+    {
+      route_id: "N12",
+      route_id_norm: "N12",
+      connected_routes_regular: 4,
+      connected_routes_night: 0,
+      connected_routes_school: 0,
+      connected_routes_total: 4
+    },
+    {
+      route_id: "618",
+      route_id_norm: "618",
+      connected_routes_regular: 2,
+      connected_routes_night: 0,
+      connected_routes_school: 1,
+      connected_routes_total: 3
+    }
+  ]);
+
+  assert.equal(result.type, "table");
+  assert.deepEqual(result.columns, ["Rank", "Route", "Day routes", "Night", "School", "Total"]);
+  assert.deepEqual(result.rows, [
+    [1, "12", "5", "2", "1", "8"],
+    [2, "N12", "4", "0", "0", "4"],
+    [3, "618", "2", "0", "1", "3"]
+  ]);
+  assert.deepEqual(result.mapOverlay, {
+    type: "route-list",
+    routeIds: ["12", "N12", "618"]
+  });
+});

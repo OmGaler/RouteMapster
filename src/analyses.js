@@ -84,6 +84,24 @@
 
   const getRouteId = (row) => String(row?.route_id_norm || row?.route_id || "").trim().toUpperCase();
 
+  const getConnectedRouteCounts = (row) => {
+    const regular = asNumber(row?.connected_routes_regular);
+    const night = asNumber(row?.connected_routes_night);
+    const school = asNumber(row?.connected_routes_school);
+    const parsedTotal = asNumber(row?.connected_routes_total);
+    const total = Number.isFinite(parsedTotal)
+      ? parsedTotal
+      : [regular, night, school].every(Number.isFinite)
+        ? regular + night + school
+        : null;
+    return {
+      regular,
+      night,
+      school,
+      total
+    };
+  };
+
   const groupRoutesByPrimaryLabel = (rows, getLabel) => {
     const groups = new Map();
     (Array.isArray(rows) ? rows : []).forEach((row) => {
@@ -957,6 +975,65 @@
             getPrimaryKnownOperator(row),
             getGarages(row)[0]
           ]),
+          mapOverlay: {
+            type: "route-list",
+            routeIds
+          }
+        };
+      }
+    },
+    "most-stop-connected-routes": {
+      id: "most-stop-connected-routes",
+      label: "Routes with most interchanges",
+      run: (rows) => {
+        const sorted = rows
+          .map((row) => ({
+            row,
+            counts: getConnectedRouteCounts(row)
+          }))
+          .filter((entry) => Number.isFinite(entry.counts.total))
+          .slice()
+          .sort((a, b) => {
+            if (b.counts.total !== a.counts.total) {
+              return b.counts.total - a.counts.total;
+            }
+            if ((b.counts.regular || 0) !== (a.counts.regular || 0)) {
+              return (b.counts.regular || 0) - (a.counts.regular || 0);
+            }
+            if ((b.counts.night || 0) !== (a.counts.night || 0)) {
+              return (b.counts.night || 0) - (a.counts.night || 0);
+            }
+            if ((b.counts.school || 0) !== (a.counts.school || 0)) {
+              return (b.counts.school || 0) - (a.counts.school || 0);
+            }
+            return getRouteId(a.row).localeCompare(getRouteId(b.row), undefined, { numeric: true });
+          })
+          .slice(0, 25);
+        if (sorted.length === 0) {
+          return {
+            type: "table",
+            columns: ["Rank", "Route", "Day routes", "Night", "School", "Total"],
+            rows: [["No shared-stop connectivity data available", "", "", "", "", ""]],
+            mapOverlay: {
+              type: "route-list",
+              routeIds: []
+            }
+          };
+        }
+        const routeIds = sorted
+          .map((entry) => getRouteId(entry.row))
+          .filter(Boolean);
+        return {
+          type: "table",
+          columns: ["Rank", "Route", "Day routes", "Night", "School", "Total"],
+          rows: sorted.map((entry, index) => ([
+            index + 1,
+            getRouteId(entry.row),
+            Number.isFinite(entry.counts.regular) ? formatNumber(entry.counts.regular, 0) : "",
+            Number.isFinite(entry.counts.night) ? formatNumber(entry.counts.night, 0) : "",
+            Number.isFinite(entry.counts.school) ? formatNumber(entry.counts.school, 0) : "",
+            formatNumber(entry.counts.total, 0)
+          ])),
           mapOverlay: {
             type: "route-list",
             routeIds

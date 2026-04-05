@@ -1523,6 +1523,23 @@ function refreshCurrentRouteInfoPanel(routeId) {
 	setRouteInfoPanel(normalised, options).catch(() => {});
 }
 
+function buildRouteConnectedRouteMetricLines(row) {
+	const regular = Number.isFinite(row?.connected_routes_regular) ? Math.round(row.connected_routes_regular) : null;
+	const night = Number.isFinite(row?.connected_routes_night) ? Math.round(row.connected_routes_night) : null;
+	const school = Number.isFinite(row?.connected_routes_school) ? Math.round(row.connected_routes_school) : null;
+	const total = Number.isFinite(row?.connected_routes_total)
+		? Math.round(row.connected_routes_total)
+		: [regular, night, school].every(Number.isFinite)
+			? regular + night + school
+			: null;
+	return [
+		Number.isFinite(regular) ? `Day route interchanges: ${escapeHtml(regular)}` : "",
+		Number.isFinite(night) ? `Night route interchanges: ${escapeHtml(night)}` : "",
+		Number.isFinite(school) ? `School route interchanges: ${escapeHtml(school)}` : "",
+		Number.isFinite(total) ? `Total interchanges: ${escapeHtml(total)}` : ""
+	].filter(Boolean);
+}
+
 function buildRouteDetailsBodyHtml(routeId, row, routeSets, options = {}) {
 	const meta = getRouteMetaFromRow(row);
 	const operators = Array.isArray(row?.operator_names_arr)
@@ -1548,7 +1565,9 @@ function buildRouteDetailsBodyHtml(routeId, row, routeSets, options = {}) {
 		Number.isFinite(uniqueStops) ? `Route-only stops: ${escapeHtml(uniqueStops)}` : "",
 		Number.isFinite(totalStops) ? `Total stops: ${escapeHtml(totalStops)}` : "",
 		Number.isFinite(uniquePct) ? `Route-only stop share: ${escapeHtml(uniquePct)}%` : ""
-	].filter(Boolean);
+	]
+		.concat(buildRouteConnectedRouteMetricLines(row))
+		.filter(Boolean);
 
 	const frequencyLines = [
 		["Peak AM", row?.frequency_peak_am],

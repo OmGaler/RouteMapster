@@ -335,6 +335,73 @@ test("loadRouteSummary parses CSV and caches result", async () => {
   assert.equal(first[0].destination_inbound_qualifier, "Grosvenor Road");
 });
 
+test("loadRouteSummary derives shared-stop connected route breakdowns", async () => {
+  const engine = loadEngine({
+    fetch: async (url) => {
+      if (String(url).includes("/data/processed/stops.geojson")) {
+        return {
+          ok: true,
+          json: async () => ({
+            features: [
+              { properties: { NAPTAN_ID: "s1", ROUTES: "12, C3, N12" } },
+              { properties: { NAPTAN_ID: "s2", ROUTES: "12, 618" } },
+              { properties: { NAPTAN_ID: "s3", ROUTES: "12, 88" } },
+              { properties: { NAPTAN_ID: "s4", ROUTES: "618" } },
+              { properties: { NAPTAN_ID: "s5", ROUTES: "N12" } }
+            ]
+          })
+        };
+      }
+      return {
+        ok: true,
+        text: async () => [
+          "route_id,route_type,operator_names",
+          "12,regular,Operator A",
+          "C3,regular,Operator B",
+          "N12,night,Operator C",
+          "618,school,Operator D",
+          "88,twentyfour,Operator E"
+        ].join("\n")
+      };
+    }
+  });
+
+  const rows = await engine.loadRouteSummary();
+  const byId = new Map(rows.map((row) => [row.route_id_norm, row]));
+
+  assert.deepEqual(
+    {
+      regular: byId.get("12").connected_routes_regular,
+      night: byId.get("12").connected_routes_night,
+      school: byId.get("12").connected_routes_school,
+      total: byId.get("12").connected_routes_total
+    },
+    { regular: 2, night: 1, school: 1, total: 4 }
+  );
+  assert.deepEqual(
+    {
+      regular: byId.get("C3").connected_routes_regular,
+      night: byId.get("C3").connected_routes_night,
+      school: byId.get("C3").connected_routes_school,
+      total: byId.get("C3").connected_routes_total
+    },
+    { regular: 1, night: 1, school: 0, total: 2 }
+  );
+  assert.deepEqual(
+    {
+      regular: byId.get("618").connected_routes_regular,
+      night: byId.get("618").connected_routes_night,
+      school: byId.get("618").connected_routes_school,
+      total: byId.get("618").connected_routes_total
+    },
+    { regular: 1, night: 0, school: 0, total: 1 }
+  );
+  assert.equal(byId.get("12").total_stops, 3);
+  assert.equal(byId.get("12").unique_stops, 0);
+  assert.equal(byId.get("618").total_stops, 2);
+  assert.equal(byId.get("618").unique_stops, 1);
+});
+
 test("loadRouteSummary returns empty list on fetch failure", async () => {
   const engine = loadEngine({
     fetch: async () => {
