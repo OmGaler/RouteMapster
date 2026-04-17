@@ -7,7 +7,7 @@ function loadAppApi(options = {}) {
   global.document = {
     addEventListener: () => {}
   };
-  loadBrowserModule("src/app.js", { window: windowRef });
+  loadBrowserModule("src/app.js", { window: windowRef, fetch: options.fetch });
   return windowRef.RouteMapsterAPI;
 }
 
@@ -260,6 +260,83 @@ test("supports hover interactions when any fine hover pointer is available", () 
   });
 
   assert.equal(api.supportsHoverInteractions(), true);
+});
+
+test("route geometry loads from the compact bundle when available", async () => {
+  const requests = [];
+  const api = loadAppApi({
+    fetch: async (url) => {
+      requests.push(url);
+      if (url === "/data/processed/route_geometry.bundle.json") {
+        return {
+          ok: true,
+          json: async () => ({
+            routes: {
+              "12": [
+                [
+                  [51.5, -0.1],
+                  [51.6, -0.2]
+                ]
+              ]
+            }
+          })
+        };
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    }
+  });
+
+  const first = await api.loadRouteGeometry("12");
+  const second = await api.loadRouteGeometry("12");
+
+  assert.deepEqual(first, [[[51.5, -0.1], [51.6, -0.2]]]);
+  assert.equal(second, first);
+  assert.deepEqual(requests, ["/data/processed/route_geometry.bundle.json"]);
+});
+
+test("route geometry falls back to per-route GeoJSON when the bundle is unavailable", async () => {
+  const requests = [];
+  const api = loadAppApi({
+    fetch: async (url) => {
+      requests.push(url);
+      if (url === "/data/processed/route_geometry.bundle.json") {
+        return {
+          ok: false,
+          status: 404,
+          json: async () => {
+            throw new Error("Bundle should not be parsed when unavailable.");
+          }
+        };
+      }
+      if (url === "/data/processed/routes/25.geojson") {
+        return {
+          ok: true,
+          json: async () => ({
+            features: [
+              {
+                geometry: {
+                  type: "LineString",
+                  coordinates: [
+                    [-0.12, 51.51],
+                    [-0.13, 51.52]
+                  ]
+                }
+              }
+            ]
+          })
+        };
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    }
+  });
+
+  const segments = await api.loadRouteGeometry("25");
+
+  assert.deepEqual(segments, [[[51.51, -0.12], [51.52, -0.13]]]);
+  assert.deepEqual(requests, [
+    "/data/processed/route_geometry.bundle.json",
+    "/data/processed/routes/25.geojson"
+  ]);
 });
 
 test("supports hover interactions on desktop-width layouts even when hover media queries fail", () => {

@@ -18,8 +18,10 @@ from typing import Dict, Iterable, List, Optional, Tuple
 
 try:
     from scripts.utils.route_ids import normalize_route_id
+    from scripts.build_route_geometry_bundle import DEFAULT_BUNDLE_PATH, build_route_geometry_bundle
 except ModuleNotFoundError:  # pragma: no cover - script execution fallback
     from utils.route_ids import normalize_route_id
+    from build_route_geometry_bundle import DEFAULT_BUNDLE_PATH, build_route_geometry_bundle
 
 ROUTE_PATTERN = re.compile(r"Route_Geometry_([A-Za-z0-9]+)_(\d{8})\.xml$", re.IGNORECASE)
 DEFAULT_OUTPUT_DIR = Path("data/processed/routes")
@@ -204,6 +206,11 @@ def main() -> int:
         help="Output path for routes index.json.",
     )
     parser.add_argument(
+        "--bundle-path",
+        default=str(DEFAULT_BUNDLE_PATH),
+        help="Output path for compact route bundle JSON.",
+    )
+    parser.add_argument(
         "--simplify",
         type=float,
         default=0.00005,
@@ -265,6 +272,7 @@ def main() -> int:
         "source": "https://bus.data.tfl.gov.uk/bus-geometry/",
     }
     write_json(index_path, index_payload)
+    build_route_geometry_bundle(output_dir, index_path, Path(args.bundle_path))
 
     print(f"Wrote {len(route_ids_sorted)} routes to {output_dir}")
     return 0
