@@ -17,6 +17,7 @@ const LONDON_BOUNDS = {
 
 const ROUTE_GEOMETRY_DIR = "/data/processed/routes";
 const ROUTE_GEOMETRY_INDEX_PATH = "/data/processed/routes/index.json";
+const ROUTE_GEOMETRY_BUNDLE_PATH = "/data/processed/route_geometry.bundle.json";
 const BUS_STOPS_GEOJSON_PATH = "/data/processed/stops.geojson";
 const BUS_STATIONS_GEOJSON_PATH = "/data/processed/bus_stations.geojson";
 const GARAGES_GEOJSON_PATH = "/data/processed/garages.geojson";
@@ -260,6 +261,8 @@ const appState = {
 	endpointHighlightLoadToken: 0,
 	showEndpointMarkers: false,
 	routeGeometryCache: new Map(),
+	routeGeometryBundle: undefined,
+	routeGeometryBundlePromise: null,
 	routeSpatialCache: new Map(),
 	routeSpatialPromises: new Map(),
 	filteredRoutesLayer: null,
@@ -315,7 +318,9 @@ const appState = {
 	loadingModalCount: 0,
 	loadingModalTitle: "",
 	loadingModalSubtitle: "",
-	stopAnalysesInitPromise: null
+	stopAnalysesInitPromise: null,
+	stopAnalysesActive: false,
+	stopAnalysesPrevSuppress: null
 };
 
 const omniSearchState = {
@@ -3725,7 +3730,8 @@ function clearAdvancedStopsLayer() {
 
 const ADVANCED_STOP_METRIC_LABELS = {
 	route_count: "Routes per stop",
-	name_count: "Stops with this name"
+	name_count: "Stops with this name",
+	frequency_total: "Combined frequency"
 };
 const ADVANCED_STOP_GRADIENT = {
 	steps: ["#2c7bb6", "#5aa4d6", "#abd9e9", "#fee090", "#fdae61", "#d7191c"],
@@ -3733,9 +3739,15 @@ const ADVANCED_STOP_GRADIENT = {
 	fallbackStroke: "#94a3b8"
 };
 
-function getAdvancedStopMetricValue(stop, metric) {
+function getAdvancedStopMetricValue(stop, metric, options = {}) {
 	if (!stop || !metric) {
 		return null;
+	}
+	if (metric === "frequency_total") {
+		const band = options?.frequencyBand || stop?.frequencyBand || appState.frequencyBand || "peak_am";
+		const value = stop?.frequency && stop.frequency[band];
+		const num = Number(value);
+		return Number.isFinite(num) ? num : null;
 	}
 	const value = stop[metric];
 	const num = Number(value);
@@ -3748,6 +3760,9 @@ function formatAdvancedStopMetricValue(metric, value) {
 	}
 	if (metric === "route_count" || metric === "name_count") {
 		return String(Math.round(value));
+	}
+	if (metric === "frequency_total") {
+		return formatFrequencyValue(value);
 	}
 	return formatCentralityValue(value);
 }
@@ -3783,12 +3798,12 @@ function lerpColor(lowHex, highHex, t) {
 	return `rgb(${r}, ${g}, ${b})`;
 }
 
-function getAdvancedStopMetricRange(stops, metric) {
+function getAdvancedStopMetricRange(stops, metric, options = {}) {
 	let min = Number.POSITIVE_INFINITY;
 	let max = Number.NEGATIVE_INFINITY;
 	let found = false;
 	stops.forEach((stop) => {
-		const value = getAdvancedStopMetricValue(stop, metric);
+		const value = getAdvancedStopMetricValue(stop, metric, options);
 		if (!Number.isFinite(value)) {
 			return;
 		}
@@ -3846,9 +3861,9 @@ function buildAdvancedStopPopup(stop, options = {}) {
 	const routes = Array.isArray(stop?.routes) ? stop.routes : [];
 	const routeSets = appState.useRouteTypeColours ? appState.networkRouteSets : null;
 	const metaParts = [];
-	const metricKey = options?.colorBy || "";
+	const metricKey = options?.colorBy || options?.weightBy || "";
 	if (metricKey) {
-		const value = getAdvancedStopMetricValue(stop, metricKey);
+		const value = getAdvancedStopMetricValue(stop, metricKey, options);
 		if (Number.isFinite(value)) {
 			const label = ADVANCED_STOP_METRIC_LABELS[metricKey] || metricKey;
 			const formatted = formatAdvancedStopMetricValue(metricKey, value);
@@ -3876,6 +3891,63 @@ function buildAdvancedStopPopup(stop, options = {}) {
 	`;
 }
 
+function getAdvancedStopHeatWeight(stop, metric, range, options = {}) {
+	if (!metric) {
+		return 0.7;
+	}
+	const value = getAdvancedStopMetricValue(stop, metric, options);
+	if (!Number.isFinite(value) || !range) {
+		return 0.25;
+	}
+	const t = getAdvancedStopMetricT(metric, value, range);
+	if (!Number.isFinite(t)) {
+		return 0.25;
+	}
+	return 0.25 + (Math.min(1, Math.max(0, t)) * 0.75);
+}
+
+function buildAdvancedStopHeatPoints(stops, weightMetric, options = {}) {
+	const metricRange = weightMetric ? getAdvancedStopMetricRange(stops, weightMetric, options) : null;
+	return stops
+		.map((stop) => {
+			const lat = Number(stop?.lat);
+			const lon = Number(stop?.lon);
+			if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+				return null;
+			}
+			return [lat, lon, getAdvancedStopHeatWeight(stop, weightMetric, metricRange, options)];
+		})
+		.filter(Boolean);
+}
+
+function renderAdvancedStopsHeatLayer(stops, options = {}) {
+	if (!window.L || typeof L.heatLayer !== "function") {
+		renderAdvancedStopsLayer(stops, { ...options, visualisation: "markers" });
+		return;
+	}
+	const weightMetric = options?.weightBy || "";
+	const points = buildAdvancedStopHeatPoints(stops, weightMetric, options);
+	if (points.length === 0) {
+		return;
+	}
+	const layer = L.heatLayer(points, {
+		radius: 22,
+		blur: 18,
+		maxZoom: 15,
+		minOpacity: 0.22,
+		gradient: {
+			0.2: "#2c7bb6",
+			0.45: "#abd9e9",
+			0.65: "#fee090",
+			0.82: "#fdae61",
+			1: "#d7191c"
+		},
+		pane: STOP_PANE
+	});
+	layer.addTo(appState.map);
+	appState.advancedStopsLayer = layer;
+}
+
 function renderAdvancedStopsLayer(stops, options = {}) {
 	if (!appState.map) {
 		return;
@@ -3884,8 +3956,12 @@ function renderAdvancedStopsLayer(stops, options = {}) {
 	if (!Array.isArray(stops) || stops.length === 0) {
 		return;
 	}
+	if (options?.visualisation === "heatmap") {
+		renderAdvancedStopsHeatLayer(stops, options);
+		return;
+	}
 	const colorMetric = options?.colorBy || "";
-	const metricRange = colorMetric ? getAdvancedStopMetricRange(stops, colorMetric) : null;
+	const metricRange = colorMetric ? getAdvancedStopMetricRange(stops, colorMetric, options) : null;
 	const layerGroup = L.layerGroup();
 	const hoverSupported = supportsHoverInteractions();
 	const renderer = createInteractivePointRenderer(STOP_PANE, hoverSupported);
@@ -3899,7 +3975,7 @@ function renderAdvancedStopsLayer(stops, options = {}) {
 		let strokeColor = "#0f766e";
 		let radius = 4;
 		if (colorMetric && metricRange) {
-			const value = getAdvancedStopMetricValue(stop, colorMetric);
+			const value = getAdvancedStopMetricValue(stop, colorMetric, options);
 			if (Number.isFinite(value)) {
 				const t = getAdvancedStopMetricT(colorMetric, value, metricRange);
 				const palette = ADVANCED_STOP_GRADIENT.steps;
@@ -5215,6 +5291,38 @@ function updateRouteFilterVisibilityNote() {
 	note.textContent = "";
 }
 
+function setStopAnalysesRouteLayerSuppressed(active) {
+	if (active) {
+		if (!appState.stopAnalysesActive) {
+			appState.stopAnalysesPrevSuppress = appState.suppressNetworkRoutes;
+		}
+		appState.stopAnalysesActive = true;
+		if (!appState.suppressNetworkRoutes) {
+			appState.suppressNetworkRoutes = true;
+			appState.networkRouteLoadToken += 1;
+			clearNetworkRoutes();
+		}
+		updateRouteFilterVisibilityNote();
+		return;
+	}
+	if (!appState.stopAnalysesActive) {
+		return;
+	}
+	appState.stopAnalysesActive = false;
+	appState.suppressNetworkRoutes = Boolean(
+		appState.stopAnalysesPrevSuppress ||
+		appState.advancedFiltersActive ||
+		appState.analysisActive ||
+		appState.omniActive
+	);
+	appState.stopAnalysesPrevSuppress = null;
+	if (!appState.suppressNetworkRoutes && appState.showNetworkRoutes) {
+		appState.networkRouteLoadToken += 1;
+		renderNetworkRoutes(appState.networkRouteLoadToken);
+	}
+	updateRouteFilterVisibilityNote();
+}
+
 async function refreshBusStopFilterStatus() {
 	const geojson = await loadBusStopsGeojson();
 	const result = filterBusStops(
@@ -5596,6 +5704,7 @@ function clearBusStopRouteSelection(options = {}) {
 		&& !appState.advancedFiltersActive
 		&& !appState.analysisActive
 		&& !appState.omniActive
+		&& !appState.stopAnalysesActive
 	) {
 		appState.suppressNetworkRoutes = false;
 		if (appState.showNetworkRoutes) {
@@ -5620,7 +5729,13 @@ function clearDetailsRouteHighlights() {
 	if (appState.analysisActive) {
 		clearAnalysisRoutes();
 	}
-	if (appState.suppressNetworkRoutes && !appState.advancedFiltersActive && !appState.analysisActive && !appState.omniActive) {
+	if (
+		appState.suppressNetworkRoutes
+		&& !appState.advancedFiltersActive
+		&& !appState.analysisActive
+		&& !appState.omniActive
+		&& !appState.stopAnalysesActive
+	) {
 		appState.suppressNetworkRoutes = false;
 	}
 	if (!appState.suppressNetworkRoutes && appState.showNetworkRoutes) {
@@ -5976,6 +6091,83 @@ function extractRouteGeometryFromCollection(geojson) {
 		featureSegments.forEach((segment) => segments.push(segment));
 	});
 	return segments;
+}
+
+function normaliseBundledRouteGeometrySegments(rawSegments) {
+	if (!Array.isArray(rawSegments)) {
+		return null;
+	}
+	const segments = rawSegments
+		.map((segment) => {
+			if (!Array.isArray(segment)) {
+				return [];
+			}
+			return segment
+				.map((point) => {
+					if (!Array.isArray(point) || point.length < 2) {
+						return null;
+					}
+					const lat = Number(point[0]);
+					const lon = Number(point[1]);
+					return Number.isFinite(lat) && Number.isFinite(lon) ? [lat, lon] : null;
+				})
+				.filter((point) => Array.isArray(point));
+		})
+		.filter((segment) => Array.isArray(segment) && segment.length > 1);
+	return segments.length > 0 ? segments : null;
+}
+
+function cacheBundledRouteGeometry(bundleRoutes) {
+	const bundleMap = new Map();
+	if (!bundleRoutes || typeof bundleRoutes !== "object") {
+		return bundleMap;
+	}
+	Object.entries(bundleRoutes).forEach(([routeId, rawSegments]) => {
+		const normalisedRouteId = String(routeId || "").trim().toUpperCase();
+		if (!normalisedRouteId || isExcludedRoute(normalisedRouteId)) {
+			return;
+		}
+		const segments = normaliseBundledRouteGeometrySegments(rawSegments);
+		if (!segments) {
+			return;
+		}
+		bundleMap.set(normalisedRouteId, segments);
+		appState.routeGeometryCache.set(normalisedRouteId, segments);
+	});
+	return bundleMap;
+}
+
+async function loadRouteGeometryBundle() {
+	if (appState.routeGeometryBundle instanceof Map) {
+		return appState.routeGeometryBundle;
+	}
+	if (appState.routeGeometryBundle === null) {
+		return null;
+	}
+	if (appState.routeGeometryBundlePromise) {
+		return appState.routeGeometryBundlePromise;
+	}
+	appState.routeGeometryBundlePromise = fetch(ROUTE_GEOMETRY_BUNDLE_PATH)
+		.then((response) => {
+			if (!response.ok) {
+				return null;
+			}
+			return response.json();
+		})
+		.then((data) => {
+			const routes = data && typeof data === "object" ? data.routes : null;
+			const bundleMap = cacheBundledRouteGeometry(routes);
+			appState.routeGeometryBundle = bundleMap.size > 0 ? bundleMap : null;
+			return appState.routeGeometryBundle;
+		})
+		.catch(() => {
+			appState.routeGeometryBundle = null;
+			return null;
+		})
+		.finally(() => {
+			appState.routeGeometryBundlePromise = null;
+		});
+	return appState.routeGeometryBundlePromise;
 }
 
 function toRadians(value) {
@@ -6720,6 +6912,10 @@ async function loadRouteGeometry(routeId) {
 	if (!normalised || isExcludedRoute(normalised)) {
 		return null;
 	}
+	if (appState.routeGeometryCache.has(normalised)) {
+		return appState.routeGeometryCache.get(normalised);
+	}
+	await loadRouteGeometryBundle();
 	if (appState.routeGeometryCache.has(normalised)) {
 		return appState.routeGeometryCache.get(normalised);
 	}
@@ -8847,7 +9043,7 @@ function setupUI() {
 
 		if (appState.advancedFiltersActive) {
 			appState.advancedFiltersActive = false;
-			appState.suppressNetworkRoutes = Boolean(appState.advancedFiltersPrevSuppress);
+			appState.suppressNetworkRoutes = Boolean(appState.advancedFiltersPrevSuppress || appState.stopAnalysesActive);
 			appState.advancedFiltersPrevSuppress = null;
 			if (window.RouteMapsterAdvancedFilters?.clearMapHighlights) {
 				window.RouteMapsterAdvancedFilters.clearMapHighlights(appState);
@@ -8890,11 +9086,15 @@ function setupUI() {
 				});
 		};
 		if (stopAnalysesModule.open) {
+			setStopAnalysesRouteLayerSuppressed(true);
 			initStopAnalyses();
 		}
 		stopAnalysesModule.addEventListener("toggle", () => {
 			if (stopAnalysesModule.open) {
+				setStopAnalysesRouteLayerSuppressed(true);
 				initStopAnalyses();
+			} else {
+				setStopAnalysesRouteLayerSuppressed(false);
 			}
 		});
 	}
@@ -8966,7 +9166,7 @@ function setupUI() {
 		clearGarageRoutes();
 		refreshStopsPanePriority();
 		appState.activeGarageRoutes = null;
-		if (appState.suppressNetworkRoutes && !appState.activeBusStationRoutes) {
+		if (appState.suppressNetworkRoutes && !appState.activeBusStationRoutes && !appState.stopAnalysesActive) {
 			appState.suppressNetworkRoutes = false;
 			appState.networkRouteLoadToken += 1;
 			renderNetworkRoutes(appState.networkRouteLoadToken);
@@ -9012,7 +9212,7 @@ function setupUI() {
 			clearBusStationRoutes();
 			refreshStopsPanePriority();
 			appState.activeBusStationRoutes = null;
-			if (appState.suppressNetworkRoutes && !appState.activeGarageRoutes) {
+			if (appState.suppressNetworkRoutes && !appState.activeGarageRoutes && !appState.stopAnalysesActive) {
 				appState.suppressNetworkRoutes = false;
 				appState.networkRouteLoadToken += 1;
 				renderNetworkRoutes(appState.networkRouteLoadToken);
@@ -9286,7 +9486,7 @@ function setupUI() {
 			appState.activeBusStopRoutes = null;
 			appState.activeGarageRoutes = null;
 			appState.activeBusStationRoutes = null;
-			appState.suppressNetworkRoutes = false;
+			appState.suppressNetworkRoutes = Boolean(appState.stopAnalysesActive);
 			updateSelectedInfo("All layers cleared.");
 			setBusStationSelectValue("");
 			resetInfoPanel();
@@ -9319,7 +9519,7 @@ function setupUI() {
 			appState.activeGarageRoutes = null;
 			appState.activeBusStationRoutes = null;
 			appState.showNetworkRoutes = false;
-			appState.suppressNetworkRoutes = false;
+			appState.suppressNetworkRoutes = Boolean(appState.stopAnalysesActive);
 			if (document.getElementById("showBusStops")?.checked) {
 				appState.busStopLoadToken += 1;
 				addBusStopsLayer(appState.map, { showLoadingModal: false }).catch(() => {});
@@ -10489,6 +10689,7 @@ function setupFrequencyModule() {
 window.RouteMapsterAPI = {
 	appState,
 	loadRouteGeometry,
+	loadRouteGeometryBundle,
 	loadRouteSpatialStats,
 	sortRouteIds,
 	compareRouteIds,
