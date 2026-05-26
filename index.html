@@ -406,7 +406,7 @@
       transform: none;
     }
 
-    .module summary {
+    .module > summary {
       list-style: none;
       cursor: pointer;
       display: flex;
@@ -418,11 +418,11 @@
       background: #fbf8f1;
     }
 
-    .module summary::-webkit-details-marker {
+    .module > summary::-webkit-details-marker {
       display: none;
     }
 
-    .module summary::after {
+    .module > summary::after {
       content: "+";
       width: 24px;
       height: 24px;
@@ -435,7 +435,7 @@
       margin-left: auto;
     }
 
-    .module[open] summary::after {
+    .module[open] > summary::after {
       content: "-";
     }
 
@@ -2902,6 +2902,9 @@
 
   <script
     src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js">
+  </script>
+  <script
+    src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js">
   </script>
 
   <script src="src/shared_utils.js"></script>

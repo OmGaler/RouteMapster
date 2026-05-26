@@ -29,7 +29,8 @@
   const DEFAULT_MAP_TOP_N = 50;
   const MAP_METRICS = [
     { value: "route_count", label: "Routes per stop" },
-    { value: "name_count", label: "Stops with this name" }
+    { value: "name_count", label: "Stops with this name" },
+    { value: "frequency_total", label: "Combined frequency", requiresFrequency: true }
   ];
 
   const utils = window.RouteMapsterUtils || {};
@@ -91,6 +92,9 @@
     if (!entry) {
       return false;
     }
+    if (entry.requiresFrequency && !context?.frequencyAvailable) {
+      return false;
+    }
     if (entry.requiresCentrality && !context?.centralityAvailable) {
       return false;
     }
@@ -99,9 +103,15 @@
 
   const getMetricLabel = (metric) => getMetricConfig(metric)?.label || metric || "Metric";
 
-  const getMetricValue = (row, metric) => {
+  const getMetricValue = (row, metric, context = state) => {
     if (!row || !metric) {
       return null;
+    }
+    if (metric === "frequency_total") {
+      const band = context?.frequencyBand || "peak_am";
+      const value = row.frequency && row.frequency[band];
+      const num = Number(value);
+      return Number.isFinite(num) ? num : null;
     }
     const value = row[metric];
     const num = Number(value);
@@ -115,6 +125,9 @@
     }
     if (metric === "route_count" || metric === "name_count") {
       return formatNumber(value, 0);
+    }
+    if (metric === "frequency_total") {
+      return formatFrequencyValue(value);
     }
     return formatCentralityValue(value);
   };
@@ -333,7 +346,11 @@
       items.push({ value: "", label: "None", disabled: false });
     }
     MAP_METRICS.forEach((entry) => {
-      items.push({ value: entry.value, label: entry.label, disabled: false });
+      items.push({
+        value: entry.value,
+        label: entry.label,
+        disabled: !isMetricAvailable(entry.value, context)
+      });
     });
     selectEl.innerHTML = items
       .map((item) => `<option value="${escapeHtml(item.value)}"${item.disabled ? " disabled" : ""}>${escapeHtml(item.label)}</option>`)
@@ -1211,13 +1228,43 @@
         stops: highlightedNameStops,
         note,
         showLegend: Boolean(colorMetric),
-        options: { colorBy: colorMetric || "" }
+        options: { colorBy: colorMetric || "", frequencyBand: state.frequencyBand }
       };
     }
     if (state.mapMode === "off") {
-      return { stops: [], note: "Map overlay is off.", showLegend: false, options: { colorBy: "" } };
+      return { stops: [], note: "Map overlay is off.", showLegend: false, options: { colorBy: "", frequencyBand: state.frequencyBand } };
     }
     const baseStops = Array.isArray(rows) ? rows : [];
+    if (state.mapMode === "heatmap") {
+      const weightMetric = resolveMetricSelection(state.mapColourMetric, state, { allowNone: true });
+      if (baseStops.length === 0) {
+        return { stops: [], note: "No bus stops matched the current heatmap view.", showLegend: false, options: { visualisation: "heatmap", weightBy: "", frequencyBand: state.frequencyBand } };
+      }
+      if (!weightMetric) {
+        return {
+          stops: baseStops,
+          note: `Showing heatmap density for ${baseStops.length} filtered bus stops.`,
+          showLegend: false,
+          options: { visualisation: "heatmap", weightBy: "", frequencyBand: state.frequencyBand }
+        };
+      }
+      const stats = buildMetricStats(baseStops, weightMetric);
+      if (!stats) {
+        return {
+          stops: baseStops,
+          note: `Showing heatmap density for ${baseStops.length} filtered bus stops. ${getMetricLabel(weightMetric)} values are missing in this selection.`,
+          showLegend: false,
+          options: { visualisation: "heatmap", weightBy: "", frequencyBand: state.frequencyBand }
+        };
+      }
+      const rangeText = `${formatMetricValue(weightMetric, stats.min)}-${formatMetricValue(weightMetric, stats.max)}`;
+      return {
+        stops: baseStops,
+        note: `Showing weighted heatmap for ${baseStops.length} filtered bus stops. ${getMetricLabel(weightMetric)} range ${rangeText} (n=${stats.count}).`,
+        showLegend: true,
+        options: { visualisation: "heatmap", weightBy: weightMetric, frequencyBand: state.frequencyBand }
+      };
+    }
     let displayStops = baseStops;
     let notePrefix = `Showing ${baseStops.length} filtered bus stops.`;
     if (state.mapMode === "top") {
@@ -1228,7 +1275,7 @@
       notePrefix = `Showing top ${displayStops.length} by ${metricLabel}.`;
     }
     if (displayStops.length === 0) {
-      return { stops: [], note: "No bus stops matched the current map view.", showLegend: false, options: { colorBy: "" } };
+      return { stops: [], note: "No bus stops matched the current map view.", showLegend: false, options: { colorBy: "", frequencyBand: state.frequencyBand } };
     }
     const colorMetric = resolveMetricSelection(state.mapColourMetric, state, { allowNone: true });
     if (!colorMetric) {
@@ -1236,7 +1283,7 @@
         stops: displayStops,
         note: `${notePrefix} Using default marker colour.`,
         showLegend: false,
-        options: { colorBy: "" }
+        options: { colorBy: "", frequencyBand: state.frequencyBand }
       };
     }
     const stats = buildMetricStats(displayStops, colorMetric);
@@ -1245,7 +1292,7 @@
         stops: displayStops,
         note: `${notePrefix} ${getMetricLabel(colorMetric)} values are missing in this selection.`,
         showLegend: false,
-        options: { colorBy: colorMetric }
+        options: { colorBy: colorMetric, frequencyBand: state.frequencyBand }
       };
     }
     const rangeText = `${formatMetricValue(colorMetric, stats.min)}-${formatMetricValue(colorMetric, stats.max)}`;
@@ -1254,7 +1301,7 @@
       stops: displayStops,
       note,
       showLegend: true,
-      options: { colorBy: colorMetric }
+      options: { colorBy: colorMetric, frequencyBand: state.frequencyBand }
     };
   };
 
@@ -1426,6 +1473,7 @@
           <select id="stopMapMode" class="select-field">
             <option value="filtered">Filtered bus stops (all)</option>
             <option value="top">Top N by metric</option>
+            <option value="heatmap">Heatmap</option>
             <option value="off">Off</option>
           </select>
         </div>
@@ -1438,7 +1486,7 @@
           <div class="module-note">Uses current filters and scope.</div>
         </div>
         <div class="field">
-          <label for="stopMapColourMetric">Colour by</label>
+          <label for="stopMapColourMetric">Colour / heat weight by</label>
           <select id="stopMapColourMetric" class="select-field"></select>
         </div>
         <div id="stopMapLegend" class="map-legend">
@@ -1832,6 +1880,12 @@
   };
 
   window.RouteMapsterStopAnalyses = {
-    initStopAnalyses
+    initStopAnalyses,
+    __test: {
+      state,
+      buildMapDisplay,
+      getMetricValue,
+      resolveMetricSelection
+    }
   };
 })();

@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "start": "node src/index.js",
-    "test": "node test/shared_utils.test.js && node test/geo_utils.test.js && node test/query_engine.test.js && node test/analyses.test.js && node test/app_route_destinations.test.js",
+    "test": "node test/shared_utils.test.js && node test/geo_utils.test.js && node test/query_engine.test.js && node test/analyses.test.js && node test/stop_analyses.test.js && node test/app_route_destinations.test.js",
     "test:e2e": "playwright test"
   },
   "devDependencies": {
