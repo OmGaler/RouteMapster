@@ -32,6 +32,46 @@
     { value: "name_count", label: "Stops with this name" },
     { value: "frequency_total", label: "Combined frequency", requiresFrequency: true }
   ];
+  const STOP_NAME_SUFFIX_PHRASES = [
+    "bus station",
+    "rail station",
+    "underground station",
+    "tube station",
+    "train station",
+    "coach station",
+    "high street",
+    "high road",
+    "town centre",
+    "shopping centre",
+    "leisure centre",
+    "civic centre",
+    "health centre",
+    "community centre",
+    "business park",
+    "industrial estate",
+    "retail park",
+    "trading estate",
+    "bus garage",
+    "fire station",
+    "police station",
+    "railway station",
+    "cross roads",
+    "traffic lights"
+  ];
+  const STOP_NAME_SUFFIX_SKIP_WORDS = new Set([
+    "and",
+    "the",
+    "near",
+    "opp",
+    "opposite",
+    "outside",
+    "adjacent",
+    "towards",
+    "northbound",
+    "southbound",
+    "eastbound",
+    "westbound"
+  ]);
 
   const utils = window.RouteMapsterUtils || {};
   const geo = window.RouteMapsterGeo || {};
@@ -258,6 +298,50 @@
     return id ? `${name} (${id})` : name;
   };
 
+  const normaliseStopNameForSuffix = (value) => {
+    return String(value || "")
+      .toLowerCase()
+      .replace(/[’']/g, "")
+      .replace(/&/g, " and ")
+      .replace(/[/-]/g, " ")
+      .replace(/\([^)]*\)/g, " ")
+      .replace(/[^a-z0-9\s]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  };
+
+  const formatSuffixLabel = (value) => {
+    return String(value || "")
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((word) => word.length <= 3 ? word : word.charAt(0).toUpperCase() + word.slice(1))
+      .join(" ");
+  };
+
+  const deriveStopNameSuffix = (name) => {
+    const normalised = normaliseStopNameForSuffix(name);
+    if (!normalised) {
+      return null;
+    }
+    const tokens = normalised.split(/\s+/).filter((token) => token && !STOP_NAME_SUFFIX_SKIP_WORDS.has(token));
+    if (tokens.length === 0) {
+      return null;
+    }
+    const tokenText = tokens.join(" ");
+    const phrase = STOP_NAME_SUFFIX_PHRASES
+      .slice()
+      .sort((a, b) => b.length - a.length)
+      .find((candidate) => tokenText === candidate || tokenText.endsWith(` ${candidate}`));
+    const key = phrase || tokens[tokens.length - 1];
+    if (!key || key.length < 3) {
+      return null;
+    }
+    return {
+      key,
+      label: formatSuffixLabel(key)
+    };
+  };
+
   const formatRouteList = (routes, limit = 8) => {
     const list = Array.isArray(routes) ? routes : [];
     if (list.length === 0) {
@@ -279,6 +363,42 @@
       .filter(Boolean);
     const summary = tokens.length <= limit ? listString : formatRouteList(tokens, limit);
     return `<span title="${escapeHtml(listString)}">${escapeHtml(summary)}</span>`;
+  };
+
+  const buildDetailsCell = (summary, values) => {
+    const items = Array.isArray(values)
+      ? values.map((value) => String(value || "").trim()).filter(Boolean)
+      : [];
+    if (items.length === 0) {
+      return "";
+    }
+    const html = `
+      <details class="suffix-examples">
+        <summary>${escapeHtml(summary)}</summary>
+        <div>${items.map((item) => `<div>${escapeHtml(item)}</div>`).join("")}</div>
+      </details>
+    `;
+    return {
+      text: items.join("; "),
+      html
+    };
+  };
+
+  const getAnalysisCellText = (cell) => {
+    if (cell && typeof cell === "object") {
+      return String(cell.csv ?? cell.text ?? "");
+    }
+    return cell;
+  };
+
+  const renderAnalysisCell = (cell) => {
+    if (cell && typeof cell === "object") {
+      if (cell.html) {
+        return String(cell.html);
+      }
+      return escapeHtml(cell.text ?? cell.csv ?? "");
+    }
+    return escapeHtml(cell);
   };
 
   const buildFrequencyTotals = (routes, frequencyData) => {
@@ -573,12 +693,16 @@
       if (meta?.highlightName) {
         attrs.push(`data-highlight-name="${escapeHtml(meta.highlightName)}"`);
         attrs.push('class="is-clickable' + (activeRowKey && activeRowKey === String(meta.highlightName) ? ' is-active' : '') + '"');
+      } else if (meta?.highlightSuffix) {
+        attrs.push(`data-highlight-suffix="${escapeHtml(meta.highlightSuffix)}"`);
+        attrs.push('class="is-clickable' + (activeRowKey && activeRowKey === String(meta.highlightSuffix) ? ' is-active' : '') + '"');
       }
       const cells = row.map((cell, index) => {
-        if (expandRouteIndex === index && typeof cell === "string") {
-          return `<td>${buildRouteListHtml(cell)}</td>`;
+        const text = getAnalysisCellText(cell);
+        if (expandRouteIndex === index && typeof text === "string") {
+          return `<td>${buildRouteListHtml(text)}</td>`;
         }
-        return `<td>${escapeHtml(cell)}</td>`;
+        return `<td>${renderAnalysisCell(cell)}</td>`;
       }).join("");
       return `<tr ${attrs.join(" ")}>${cells}</tr>`;
     }).join("");
@@ -690,6 +814,35 @@
       entry.routeTotal += row.route_count || 0;
       if (row.district && row.district !== "Unknown") {
         entry.districts.add(row.district);
+      }
+    });
+    return Array.from(summary.entries());
+  };
+
+  const buildStopSuffixRows = (rows) => {
+    const summary = new Map();
+    rows.forEach((row) => {
+      const suffix = deriveStopNameSuffix(row.name);
+      if (!suffix?.key) {
+        return;
+      }
+      if (!summary.has(suffix.key)) {
+        summary.set(suffix.key, {
+          label: suffix.label,
+          count: 0,
+          routeTotal: 0,
+          names: new Set(),
+          boroughs: new Set()
+        });
+      }
+      const entry = summary.get(suffix.key);
+      entry.count += 1;
+      entry.routeTotal += row.route_count || 0;
+      if (row.name) {
+        entry.names.add(row.name);
+      }
+      if (row.borough && row.borough !== "Unknown") {
+        entry.boroughs.add(row.borough);
       }
     });
     return Array.from(summary.entries());
@@ -893,6 +1046,61 @@
         };
       }
     },
+    "common-stop-suffixes": {
+      id: "common-stop-suffixes",
+      label: "Common stop name suffixes",
+      run: (rows) => {
+        const grouped = buildStopSuffixRows(rows);
+        if (grouped.length === 0) {
+          return { type: "note", message: "No reusable stop name suffixes were found in the selected bus stops." };
+        }
+        const rowsOut = grouped
+          .map(([key, entry]) => {
+            const examples = Array.from(entry.names)
+              .sort((a, b) => String(a).localeCompare(String(b)))
+              .slice(0, 8);
+            const boroughs = Array.from(entry.boroughs)
+              .sort((a, b) => String(a).localeCompare(String(b)))
+              .slice(0, 6);
+            return [
+              key,
+              entry.label,
+              entry.count,
+              entry.names.size,
+              entry.boroughs.size,
+              formatNumber(entry.count > 0 ? entry.routeTotal / entry.count : 0, 2),
+              examples,
+              boroughs
+            ];
+          })
+          .filter((row) => row[2] > 1)
+          .sort((a, b) => (b[2] || 0) - (a[2] || 0) || String(a[1]).localeCompare(String(b[1])))
+          .slice(0, 30);
+        if (rowsOut.length === 0) {
+          return { type: "note", message: "No repeated stop name suffixes were found in the selected bus stops." };
+        }
+        return {
+          type: "table",
+          columns: ["Rank", "Suffix", "Bus stops", "Names", "Boroughs", "Avg routes", "Examples"],
+          rows: rowsOut.map((row, index) => [
+            index + 1,
+            row[1],
+            row[2],
+            row[3],
+            row[4],
+            row[5],
+            buildDetailsCell("Show examples", [
+              ...row[6],
+              ...(row[7].length > 0 ? [`Boroughs: ${row[7].join(", ")}`] : [])
+            ])
+          ]),
+          meta: {
+            rowMeta: rowsOut.map((row) => ({ highlightSuffix: row[0] })),
+            activeRowKey: state.activeStopSuffixHighlight || ""
+          }
+        };
+      }
+    },
     "common-stop-letters": {
       id: "common-stop-letters",
       label: "Most common bus stop letters",
@@ -926,6 +1134,7 @@
     centralityAvailable: false,
     currentAnalysisIds: [],
     activeStopNameHighlight: "",
+    activeStopSuffixHighlight: "",
     resultsByKey: new Map(),
     debounceHandle: null,
     districtTokens: [],
@@ -947,6 +1156,14 @@
       return [];
     }
     return rows.filter((row) => String(row.name || "").trim() === name);
+  };
+
+  const getHighlightedSuffixStops = (rows) => {
+    const suffixKey = String(state.activeStopSuffixHighlight || "").trim();
+    if (!suffixKey) {
+      return [];
+    }
+    return rows.filter((row) => deriveStopNameSuffix(row.name)?.key === suffixKey);
   };
 
   const buildFilterSpec = (els) => {
@@ -1213,6 +1430,29 @@
     }
   };
 
+  const buildHighlightedMapDisplay = (stops, note) => {
+    const list = Array.isArray(stops) ? stops : [];
+    const colorMetric = resolveMetricSelection(state.mapColourMetric, state, { allowNone: true });
+    if (state.mapMode === "heatmap") {
+      return {
+        stops: list,
+        note,
+        showLegend: Boolean(colorMetric),
+        options: {
+          visualisation: "heatmap",
+          weightBy: colorMetric || "",
+          frequencyBand: state.frequencyBand
+        }
+      };
+    }
+    return {
+      stops: list,
+      note,
+      showLegend: Boolean(colorMetric),
+      options: { colorBy: colorMetric || "", frequencyBand: state.frequencyBand }
+    };
+  };
+
   /**
    * Derives the stop subset and legend state for the current map mode.
    *
@@ -1222,14 +1462,14 @@
   const buildMapDisplay = (rows) => {
     const highlightedNameStops = getHighlightedNameStops(rows);
     if (highlightedNameStops.length > 0) {
-      const colorMetric = resolveMetricSelection(state.mapColourMetric, state, { allowNone: true });
       const note = `Highlighting ${highlightedNameStops.length} stops named ${state.activeStopNameHighlight}.`;
-      return {
-        stops: highlightedNameStops,
-        note,
-        showLegend: Boolean(colorMetric),
-        options: { colorBy: colorMetric || "", frequencyBand: state.frequencyBand }
-      };
+      return buildHighlightedMapDisplay(highlightedNameStops, note);
+    }
+    const highlightedSuffixStops = getHighlightedSuffixStops(rows);
+    if (highlightedSuffixStops.length > 0) {
+      const suffixLabel = deriveStopNameSuffix(highlightedSuffixStops[0]?.name)?.label || state.activeStopSuffixHighlight;
+      const note = `Highlighting ${highlightedSuffixStops.length} stops matching suffix ${suffixLabel}.`;
+      return buildHighlightedMapDisplay(highlightedSuffixStops, note);
     }
     if (state.mapMode === "off") {
       return { stops: [], note: "Map overlay is off.", showLegend: false, options: { colorBy: "", frequencyBand: state.frequencyBand } };
@@ -1377,6 +1617,9 @@
     state.filteredStops = filtered;
     if (state.activeStopNameHighlight && getHighlightedNameStops(filtered).length === 0) {
       state.activeStopNameHighlight = "";
+    }
+    if (state.activeStopSuffixHighlight && getHighlightedSuffixStops(filtered).length === 0) {
+      state.activeStopSuffixHighlight = "";
     }
     renderSummary(els.summary, filtered, {
       frequencyBand: state.frequencyBand,
@@ -1561,6 +1804,8 @@
       state.boroughToken = "";
       state.regionToken = "";
       state.stopLetterToken = "";
+      state.activeStopNameHighlight = "";
+      state.activeStopSuffixHighlight = "";
       if (els.districtEntry) {
         els.districtEntry.value = "";
       }
@@ -1792,6 +2037,9 @@
       if (analysisId !== "common-stop-names") {
         state.activeStopNameHighlight = "";
       }
+      if (analysisId !== "common-stop-suffixes") {
+        state.activeStopSuffixHighlight = "";
+      }
       state.currentAnalysisIds = [analysisId];
       const results = runAnalyses(state.currentAnalysisIds, state.filteredStops, {
         frequencyBand: state.frequencyBand,
@@ -1819,18 +2067,33 @@
           if (!entry || entry.result?.type !== "table") {
             return;
           }
-          downloadCsv("bus_stop_analysis.csv", entry.result.columns, entry.result.rows);
+          const csvRows = entry.result.rows.map((row) => row.map((cell) => getAnalysisCellText(cell)));
+          downloadCsv("bus_stop_analysis.csv", entry.result.columns, csvRows);
           return;
         }
-        const row = event.target.closest("tr[data-highlight-name]");
-        if (!row) {
+        if (event.target.closest(".suffix-examples")) {
           return;
         }
-        const highlightName = String(row.dataset.highlightName || "").trim();
-        if (!highlightName) {
+        const nameRow = event.target.closest("tr[data-highlight-name]");
+        const suffixRow = event.target.closest("tr[data-highlight-suffix]");
+        if (!nameRow && !suffixRow) {
           return;
         }
-        state.activeStopNameHighlight = state.activeStopNameHighlight === highlightName ? "" : highlightName;
+        if (suffixRow) {
+          const highlightSuffix = String(suffixRow.dataset.highlightSuffix || "").trim();
+          if (!highlightSuffix) {
+            return;
+          }
+          state.activeStopNameHighlight = "";
+          state.activeStopSuffixHighlight = state.activeStopSuffixHighlight === highlightSuffix ? "" : highlightSuffix;
+        } else {
+          const highlightName = String(nameRow.dataset.highlightName || "").trim();
+          if (!highlightName) {
+            return;
+          }
+          state.activeStopSuffixHighlight = "";
+          state.activeStopNameHighlight = state.activeStopNameHighlight === highlightName ? "" : highlightName;
+        }
         const results = runAnalyses(state.currentAnalysisIds, state.filteredStops, {
           frequencyBand: state.frequencyBand,
           frequencyAvailable: state.frequencyAvailable,
@@ -1885,7 +2148,9 @@
       state,
       buildMapDisplay,
       getMetricValue,
-      resolveMetricSelection
+      resolveMetricSelection,
+      deriveStopNameSuffix,
+      runAnalyses
     }
   };
 })();
