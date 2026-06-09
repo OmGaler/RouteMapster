@@ -512,7 +512,7 @@ B15,regular,BX,Bexleyheath,Go-Ahead,SD,Horn Park,"Bexleyheath, Shopping Centre",
 B16,regular,BX,Bexleyheath,Go-Ahead,SD,Kidbrooke,"Bexleyheath, Bus Garage",Wingfield School,,"Kidbrooke, Wingfield School","Bexleyheath, Bus Garage",,4.0,4.0,4.0,0.0,2.0,14.467,8.99
 BL1,regular,RA,Waterloo,Go-Ahead,DD,Waterloo,"Lewisham, Shopping Centre",Waterloo Station / Waterloo Road,Molesworth Street,Waterloo,"Lewisham, Shopping Centre, Molesworth Street",,5.0,5.0,5.0,0.0,4.5,9.288,5.771
 C1,regular,S,Shepherd's Bush,First,SD,White City,Victoria,White City Bus Station,Victoria Station,White City,Victoria,,5.0,5.0,5.0,0.0,5.0,9.642,5.992
-C3,regular,QB,Battersea,Transport UK,DD,"Earl's Court, Tesco","Fulham, Sands End",Warwick Road Tesco,Clapham Junction Stn / the Falcon,"Earl's Court, Tesco, Warwick Road Tesco","Fulham, Sands End, Clapham Junction Stn / the Falcon",,5.5,5.5,5.5,0.0,4.0,6.725,4.179
+C3,regular,QB,Battersea,Transport UK,DD,"Earl's Court, Tesco",Clapham Junction,Warwick Road Tesco,Clapham Junction Stn / the Falcon,"Earl's Court, Tesco, Warwick Road Tesco",Clapham Junction,,5.5,5.5,5.5,0.0,4.0,6.725,4.179
 C10,regular,WL,Walworth,Transport UK,SD,Victoria,Canada Water,Victoria Station,Canada Water Bus Station,Victoria,Canada Water,,8.0,7.5,7.5,0.0,5.0,14.654,9.105
 C11,regular,HT,Holloway,Metroline,SD,"Brent Cross, Shopping Centre",Archway Station,,,"Brent Cross, Shopping Centre",Archway Station,,6.0,6.0,6.0,0.0,5.0,13.13,8.159
 D3,regular,DS,Henley Road,Go-Ahead,SD,"Leamouth, London City Island","Bethnal Green, Bonner Road",Leamouth / Orchard Place,Bonner Road,"Leamouth, London City Island, Leamouth / Orchard Place","Bethnal Green, Bonner Road",,3.5,3.5,3.5,0.0,3.5,10.837,6.734
@@ -624,7 +624,7 @@ N18,night,X,Westbourne Park,First,DD,Trafalgar Square,"Harrow Weald, Bus Garage"
 N19,night,SF,Stamford Hill,Arriva,DD,Clapham Junction,Finsbury Park Station,Clapham Junction Station,Finsbury Park Interchange,Clapham Junction,"Finsbury Park Station, Finsbury Park Interchange",,0.0,0.0,0.0,1.5,1.5,15.768,9.798
 N20,night,HT,Holloway,Metroline,DD,Trafalgar Square,Barnet Church,Whitehall / Trafalgar Square,Barnet Hospital,Trafalgar Square,"Barnet Church, Barnet Hospital",,0.0,0.0,0.0,2.0,2.0,22.061,13.708
 N21,night,NX,New Cross,Go-Ahead,DD,Trafalgar Square,"Bexleyheath, Shopping Centre",Charing Cross Station,Geddes Place,"Trafalgar Square, Charing Cross Station","Bexleyheath, Shopping Centre, Geddes Place",,0.0,0.0,0.0,3.0,2.0,26.75,16.622
-N22,night,AF,Putney,Go-Ahead,DD,Piccadilly Circus,Fulwell,Margaret Street / Oxford Circus,South Road / Fulwell,"Piccadilly Circus, Margaret Street / Oxford Circus",Fulwell,,0.0,0.0,0.0,1.5,1.5,21.388,13.29
+N22,night,AF,Putney,Go-Ahead,DD,Oxford Circus,Fulwell,Margaret Street / Oxford Circus,South Road / Fulwell,Oxford Circus,Fulwell,,0.0,0.0,0.0,1.5,1.5,21.388,13.29
 N25,night,BW,Bow,Stagecoach London,DD,Ilford,Oxford Circus,Great Titchfield St / Oxford Circus Stn,Hainault Street,"Ilford, Great Titchfield St / Oxford Circus Stn","Oxford Circus, Hainault Street",,0.0,0.0,0.0,4.5,5.5,17.971,11.167
 N26,night,HK,Ash Grove,Stagecoach London,DD,Chingford Station,Victoria,,Westminster Cathedral / Victoria Stn,Chingford Station,Victoria,,0.0,0.0,0.0,2.0,2.0,25.692,15.964
 N27,night,QB,Battersea,Transport UK,DD,Chalk Farm,Hammersmith,Hartland Road / Camden Market,Hammersmith Bus Station,"Chalk Farm, Hartland Road / Camden Market",Hammersmith,,0.0,0.0,0.0,2.0,2.0,11.62,7.22

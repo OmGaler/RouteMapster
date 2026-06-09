@@ -45,7 +45,7 @@ jobs:
         run: python scripts/fetch_and_process_garages.py --base data/garages-base.geojson
 
       - name: Fetch route destinations
-        run: python scripts/fetch_route_destinations.py
+        run: python scripts/fetch_route_destinations.py --replace-existing
 
       - name: Build route summary
         run: python scripts/build_route_summary.py

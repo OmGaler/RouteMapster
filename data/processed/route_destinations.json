@@ -1,5 +1,5 @@
 {
-  "generated_at_utc": "2026-06-07T08:17:55Z",
+  "generated_at_utc": "2026-06-09T14:57:23Z",
   "route_count": 677,
   "routes": {
     "1": {
@@ -7714,8 +7714,8 @@
     },
     "C3": {
       "inbound": {
-        "destination": "Fulham, Sands End",
-        "full": "Fulham, Sands End, Clapham Junction Stn / the Falcon",
+        "destination": "Clapham Junction",
+        "full": "Clapham Junction",
         "qualifier": "Clapham Junction Stn / the Falcon"
       },
       "outbound": {
@@ -8654,8 +8654,8 @@
         "qualifier": "South Road / Fulwell"
       },
       "outbound": {
-        "destination": "Piccadilly Circus",
-        "full": "Piccadilly Circus, Margaret Street / Oxford Circus",
+        "destination": "Oxford Circus",
+        "full": "Oxford Circus",
         "qualifier": "Margaret Street / Oxford Circus"
       },
       "service_types": [
