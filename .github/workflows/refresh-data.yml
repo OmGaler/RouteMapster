@@ -45,7 +45,17 @@ jobs:
         run: python scripts/fetch_and_process_garages.py --base data/garages-base.geojson
 
       - name: Fetch route destinations
-        run: python scripts/fetch_route_destinations.py --replace-existing
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          routes=$(python scripts/changes.py --destination-refresh-routes)
+          if [ -z "$routes" ]; then
+            echo "No new or geometry-updated routes; keeping existing route destination cache."
+            exit 0
+          fi
+
+          python scripts/fetch_route_destinations.py --line-ids "$routes"
 
       - name: Build route summary
         run: python scripts/build_route_summary.py
@@ -71,7 +81,7 @@ jobs:
           summary=$(python scripts/changes.py --summary)
           msg="Data update: $summary"
 
-          python scripts/changes.py --details >> "$GITHUB_STEP_SUMMARY"
+          python scripts/changes.py --details | tee data/processed/latest_change_log.md >> "$GITHUB_STEP_SUMMARY"
 
           git add data/processed
           git add -f data/raw/stops/postcode_cache.json

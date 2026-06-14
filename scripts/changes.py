@@ -23,6 +23,7 @@ except ModuleNotFoundError:  # pragma: no cover - script execution fallback
 ROUTES_DIR = Path("data/processed/routes")
 GARAGES_FILE = Path("data/processed/garages.geojson")
 FREQS_FILE = Path("data/processed/frequencies.json")
+DESTINATIONS_FILE = Path("data/processed/route_destinations.json")
 
 STOPS_FILE = Path("data/processed/stops.geojson")
 ROUTES_INDEX = Path("data/processed/routes/index.json")
@@ -193,6 +194,57 @@ new_freqs = load_json_from_fs(FREQS_FILE) or {}
 freq_changes = build_frequency_changes(old_freqs, new_freqs)
 
 
+# ---- DESTINATION CHANGES ----
+def load_destination_routes(payload: Optional[dict]) -> Dict[str, dict]:
+    if not isinstance(payload, dict):
+        return {}
+    routes = payload.get("routes")
+    if not isinstance(routes, dict):
+        return {}
+    return {
+        normalize_route_id(route_id): value
+        for route_id, value in routes.items()
+        if normalize_route_id(route_id) and isinstance(value, dict)
+    }
+
+
+def destination_value(entry: dict, direction: str, key: str) -> str:
+    section = entry.get(direction)
+    if not isinstance(section, dict):
+        return ""
+    return str(section.get(key) or "").strip()
+
+
+def build_destination_changes(old_destinations: dict, new_destinations: dict) -> List[str]:
+    changes: List[str] = []
+    old_routes = load_destination_routes(old_destinations)
+    new_routes = load_destination_routes(new_destinations)
+    for route_id in sorted(set(old_routes) | set(new_routes)):
+        old_entry = old_routes.get(route_id, {})
+        new_entry = new_routes.get(route_id, {})
+        if route_id not in old_routes:
+            changes.append(f"{route_id} destinations added")
+            continue
+        if route_id not in new_routes:
+            changes.append(f"{route_id} destinations removed")
+            continue
+        for direction in ("outbound", "inbound"):
+            old_value = destination_value(old_entry, direction, "destination")
+            new_value = destination_value(new_entry, direction, "destination")
+            if old_value != new_value:
+                changes.append(f"{route_id} {direction} destination changed from {old_value or '<blank>'} to {new_value or '<blank>'}")
+    return changes
+
+
+def build_destination_refresh_routes(added_routes: List[str], geometry_updated_routes: List[str]) -> List[str]:
+    return sorted(set(added_routes) | set(geometry_updated_routes))
+
+
+old_destinations = load_json_from_git("HEAD", DESTINATIONS_FILE) or {}
+new_destinations = load_json_from_fs(DESTINATIONS_FILE) or {}
+destination_changes = build_destination_changes(old_destinations, new_destinations)
+
+
 # ---- GEOMETRY UPDATES ----
 def git_diff_names(path: str) -> List[str]:
     out = subprocess.check_output(["git", "diff", "--name-only", "HEAD", "--", path]).decode()
@@ -232,6 +284,9 @@ if stops_added or stops_removed:
 if freq_changes:
     lines.append(f"Freq (~{len(freq_changes)})")
 
+if destination_changes:
+    lines.append(f"Dest (~{len(destination_changes)})")
+
 alloc_messages: List[str] = []
 if moves:
     alloc_messages.extend([f"{r} {a} -> {b}" for (r, a, b) in moves])
@@ -251,6 +306,22 @@ def print_details() -> None:
     print("### Data update")
     print(f"- {summary_line}")
 
+    if added or removed or geom_updated:
+        print("\n### Route geometry changes")
+        if added:
+            print(f"- Added routes: {cap_list(added, 40)}")
+        if removed:
+            print(f"- Removed routes: {cap_list(removed, 40)}")
+        if geom_updated:
+            print(f"- Updated route geometries: {cap_list(geom_updated, 60)}")
+
+    if stops_added or stops_removed:
+        print("\n### Stop changes")
+        if stops_added:
+            print(f"- Added stops: {cap_list(stops_added, 40)}")
+        if stops_removed:
+            print(f"- Removed stops: {cap_list(stops_removed, 40)}")
+
     if freq_changes:
         print("\n### Frequency changes")
         limit = 30
@@ -258,6 +329,22 @@ def print_details() -> None:
             print(f"- {line}")
         if len(freq_changes) > limit:
             print(f"- ...and {len(freq_changes) - limit} more")
+
+    if destination_changes:
+        print("\n### Destination changes")
+        limit = 60
+        for line in destination_changes[:limit]:
+            print(f"- {line}")
+        if len(destination_changes) > limit:
+            print(f"- ...and {len(destination_changes) - limit} more")
+
+    if alloc_messages:
+        print("\n### Allocation changes")
+        limit = 60
+        for line in alloc_messages[:limit]:
+            print(f"- {line}")
+        if len(alloc_messages) > limit:
+            print(f"- ...and {len(alloc_messages) - limit} more")
 
 
 def main() -> None:
@@ -270,15 +357,22 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Summarize processed data changes.")
     parser.add_argument("--summary", action="store_true", help="Print one-line summary.")
     parser.add_argument("--details", action="store_true", help="Print detailed change log.")
+    parser.add_argument(
+        "--destination-refresh-routes",
+        action="store_true",
+        help="Print comma-separated route ids whose destinations should be refreshed.",
+    )
     args = parser.parse_args()
 
-    if not args.summary and not args.details:
+    if not args.summary and not args.details and not args.destination_refresh_routes:
         args.summary = True
 
     if args.summary:
         print(summary_line)
     if args.details:
         print_details()
+    if args.destination_refresh_routes:
+        print(",".join(build_destination_refresh_routes(added, geom_updated)))
 
 
 if __name__ == "__main__":
