@@ -1,2 +1,2 @@
-﻿### Data update
+### Data update
 - Processed data update
