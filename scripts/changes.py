@@ -250,13 +250,57 @@ def git_diff_names(path: str) -> List[str]:
     out = subprocess.check_output(["git", "diff", "--name-only", "HEAD", "--", path]).decode()
     return [line.strip() for line in out.splitlines() if line.strip()]
 
+
+def normalise_route_geometry(payload: Optional[dict]) -> List[dict]:
+    """Return the route shape in a form which excludes refresh metadata."""
+    if not isinstance(payload, dict):
+        return []
+
+    normalised: List[dict] = []
+    for feature in payload.get("features", []):
+        if not isinstance(feature, dict):
+            continue
+        properties = feature.get("properties")
+        geometry = feature.get("geometry")
+        if not isinstance(properties, dict) or not isinstance(geometry, dict):
+            continue
+
+        geometry_type = geometry.get("type")
+        coordinates = geometry.get("coordinates")
+        if geometry_type == "MultiLineString" and isinstance(coordinates, list):
+            coordinates = sorted(coordinates, key=lambda segment: json.dumps(segment, separators=(",", ":")))
+
+        normalised.append(
+            {
+                "direction": str(properties.get("direction") or ""),
+                "geometry": {"type": geometry_type, "coordinates": coordinates},
+            }
+        )
+
+    return sorted(
+        normalised,
+        key=lambda feature: json.dumps(feature, sort_keys=True, separators=(",", ":")),
+    )
+
+
+def route_geometry_changed(route_id: str) -> bool:
+    path = ROUTES_DIR / f"{route_id}.geojson"
+    old_payload = load_json_from_git("HEAD", path)
+    new_payload = load_json_from_fs(path)
+    return normalise_route_geometry(old_payload) != normalise_route_geometry(new_payload)
+
+
 route_changed_files = [
     p for p in git_diff_names(ROUTES_DIR.as_posix())
     if p.endswith(".geojson") and not p.endswith("/index.json")
 ]
 # exclude pure additions/removals already counted
 changed_route_ids = sorted({Path(p).stem for p in route_changed_files})
-geom_updated = sorted(set(changed_route_ids) - set(added) - set(removed))
+geom_updated = [
+    route_id
+    for route_id in changed_route_ids
+    if route_id not in added and route_id not in removed and route_geometry_changed(route_id)
+]
 
 
 
