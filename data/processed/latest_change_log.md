@@ -1,2 +1,35 @@
 ### Data update
-- Processed data update
+- Freq (~31)
+
+### Frequency changes
+- 115 am peak increased from 7.5 to 8.0 bph
+- 154 am peak decreased from 6.0 to 5.5 bph
+- 154 offpeak decreased from 6.0 to 5.5 bph
+- 245 am peak decreased from 6.0 to 5.5 bph
+- 245 pm peak decreased from 6.5 to 5.5 bph
+- 245 offpeak decreased from 6.0 to 5.5 bph
+- 295 am peak decreased from 7.0 to 6.5 bph
+- 295 pm peak decreased from 7.0 to 6.5 bph
+- 295 offpeak decreased from 7.0 to 6.5 bph
+- 295 weekend decreased from 5.0 to 4.5 bph
+- 376 am peak increased from 4.5 to 5.0 bph
+- 376 pm peak increased from 4.5 to 5.0 bph
+- 376 offpeak increased from 4.5 to 5.0 bph
+- 406 am peak increased from 2.5 to 3.0 bph
+- 406 weekend decreased from 2.5 to 2.0 bph
+- 407 am peak decreased from 5.0 to 4.5 bph
+- 407 offpeak decreased from 5.0 to 4.5 bph
+- 418 am peak increased from 2.5 to 3.0 bph
+- 418 pm peak increased from 2.5 to 3.0 bph
+- 418 weekend decreased from 2.5 to 2.0 bph
+- 8 am peak decreased from 8.0 to 7.5 bph
+- 8 pm peak decreased from 8.0 to 7.5 bph
+- 8 offpeak decreased from 8.0 to 7.5 bph
+- 83 am peak decreased from 7.5 to 7.0 bph
+- 83 pm peak decreased from 7.5 to 7.0 bph
+- 83 weekend decreased from 6.0 to 5.5 bph
+- K1 am peak increased from 5.5 to 6.0 bph
+- K1 pm peak increased from 5.5 to 6.0 bph
+- K1 offpeak increased from 5.5 to 6.0 bph
+- K3 am peak decreased from 4.5 to 4.0 bph
+- ...and 1 more
