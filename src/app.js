@@ -713,7 +713,7 @@ async function refreshSelectedInfoPanel() {
 	const { type, data, token } = appState.selectedFeature;
 	const [routeSets, summaryIndex] = await Promise.all([
 		appState.useRouteTypeColours ? loadNetworkRouteSets() : Promise.resolve(null),
-		(type === "station" || type === "garage") ? ensureRouteSummaryIndex().catch(() => null) : Promise.resolve(null)
+		(type === "stop" || type === "station" || type === "garage") ? ensureRouteSummaryIndex().catch(() => null) : Promise.resolve(null)
 	]);
 	if (!appState.selectedFeature || token !== appState.selectedFeature.token) {
 		return;
@@ -721,7 +721,7 @@ async function refreshSelectedInfoPanel() {
 	if (type === "stop") {
 		clearRouteInfoPanelContext();
 		appState.infoPanelKind = "stop";
-		setInfoPanel(buildBusStopInfoHtml(data, routeSets));
+		setInfoPanel(buildBusStopInfoHtml(data, routeSets, summaryIndex));
 		return;
 	}
 	if (type === "station") {
@@ -4940,7 +4940,7 @@ function buildBusStopPopup(props) {
 	`;
 }
 
-function buildBusStopInfoHtml(props, routeSets) {
+function buildBusStopInfoHtml(props, routeSets, summaryIndex) {
 	const name = getStopDisplayName(props);
 	const road = getStopRoadName(props);
 	const postcode = props?.POSTCODE || "";
@@ -4967,6 +4967,15 @@ function buildBusStopInfoHtml(props, routeSets) {
 		: '<div class="info-empty">No extra stop details listed.</div>';
 
 	const routes = getStopRouteTokens(props);
+	const destinationDetailsHtml = renderRouteDestinationDetailsHtml(routes, routeSets, summaryIndex);
+	const destinationsSection = destinationDetailsHtml
+		? `
+			<div class="info-section">
+				<div class="info-label">Destinations</div>
+				${renderRouteDestinationsExpanderHtml(destinationDetailsHtml)}
+			</div>
+		`
+		: "";
 	const centralityLines = buildCentralityDetailLines(props);
 	const centralitySection = centralityLines.length > 0
 		? `
@@ -4989,6 +4998,7 @@ function buildBusStopInfoHtml(props, routeSets) {
 				<div class="info-label">Routes serving</div>
 				${renderStopRoutePills(props, routes, routeSets)}
 			</div>
+			${destinationsSection}
 			${centralitySection}
 		`
 	};
@@ -10703,6 +10713,7 @@ window.RouteMapsterAPI = {
 	collectEndpointEntriesFromLayers,
 	getRouteDestinationSummaryText,
 	getRouteDestinationDisplayLines,
+	buildBusStopInfoHtml,
 	escapeHtml,
 	setLoadingModalVisible,
 	showEndpointPairOnMap,

@@ -62,6 +62,27 @@ test("station route destination display lines match qualifier-only station names
   assert.deepEqual(lines, ["Hampstead Heath"]);
 });
 
+test("bus stop info includes an expandable route destination list", () => {
+  const api = loadAppApi();
+  const summaryIndex = new Map([
+    ["24", {
+      destination_outbound: "Hampstead Heath",
+      destination_inbound: "Pimlico"
+    }]
+  ]);
+
+  const panel = api.buildBusStopInfoHtml({
+    NAME: "Trafalgar Square",
+    ROUTES: "24",
+    NAPTAN_ID: "490000001A"
+  }, null, summaryIndex);
+
+  assert.match(panel.bodyHtml, /<div class="info-label">Destinations<\/div>/);
+  assert.match(panel.bodyHtml, /class="route-destination-toggle-all"/);
+  assert.match(panel.bodyHtml, /Hampstead Heath/);
+  assert.match(panel.bodyHtml, /Pimlico/);
+});
+
 test("bus stop display features return the focused stop when it has coordinates", () => {
   const api = loadAppApi();
   const first = { properties: { NAPTAN_ID: "s1" }, geometry: { coordinates: [-0.1, 51.5] } };
