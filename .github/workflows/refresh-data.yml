@@ -157,3 +157,11 @@ jobs:
             --body-file data/processed/latest_change_log.md \
             --base "${GITHUB_REF_NAME}" \
             --head "$branch"
+
+      - name: Upload latest change log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: latest-change-log
+          path: data/processed/latest_change_log.md
+          if-no-files-found: ignore
