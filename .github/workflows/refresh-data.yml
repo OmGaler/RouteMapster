@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
   refresh:
@@ -60,30 +61,99 @@ jobs:
       - name: Build route summary
         run: python scripts/build_route_summary.py
 
-      # - name: Run tests
-      #   run: pytest -q
-
-      - name: Commit changes
+      - name: Run tests
         shell: bash
         run: |
-          set -euo pipefail
+          set +e
 
-          # Detect changes in exactly what we intend to commit
-          changes=$(git status --porcelain -- data/processed data/raw/stops/postcode_cache.json)
-          if [ -z "$changes" ]; then
-            echo "No data changes."
-            exit 0
-          fi
+          mkdir -p test-results
+          python -m pytest -q 2>&1 | tee test-results/pytest.log
+          status=${PIPESTATUS[0]}
+
+          {
+            echo "### Test results"
+            echo
+            if [ "$status" -eq 0 ]; then
+              echo "- Unit tests passed."
+            else
+              echo "- Unit tests failed with exit code $status. Data refresh will continue."
+            fi
+            echo
+            echo '```'
+            tail -n 80 test-results/pytest.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          exit 0
+
+      - name: Upload test log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-log
+          path: test-results/pytest.log
+          if-no-files-found: ignore
+
+      - name: Commit non-destination changes
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
 
           git config user.name "routemapster-bot"
           git config user.email "routemapster-bot@users.noreply.github.com"
 
-          summary=$(python scripts/changes.py --summary)
-          msg="Data update: $summary"
+          has_destination_changes=0
+          if ! git diff --quiet HEAD -- data/processed/route_destinations.json; then
+            has_destination_changes=1
+            mkdir -p /tmp/routemapster-destination-review
+            cp data/processed/route_destinations.json /tmp/routemapster-destination-review/route_destinations.json
+
+            git restore --source=HEAD -- data/processed/route_destinations.json
+            python scripts/build_route_summary.py
+          fi
 
           python scripts/changes.py --details | tee data/processed/latest_change_log.md >> "$GITHUB_STEP_SUMMARY"
 
-          git add data/processed
-          git add -f data/raw/stops/postcode_cache.json
-          git commit -m "$msg"
-          git push
+          # Detect changes in exactly what we intend to commit
+          changes=$(git status --porcelain -- data/processed data/raw/stops/postcode_cache.json)
+          real_changes=$(printf "%s\n" "$changes" | grep -v ' data/processed/latest_change_log.md$' || true)
+          if [ -z "$real_changes" ]; then
+            echo "No non-destination data changes."
+          else
+            summary=$(python scripts/changes.py --summary)
+            msg="Data update: $summary"
+
+            git add data/processed
+            git add -f data/raw/stops/postcode_cache.json
+            git commit -m "$msg"
+            git push
+          fi
+
+          if [ "$has_destination_changes" -eq 0 ]; then
+            exit 0
+          fi
+
+          branch="data/destination-review-${GITHUB_RUN_ID}"
+          git switch -c "$branch"
+
+          cp /tmp/routemapster-destination-review/route_destinations.json data/processed/route_destinations.json
+          python scripts/build_route_summary.py
+          python scripts/changes.py --details > data/processed/latest_change_log.md
+
+          destination_changes=$(git status --porcelain -- data/processed/route_destinations.json data/processed/route_summary.csv data/processed/latest_change_log.md)
+          if [ -z "$destination_changes" ]; then
+            echo "Destination cache changed during refresh but no review artefacts differ after rebuilding."
+            exit 0
+          fi
+
+          git add data/processed/route_destinations.json data/processed/route_summary.csv data/processed/latest_change_log.md
+          git commit -m "Review route destination changes"
+          git push --set-upstream origin "$branch"
+
+          gh pr create \
+            --title "Review route destination changes" \
+            --body-file data/processed/latest_change_log.md \
+            --base "${GITHUB_REF_NAME}" \
+            --head "$branch"

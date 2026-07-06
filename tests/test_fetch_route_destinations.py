@@ -1,5 +1,5 @@
 """Unit tests for route destination record selection and fallback rules."""
-from scripts.fetch_route_destinations import build_route_destination_record
+from scripts.fetch_route_destinations import build_route_destination_record, should_keep_cached_destination
 
 
 def test_build_route_destination_record_prefers_vehicle_destination_text() -> None:
@@ -184,3 +184,15 @@ def test_build_route_destination_record_keeps_public_destination_without_stronge
     assert record is not None
     assert record["outbound"]["destination"] == "Hampstead Heath"
     assert record["outbound"]["qualifier"] == "South End Green"
+
+
+def test_should_keep_cached_destination_for_active_route_after_empty_api_result() -> None:
+    existing = {"268": {"outbound": {"destination": "Golders Green"}}}
+
+    assert should_keep_cached_destination("268", existing, {"268", "272"}) is True
+
+
+def test_should_not_keep_cached_destination_for_withdrawn_route_after_empty_api_result() -> None:
+    existing = {"X68": {"outbound": {"destination": "Russell Square"}}}
+
+    assert should_keep_cached_destination("X68", existing, {"268", "272"}) is False

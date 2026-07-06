@@ -15,7 +15,7 @@ import time
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, Container, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -115,6 +115,15 @@ def load_routes_from_index(path: Path) -> List[str]:
     if not isinstance(routes, list):
         return []
     return normalize_routes(str(route) for route in routes)
+
+
+def should_keep_cached_destination(
+    route_id: str,
+    existing_routes: Mapping[str, Any],
+    active_route_ids: Container[str],
+) -> bool:
+    """Keep cached text when TfL returns no destination for an active route."""
+    return route_id in existing_routes and route_id in active_route_ids
 
 
 def clean_text(value: Any) -> str:
@@ -465,10 +474,14 @@ def main() -> int:
     app_key = require_env("TFL_APP_KEY")
     app_id = os.environ.get("TFL_APP_ID", "").strip() or None
 
+    routes_index_path = Path(args.routes_index)
+    routes_from_index = load_routes_from_index(routes_index_path)
+    active_route_ids = set(routes_from_index)
+
     if args.line_ids is not None:
         routes = normalize_routes(part.strip() for part in args.line_ids.split(",") if part.strip())
     else:
-        routes = load_routes_from_index(Path(args.routes_index))
+        routes = routes_from_index
     if args.max_lines:
         routes = routes[: max(0, int(args.max_lines))]
     if not routes:
@@ -522,6 +535,8 @@ def main() -> int:
             record = build_route_destination_record(route_id, stop_payloads, service_types, route_contexts)
             if record:
                 route_payloads[route_id] = record
+            elif should_keep_cached_destination(route_id, route_payloads, active_route_ids):
+                print(f"[{index}/{len(routes)}] {route_id}: kept cached destinations after empty API result")
             elif route_id in route_payloads:
                 route_payloads.pop(route_id, None)
             fetched += 1
