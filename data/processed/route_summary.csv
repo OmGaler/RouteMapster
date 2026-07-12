@@ -32,7 +32,7 @@ route,route_type,garage_code,garage_name,operator,vehicle,destination_outbound,d
 32,regular,W,Cricklewood,Metroline,DD,Kilburn Park,Edgware,Kilburn Park Station,Edgware Station,Kilburn Park,Edgware,,7.5,6.5,6.5,0.0,4.5,10.934,6.794
 33,regular,FW,Fulwell,First,SD,"Castelnau, Lonsdale Road",Fulwell,Lonsdale Road,Fulwell Station,"Castelnau, Lonsdale Road",Fulwell,,7.0,7.0,6.5,0.0,5.0,13.442,8.353
 34,regular,AD,Palmers Green,Arriva,DD,Walthamstow Central,Fitzjohn Avenue,Walthamstow Central Station,,Walthamstow Central,Fitzjohn Avenue,,6.5,5.5,6.5,0.0,5.0,18.198,11.308
-35,twentyfour,Q,Camberwell,Go-Ahead,DD,Shoreditch,Clapham Junction,,Clapham Junction Stn / the Falcon,Shoreditch,Clapham Junction,,7.0,7.0,7.0,2.5,5.5,13.948,8.667
+35,twentyfour,Q,Camberwell,Go-Ahead,DD,Shoreditch,Clapham Junction,,Clapham Junction Stn / the Falcon,Shoreditch,Clapham Junction,,7.5,7.5,7.5,2.5,5.0,13.948,8.667
 36,twentyfour,NX,New Cross,Go-Ahead,DD,New Cross Gate,Queen's Park,New Cross Bus Garage,Queen's Park Station,"New Cross Gate, New Cross Bus Garage",Queen's Park,,8.0,8.0,8.0,3.0,5.0,16.591,10.309
 37,twentyfour,PM,Peckham,Go-Ahead,DD,Peckham,Putney Heath,Peckham Bus Station,Putney Heath / Green Man,Peckham,Putney Heath,,5.5,5.5,5.5,2.5,5.5,15.475,9.616
 38,regular,CT,Clapton,Arriva,DD,Victoria,Clapton Pond,Victoria Bus Station,Lea Bridge Roundabout,Victoria,"Clapton Pond, Lea Bridge Roundabout",,12.0,12.0,12.0,0.0,10.0,12.36,7.68
@@ -65,7 +65,7 @@ route,route_type,garage_code,garage_name,operator,vehicle,destination_outbound,d
 66,regular,GY,Grays,Arriva,DD,Leytonstone,Romford Station,Leytonstone Station,,Leytonstone,Romford Station,,5.0,5.0,5.0,0.0,4.0,15.417,9.58
 67,regular,SF,Stamford Hill,Arriva,DD,"Dalston, Forest Road",Wood Green,Forest Road,Wood Green Station,"Dalston, Forest Road",Wood Green,,5.0,5.0,5.0,0.0,5.0,7.869,4.889
 68,regular,WL,Walworth,Transport UK,DD,Euston,West Norwood,Euston Bus Station,Ernest Avenue,Euston,"West Norwood, Ernest Avenue",,7.0,7.0,6.0,0.0,5.0,12.414,7.714
-69,twentyfour,DS,Henley Road,Go-Ahead,DD,Canning Town,Walthamstow Central,Canning Town Bus Station,Walthamstow Bus Station,Canning Town,"Walthamstow Central, Walthamstow Bus Station",,7.5,7.5,7.5,2.5,5.0,10.829,6.729
+69,twentyfour,DS,Henley Road,Go-Ahead,DD,Canning Town,Walthamstow Central,Canning Town Bus Station,Walthamstow Bus Station,Canning Town,"Walthamstow Central, Walthamstow Bus Station",,6.5,6.0,6.0,2.5,5.0,10.829,6.729
 70,regular,S,Shepherd's Bush,First,DD,South Kensington,"Chiswick, Business Park",Queensberry Place,,"South Kensington, Queensberry Place","Chiswick, Business Park",,4.5,5.5,5.0,0.0,4.5,14.979,9.308
 71,regular,FW,Fulwell,First,DD,Kingston,Chessington,Cromwell Road Bus Station,Chessington World of Adventures,"Kingston, Cromwell Road Bus Station",Chessington,,7.5,7.5,7.5,0.0,5.0,10.233,6.358
 72,regular,S,Shepherd's Bush,First,SD,Hammersmith Bridge Road,East Acton,,Brunel Road,Hammersmith Bridge Road,"East Acton, Brunel Road",,6.0,6.0,6.0,0.0,5.0,7.545,4.688
@@ -109,7 +109,7 @@ route,route_type,garage_code,garage_name,operator,vehicle,destination_outbound,d
 112,regular,W,Cricklewood,Metroline,SD,"North Finchley, Tally Ho!",Ealing Broadway,Tally Ho Corner,Haven Green / Ealing Broadway Stn,"North Finchley, Tally Ho!, Tally Ho Corner",Ealing Broadway,,6.0,6.0,6.0,0.0,5.0,17.433,10.832
 113,regular,EW,Edgware,Metroline,DD,Marble Arch,Edgware,Marble Arch Station,Edgware Station,Marble Arch,Edgware,,7.5,7.0,7.0,0.0,5.0,17.891,11.117
 114,regular,UX,Uxbridge Industrial Estate,Metroline,DD,Ruislip,Mill Hill Broadway,Ruislip Station,Mill Hill Broadway Station,Ruislip,Mill Hill Broadway,,6.5,5.5,6.0,0.0,5.0,19.244,11.958
-115,regular,DS,Henley Road,Go-Ahead,DD,Aldgate,"East Ham, Central Park",Aldgate Station,,Aldgate,"East Ham, Central Park",,8.0,7.5,7.5,0.0,6.0,10.967,6.814
+115,regular,DS,Henley Road,Go-Ahead,DD,Aldgate,"East Ham, Central Park",Aldgate Station,,Aldgate,"East Ham, Central Park",,7.5,8.0,7.5,0.0,6.0,10.967,6.814
 116,regular,WK,Hounslow Heath,First,DD,"Hounslow, Bus Station",Ashford Hospital,,,"Hounslow, Bus Station",Ashford Hospital,,5.0,5.0,5.0,0.0,3.0,9.237,5.739
 117,regular,AV,Hounslow,First,SD,Staines,West Middlesex Hospital,Staines Bus Station,,Staines,West Middlesex Hospital,,3.0,3.0,3.0,0.0,2.0,17.159,10.662
 119,twentyfour,C,Croydon,Go-Ahead,DD,Croydon Colonnades,Bromley North,The Colonnades / Croydon Airport,Bromley North Station,"Croydon Colonnades, The Colonnades / Croydon Airport",Bromley North,,5.0,4.5,5.0,2.0,4.5,17.702,11.0
@@ -140,7 +140,7 @@ route,route_type,garage_code,garage_name,operator,vehicle,destination_outbound,d
 144,regular,NP,Northumberland Park,Go-Ahead,DD,Edmonton Green,Muswell Hill,Edmonton Green Bus Station,Muswell Hill Broadway,Edmonton Green,Muswell Hill,,6.5,6.0,6.0,0.0,6.0,10.784,6.701
 145,regular,BK,Barking,Stagecoach London,DD,Leytonstone,"Dagenham, Asda",Leytonstone Station,,Leytonstone,"Dagenham, Asda",,4.5,4.5,4.5,0.0,4.0,19.609,12.185
 146,regular,TB,Bromley,Stagecoach London,SD,Downe,Bromley North,Downe Church,Bromley North Station,Downe,Bromley North,,1.0,1.0,1.0,0.0,1.0,10.067,6.255
-147,regular,RR,River Road,Go-Ahead,DD,Canning Town,Ilford,Brunel Street,Hainault Street,"Canning Town, Brunel Street","Ilford, Hainault Street",,8.0,7.5,7.5,0.0,6.0,10.883,6.762
+147,regular,RR,River Road,Go-Ahead,DD,Canning Town,Ilford,Brunel Street,Hainault Street,"Canning Town, Brunel Street","Ilford, Hainault Street",,7.5,7.5,7.5,0.0,5.5,10.883,6.762
 148,twentyfour,S,Shepherd's Bush,First,DD,White City,Camberwell Green,White City Bus Station,Denmark Hill / Camberwell Green,White City,Camberwell Green,,4.5,5.0,5.0,3.0,5.0,14.263,8.863
 149,twentyfour,AR,Tottenham,Arriva,DD,London Bridge,Edmonton Green,London Bridge Bus Station,Edmonton Green Bus Station,London Bridge,Edmonton Green,,8.5,8.5,7.5,2.5,6.0,14.182,8.812
 150,regular,DX,Barking,Arriva,DD,Chigwell Row,Becontree Heath,Lambourne Road,Becontree Heath Leisure Centre,"Chigwell Row, Lambourne Road",Becontree Heath,,5.5,5.0,5.0,0.0,3.0,15.203,9.447
@@ -259,10 +259,10 @@ route,route_type,garage_code,garage_name,operator,vehicle,destination_outbound,d
 265,regular,AF,Putney,Go-Ahead,SD,Tolworth,Putney Heath,Tolworth / King Charles Road,Putney Bridge Station,Tolworth,"Putney Heath, Putney Bridge Station",,4.5,4.5,4.5,0.0,3.0,17.608,10.941
 266,regular,W,Cricklewood,Metroline,DD,"Brent Cross, Shopping Centre",Acton Old Town Hall,,Acton Old Town Hall / Salisbury Street,"Brent Cross, Shopping Centre",Acton Old Town Hall,,7.0,7.5,7.5,0.0,6.0,12.947,8.045
 267,regular,TF,Fulwell (Twickenham),Transport UK,DD,Fulwell,Hammersmith,South Road / Fulwell,Hammersmith Bus Station,Fulwell,Hammersmith,,6.0,5.5,5.5,0.0,4.5,13.831,8.594
-268,regular,W,Cricklewood,Metroline,SD,,,,,,,,4.0,4.0,4.0,0.0,3.0,6.257,3.888
+268,regular,W,Cricklewood,Metroline,SD,"Finchley Road, O2 Centre",Golders Green,O2 Centre / Sainsbury's,Golders Green Station,"Finchley Road, O2 Centre, O2 Centre / Sainsbury's",Golders Green,,4.0,4.0,4.0,0.0,3.0,6.257,3.888
 269,regular,BX,Bexleyheath,Go-Ahead,DD,Bromley North,Friswell Place,Bromley North Station,,Bromley North,Friswell Place,,4.5,4.5,4.5,0.0,4.0,16.309,10.134
 270,regular,BC,Beddington,Transport UK,DD,Mitcham,Putney Bridge,Madeira Road,Putney Bridge Station,"Mitcham, Madeira Road",Putney Bridge,,6.0,6.0,6.0,0.0,5.0,10.096,6.273
-272,regular,V,Stamford Brook,First,SD,,,,,,,,4.0,4.0,4.0,0.0,4.0,9.523,5.917
+272,regular,V,Stamford Brook,First,SD,Shepherd's Bush,"Chiswick, Grove Park",Shepherd's Bush Station,Cavendish Road,Shepherd's Bush,"Chiswick, Grove Park, Cavendish Road",,4.0,4.0,4.0,0.0,4.0,9.523,5.917
 273,regular,TL,Catford,Stagecoach London,SD,Petts Wood,Conington Road,Station Square / Petts Wood Station,,Petts Wood,Conington Road,,3.0,3.0,3.0,0.0,2.0,18.431,11.452
 274,regular,HT; KC,Holloway; King's Cross,Metroline,DD,Lancaster Gate,"Islington, Angel",Lancaster Gate Station,Angel Islington / City Road,Lancaster Gate,"Islington, Angel, Angel Islington / City Road",,4.5,5.0,4.5,0.0,5.5,11.123,6.912
 275,regular,T,Leyton,Stagecoach London,DD,Barkingside,"Walthamstow, St. James's Street Station",Barkingside Tesco,St James Street Station,Barkingside,"Walthamstow, St. James's Street Station, St James Street Station",,4.0,4.5,4.5,0.0,2.5,18.592,11.552
@@ -275,7 +275,7 @@ route,route_type,garage_code,garage_name,operator,vehicle,destination_outbound,d
 282,regular,G,Greenford,Metroline,DD,Mount Vernon Hospital,Ealing Hospital,,,Mount Vernon Hospital,Ealing Hospital,,5.0,5.0,5.0,0.0,4.0,19.158,11.904
 284,regular,KB,Kangley Bridge Road,Stagecoach London,SD,Grove Park Cemetery,"Lewisham, Shopping Centre",,Lewisham Station,Grove Park Cemetery,"Lewisham, Shopping Centre, Lewisham Station",,6.0,5.5,6.0,0.0,3.0,10.663,6.626
 285,twentyfour,TF,Fulwell (Twickenham),Transport UK,DD,Kingston,Heathrow Central,Cromwell Road Bus Station,Heathrow Central Bus Station,"Kingston, Cromwell Road Bus Station",Heathrow Central,,5.0,5.0,5.0,2.0,5.0,20.19,12.545
-286,regular,MG,Morden Wharf (Greenwich),Go-Ahead,DD,"Greenwich, Cutty Sark",Queen Mary's Hospital,Greenwich Town Centre / Cutty Sark,Queen Mary's Hospital / Frognal Avenue,"Greenwich, Cutty Sark, Greenwich Town Centre / Cutty Sark",Queen Mary's Hospital,,4.5,5.0,5.0,0.0,3.0,14.718,9.145
+286,regular,MG,Morden Wharf (Greenwich),Go-Ahead,DD,"Greenwich, Cutty Sark",Queen Mary's Hospital,Greenwich Town Centre / Cutty Sark,Queen Mary's Hospital / Frognal Avenue,"Greenwich, Cutty Sark, Greenwich Town Centre / Cutty Sark",Queen Mary's Hospital,,4.0,4.0,4.0,0.0,3.5,14.718,9.145
 287,regular,RM,Rainham,Stagecoach London,DD,"Rainham, Abbey Wood Lane",Barking,Abbey Wood Lane,Barking Station,"Rainham, Abbey Wood Lane",Barking,,4.0,4.0,4.0,0.0,3.0,13.204,8.205
 288,regular,BT,Edgware,First,SD,Broadfields Estate,"Queensbury, Morrisons",Meadfield,,"Broadfields Estate, Meadfield","Queensbury, Morrisons",,6.0,6.0,6.0,0.0,4.0,6.467,4.019
 289,regular,TH,Thornton Heath,Arriva,DD,Purley,Elmers End,Purley Station,Elmers End Interchange,Purley,Elmers End,,5.0,5.0,5.0,0.0,4.0,14.639,9.096
@@ -289,8 +289,8 @@ route,route_type,garage_code,garage_name,operator,vehicle,destination_outbound,d
 297,twentyfour,PV,Perivale [East],Metroline,DD,Ealing Broadway,Meyrick Road,Ealing Broadway Station / Haven Green,,Ealing Broadway,Meyrick Road,,5.0,5.0,5.0,2.5,4.5,15.012,9.328
 298,regular,UB,Hatfield,Uno,DD,Potters Bar Station,Arnos Grove,,Arnos Grove Station,Potters Bar Station,Arnos Grove,,3.0,3.0,3.0,0.0,2.0,12.492,7.762
 299,regular,NP,Northumberland Park,Go-Ahead,SD,Cockfosters,Muswell Hill,Cockfosters Station,,Cockfosters,Muswell Hill,,4.0,4.0,4.0,0.0,2.0,9.468,5.883
-300,regular,SI,Silvertown,Go-Ahead,SD,Canning Town,East Ham Station,Rokeby School,Wordsworth Health Centre,"Canning Town, Rokeby School","East Ham Station, Wordsworth Health Centre",,4.0,3.5,3.5,0.0,3.5,11.959,7.431
-301,regular,DT,Dartford,Arriva,DD,Woolwich,Market Place,Beresford Sq / Woolwich Arsenal Stn,,Woolwich,Market Place,,5.0,5.0,5.0,0.0,5.0,12.942,8.042
+300,regular,SI,Silvertown,Go-Ahead,SD,Canning Town,East Ham Station,Rokeby School,Wordsworth Health Centre,"Canning Town, Rokeby School","East Ham Station, Wordsworth Health Centre",,4.0,4.0,3.5,0.0,3.5,11.959,7.431
+301,regular,PD,Plumstead,Stagecoach London,DD,Woolwich,Market Place,Beresford Sq / Woolwich Arsenal Stn,,Woolwich,Market Place,,5.0,5.0,5.0,0.0,5.0,12.942,8.042
 302,regular,AC,Willesden,Metroline,DD,Kensal Rise,Mill Hill Broadway,Kensal Rise Station,Mill Hill Broadway Station,Kensal Rise,Mill Hill Broadway,,6.0,6.5,6.5,0.0,4.5,12.751,7.923
 303,regular,BT,Edgware,First,SD,Kingsbury Circle,Edgware,,Edgware Station,Kingsbury Circle,Edgware,,4.0,4.0,4.0,0.0,3.0,11.285,7.012
 304,regular,RR,River Road,Go-Ahead,DD,Manor Park,Custom House Station,Manor Park / Gladding Road,,Manor Park,Custom House Station,,5.0,5.0,5.0,0.0,4.0,8.326,5.174
@@ -619,7 +619,7 @@ N7,night,PV,Perivale [East],Metroline,DD,Oxford Circus,Northolt,Oxford Circus St
 N8,night,BW,Bow,Stagecoach London,DD,Oxford Circus,"Hainault, The Lowe",Great Titchfield St / Oxford Circus Stn,The Lowe,Oxford Circus,"Hainault, The Lowe",,0.0,0.0,0.0,6.0,3.0,26.688,16.583
 N9,night,AH,Brentford,Metroline,DD,Heathrow Terminal 5,Aldwych,,Aldwych / Drury Lane,Heathrow Terminal 5,Aldwych,,0.0,0.0,0.0,2.0,2.5,32.892,20.438
 N11,night,SW,Stockwell,Go-Ahead,DD,"Whitehall, Horse Guards",Ealing Broadway,Horse Guards Parade,Ealing Broadway Station / Haven Green,"Whitehall, Horse Guards, Horse Guards Parade",Ealing Broadway,,0.0,0.0,0.0,1.5,1.5,21.397,13.295
-N15,night,DS; RR,Henley Road; River Road,Go-Ahead,DD,Oxford Circus,Romford Market,Margaret Street / Oxford Circus,,Oxford Circus,Romford Market,,0.0,0.0,0.0,6.5,5.0,29.727,18.472
+N15,night,DS; RR,Henley Road; River Road,Go-Ahead,DD,Oxford Circus,Romford Market,Margaret Street / Oxford Circus,,Oxford Circus,Romford Market,,0.0,0.0,0.0,7.5,6.0,29.727,18.472
 N18,night,X,Westbourne Park,First,DD,Trafalgar Square,Long Elmes,Whitehall / Trafalgar Square,,Trafalgar Square,Long Elmes,,0.0,0.0,0.0,4.0,0.5,23.859,14.825
 N19,night,SF,Stamford Hill,Arriva,DD,Clapham Junction,Finsbury Park Station,Clapham Junction Station,Finsbury Park Interchange,Clapham Junction,"Finsbury Park Station, Finsbury Park Interchange",,0.0,0.0,0.0,1.5,1.5,15.768,9.798
 N20,night,HT,Holloway,Metroline,DD,Trafalgar Square,Barnet Church,Whitehall / Trafalgar Square,Barnet Hospital,Trafalgar Square,"Barnet Church, Barnet Hospital",,0.0,0.0,0.0,2.0,2.0,22.06,13.708
@@ -673,5 +673,5 @@ N279,night,E,Enfield,Arriva,DD,Trafalgar Square,Waltham Cross,Trafalgar Square /
 N343,night,NX,New Cross,Go-Ahead,DD,New Cross,Trafalgar Square,New Cross / Jerningham Road,Whitehall / Trafalgar Square,New Cross,Trafalgar Square,,0.0,0.0,0.0,2.0,2.0,15.101,9.383
 N381,night,WL,Walworth,Transport UK,DD,"Whitehall, Horse Guards",Peckham,Horse Guards Parade,Peckham Bus Station,"Whitehall, Horse Guards, Horse Guards Parade",Peckham,,0.0,0.0,0.0,2.0,2.0,15.716,9.766
 N472,night,MG,Morden Wharf (Greenwich),Go-Ahead,DD,Gayton Road / Abbey Wood Station,North Greenwich Station,,,Gayton Road / Abbey Wood Station,North Greenwich Station,,0.0,0.0,0.0,2.0,2.0,15.028,9.338
-N550,night,HK,Ash Grove,Stagecoach London,DD,Canning Town,Trafalgar Square,Canning Town Bus Station,,Canning Town,Trafalgar Square,,0.0,0.0,0.0,2.0,0.0,17.702,10.999
-N551,night,BK,Barking,Stagecoach London,DD,"Gallions Reach, Shopping Park",Trafalgar Square,,,"Gallions Reach, Shopping Park",Trafalgar Square,,0.0,0.0,0.0,2.0,0.0,20.222,12.565
+N550,night,HK,Ash Grove,Stagecoach London,DD,Canning Town,Trafalgar Square,Canning Town Bus Station,,Canning Town,Trafalgar Square,,0.0,0.0,0.0,2.0,2.0,17.702,10.999
+N551,night,BK,Barking,Stagecoach London,DD,"Gallions Reach, Shopping Park",Trafalgar Square,,,"Gallions Reach, Shopping Park",Trafalgar Square,,0.0,0.0,0.0,2.0,0.5,20.222,12.565
