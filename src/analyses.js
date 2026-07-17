@@ -940,6 +940,64 @@
         };
       }
     },
+    "routes-by-borough-count": {
+      id: "routes-by-borough-count",
+      label: "Routes passing through most boroughs",
+      run: async (rows) => {
+        const filters = window.RouteMapsterAdvancedFilters;
+        if (!filters || typeof filters.listRoutesByBoroughCoverage !== "function") {
+          return {
+            type: "note",
+            message: "Borough route analysis is unavailable in this build."
+          };
+        }
+        const matches = await filters.listRoutesByBoroughCoverage(rows);
+        if (!Array.isArray(matches)) {
+          return {
+            type: "note",
+            message: "Borough route analysis is unavailable in this build."
+          };
+        }
+        const sorted = matches
+          .filter((entry) => Array.isArray(entry?.boroughTokens) && entry.boroughTokens.length > 0)
+          .slice()
+          .sort((a, b) => {
+            if (b.boroughTokens.length !== a.boroughTokens.length) {
+              return b.boroughTokens.length - a.boroughTokens.length;
+            }
+            const lengthA = Number.isFinite(a?.row?.length_miles) ? a.row.length_miles : -Infinity;
+            const lengthB = Number.isFinite(b?.row?.length_miles) ? b.row.length_miles : -Infinity;
+            if (lengthB !== lengthA) {
+              return lengthB - lengthA;
+            }
+            return String(a?.routeId || "").localeCompare(String(b?.routeId || ""), undefined, { numeric: true });
+          })
+          .slice(0, 25);
+        if (sorted.length === 0) {
+          return {
+            type: "table",
+            columns: ["Rank", "Route", "Boroughs", "Boroughs passed through", "Operator"],
+            rows: [["", "No route borough coverage available", "", "", ""]],
+            mapOverlay: { type: "route-list", routeIds: [] }
+          };
+        }
+        return {
+          type: "table",
+          columns: ["Rank", "Route", "Boroughs", "Boroughs passed through", "Operator"],
+          rows: sorted.map((entry, index) => [
+            index + 1,
+            entry.routeId,
+            entry.boroughTokens.length,
+            entry.boroughLabels.join(", "),
+            getPrimaryKnownOperator(entry.row)
+          ]),
+          mapOverlay: {
+            type: "route-list",
+            routeIds: sorted.map((entry) => entry.routeId).filter(Boolean)
+          }
+        };
+      }
+    },
     "most-unique-stops-routes": {
       id: "most-unique-stops-routes",
       label: "Most route-only stops",
@@ -2255,4 +2313,3 @@
     analysisRegistry
   };
 })();
-

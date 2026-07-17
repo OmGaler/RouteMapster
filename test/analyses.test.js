@@ -81,6 +81,32 @@ test("routes wholly within one borough analysis sorts by descending length and s
   });
 });
 
+test("routes passing through most boroughs ranks distinct borough coverage", async () => {
+  const routeGeometries = new Map([
+    ["R1", [[[0.5, 0.5], [0.5, 1.5], [0.5, 2.5]]]],
+    ["R2", [[[0.5, 0.5], [0.5, 1.5]]]],
+    ["R3", [[[0.5, 0.5], [0.5, 0.8]]]]
+  ]);
+  const analyses = loadAnalyses();
+  global.window.RouteMapsterAPI = {
+    loadRouteGeometry: async (routeId) => routeGeometries.get(routeId) || [],
+    setLoadingModalVisible: () => {}
+  };
+
+  const result = await analyses.runAnalysis("routes-by-borough-count", [
+    { route_id: "R1", route_id_norm: "R1", length_miles: 10, operator_names_arr: ["Go-Ahead"] },
+    { route_id: "R2", route_id_norm: "R2", length_miles: 8, operator_names_arr: ["Arriva"] },
+    { route_id: "R3", route_id_norm: "R3", length_miles: 4, operator_names_arr: ["Metroline"] }
+  ]);
+
+  assert.deepEqual(result.rows, [
+    [1, "R1", 2, "Camden, Westminster", "Go-Ahead"],
+    [2, "R2", 2, "Camden, Westminster", "Arriva"],
+    [3, "R3", 1, "Camden", "Metroline"]
+  ]);
+  assert.deepEqual(result.mapOverlay.routeIds, ["R1", "R2", "R3"]);
+});
+
 test("most stop-connected routes analysis ranks by shared-stop totals", async () => {
   const analyses = loadAnalyses();
 

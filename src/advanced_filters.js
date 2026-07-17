@@ -799,7 +799,7 @@
     return coverage;
   };
 
-  const listRoutesWhollyWithinBoroughs = async (rows) => {
+  const listRoutesByBoroughCoverage = async (rows) => {
     const boroughIndex = await loadBoroughIndex();
     if (!boroughIndex || boroughIndex.length === 0) {
       return null;
@@ -833,7 +833,7 @@
         const entry = routeRows[index];
         index += 1;
         const coverage = await computeRouteGeometryCoverage(entry.routeId, boroughIndex);
-        if (!coverage || coverage.hasOutside) {
+        if (!coverage) {
           continue;
         }
         const tokens = Array.isArray(coverage.tokens)
@@ -846,6 +846,7 @@
           row: entry.row,
           routeId: entry.routeId,
           boroughTokens: tokens,
+          hasOutside: coverage.hasOutside,
           boroughLabels: tokens.map((token) => boroughLabels.get(token) || token)
         });
       }
@@ -858,6 +859,14 @@
       }
     }
     return matches;
+  };
+
+  const listRoutesWhollyWithinBoroughs = async (rows) => {
+    const matches = await listRoutesByBoroughCoverage(rows);
+    if (!Array.isArray(matches)) {
+      return matches;
+    }
+    return matches.filter((entry) => !entry.hasOutside);
   };
 
   const computeRoutesWhollyWithin = async (rows, boroughSet) => {
@@ -1886,6 +1895,7 @@
     getCurrentFilterSpec: () => state.filterSpec,
     getCurrentRows: () => state.filteredRows,
     listRoutesWhollyWithinBoroughs,
+    listRoutesByBoroughCoverage,
     applyFilterSpec,
     dismissResults,
     showResults
