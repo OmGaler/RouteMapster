@@ -14,6 +14,10 @@ permissions:
 env:
   DESTINATION_REVIEWER: OmGaler
 
+concurrency:
+  group: refresh-data
+  cancel-in-progress: false
+
 jobs:
   refresh:
     if: github.event_name != 'pull_request'
@@ -134,7 +138,9 @@ jobs:
             git add data/processed
             git add -f data/raw/stops/postcode_cache.json
             git commit -m "$msg"
-            git push
+            git fetch origin "$GITHUB_REF_NAME"
+            git rebase "origin/$GITHUB_REF_NAME"
+            git push origin "HEAD:$GITHUB_REF_NAME"
           fi
 
           if [ "$has_destination_changes" -eq 0 ]; then
@@ -142,7 +148,9 @@ jobs:
           fi
 
           branch="data/destination-review-${GITHUB_RUN_ID}"
-          git switch -c "$branch"
+          git restore --source=HEAD -- data/processed/route_summary.csv data/processed/latest_change_log.md
+          git fetch origin "$GITHUB_REF_NAME"
+          git switch -c "$branch" "origin/$GITHUB_REF_NAME"
 
           cp /tmp/routemapster-destination-review/route_destinations.json data/processed/route_destinations.json
           python scripts/build_route_summary.py
@@ -204,4 +212,6 @@ jobs:
           fi
           git add data/processed/route_summary.csv
           git commit -m "Rebuild route summary after destination review"
-          git push
+          git fetch origin "${{ github.event.pull_request.base.ref }}"
+          git rebase "origin/${{ github.event.pull_request.base.ref }}"
+          git push origin "HEAD:${{ github.event.pull_request.base.ref }}"
