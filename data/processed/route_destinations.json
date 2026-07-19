@@ -1,6 +1,6 @@
 {
-  "generated_at_utc": "2026-07-05T08:01:40Z",
-  "route_count": 674,
+  "generated_at_utc": "2026-07-19T07:10:40Z",
+  "route_count": 676,
   "routes": {
     "1": {
       "inbound": {
@@ -696,7 +696,7 @@
       "inbound": {
         "destination": "Watford Junction",
         "full": "Watford Junction",
-        "qualifier": "Watford Junction Railway Station"
+        "qualifier": "Watford Junction Station"
       },
       "outbound": {
         "destination": "Brent Cross, Shopping Centre",
@@ -775,8 +775,8 @@
       },
       "outbound": {
         "destination": "Canning Town",
-        "full": "Canning Town, Brunel Street",
-        "qualifier": "Brunel Street"
+        "full": "Canning Town",
+        "qualifier": "Canning Town Station"
       },
       "service_types": [
         "Regular"
@@ -1119,9 +1119,9 @@
         "qualifier": ""
       },
       "outbound": {
-        "destination": "Barking",
-        "full": "Barking",
-        "qualifier": "Barking Town Centre"
+        "destination": "Barking Town Centre",
+        "full": "Barking Town Centre",
+        "qualifier": ""
       },
       "service_types": [
         "Regular"
@@ -1794,8 +1794,8 @@
         "qualifier": "Mortlake Bus Station"
       },
       "outbound": {
-        "destination": "Putney Bridge",
-        "full": "Putney Bridge, Lonsdale Road",
+        "destination": "Castlenau, Lonsdale Road",
+        "full": "Castlenau, Lonsdale Road",
         "qualifier": "Lonsdale Road"
       },
       "service_types": [
@@ -2586,7 +2586,7 @@
       "inbound": {
         "destination": "Watford Junction",
         "full": "Watford Junction",
-        "qualifier": "Watford Junction Railway Station"
+        "qualifier": "Watford Junction Station"
       },
       "outbound": {
         "destination": "South Harrow",
@@ -3189,9 +3189,9 @@
         "qualifier": ""
       },
       "outbound": {
-        "destination": "Roden Street",
-        "full": "Roden Street",
-        "qualifier": ""
+        "destination": "Ilford Hill",
+        "full": "Ilford Hill, Roden Street",
+        "qualifier": "Roden Street"
       },
       "service_types": [
         "Regular"
@@ -3206,7 +3206,7 @@
       "outbound": {
         "destination": "Ealing Broadway",
         "full": "Ealing Broadway",
-        "qualifier": "Ealing Broadway Station / Haven Green"
+        "qualifier": "Ealing Broadway Stn / Haven Green"
       },
       "service_types": [
         "Regular"
@@ -3280,8 +3280,8 @@
       },
       "outbound": {
         "destination": "Canning Town",
-        "full": "Canning Town, Rokeby School",
-        "qualifier": "Rokeby School"
+        "full": "Canning Town",
+        "qualifier": "Canning Town Station"
       },
       "service_types": [
         "Regular"
@@ -5494,8 +5494,8 @@
     },
     "482": {
       "inbound": {
-        "destination": "Hamilton Road",
-        "full": "Hamilton Road",
+        "destination": "Southall, Town Hall",
+        "full": "Southall, Town Hall",
         "qualifier": ""
       },
       "outbound": {
@@ -5726,7 +5726,7 @@
       "outbound": {
         "destination": "Canning Town",
         "full": "Canning Town",
-        "qualifier": "Canning Town Bus Station"
+        "qualifier": "Canning Town Station"
       },
       "service_types": [
         "Regular"
@@ -6956,7 +6956,7 @@
       "outbound": {
         "destination": "Canning Town",
         "full": "Canning Town",
-        "qualifier": "Canning Town Bus Station"
+        "qualifier": "Canning Town Station"
       },
       "service_types": [
         "Regular"
@@ -7901,7 +7901,7 @@
       "outbound": {
         "destination": "Ealing Broadway",
         "full": "Ealing Broadway",
-        "qualifier": "Ealing Broadway Station / Haven Green"
+        "qualifier": "Ealing Broadway Stn / Haven Green"
       },
       "service_types": [
         "Regular"
@@ -8194,8 +8194,8 @@
         "qualifier": ""
       },
       "outbound": {
-        "destination": "Hamilton Road",
-        "full": "Hamilton Road",
+        "destination": "Southall, Town Hall",
+        "full": "Southall, Town Hall",
         "qualifier": ""
       },
       "service_types": [
@@ -8366,7 +8366,7 @@
       "inbound": {
         "destination": "Ealing Broadway",
         "full": "Ealing Broadway",
-        "qualifier": "Ealing Broadway Station / Haven Green"
+        "qualifier": "Ealing Broadway Stn / Haven Green"
       },
       "outbound": {
         "destination": "Whitehall, Horse Guards",
@@ -9031,7 +9031,7 @@
       "outbound": {
         "destination": "Canning Town",
         "full": "Canning Town",
-        "qualifier": "Canning Town Bus Station"
+        "qualifier": "Canning Town Station"
       },
       "service_types": [
         "Regular"
