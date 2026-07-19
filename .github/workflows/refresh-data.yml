@@ -4,13 +4,19 @@ on:
   schedule:
     - cron: "0 4 * * 0"
   workflow_dispatch:
+  pull_request:
+    types: [closed]
 
 permissions:
   contents: write
   pull-requests: write
 
+env:
+  DESTINATION_REVIEWER: OmGaler
+
 jobs:
   refresh:
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     env:
       TFL_APP_ID: ${{ secrets.TFL_APP_ID }}
@@ -97,7 +103,7 @@ jobs:
       - name: Commit non-destination changes
         shell: bash
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.ROUTEMAPSTER_PR_TOKEN || github.token }}
         run: |
           set -euo pipefail
 
@@ -142,21 +148,22 @@ jobs:
           python scripts/build_route_summary.py
           python scripts/changes.py --details > data/processed/latest_change_log.md
 
-          destination_changes=$(git status --porcelain -- data/processed/route_destinations.json data/processed/route_summary.csv data/processed/latest_change_log.md)
+          destination_changes=$(git status --porcelain -- data/processed/route_destinations.json)
           if [ -z "$destination_changes" ]; then
             echo "Destination cache changed during refresh but no review artefacts differ after rebuilding."
             exit 0
           fi
 
-          git add data/processed/route_destinations.json data/processed/route_summary.csv data/processed/latest_change_log.md
+          git add data/processed/route_destinations.json
           git commit -m "Review route destination changes"
           git push --set-upstream origin "$branch"
 
-          gh pr create \
+          pr_url=$(gh pr create \
             --title "Review route destination changes" \
             --body-file data/processed/latest_change_log.md \
             --base "${GITHUB_REF_NAME}" \
-            --head "$branch"
+            --head "$branch")
+          gh pr edit "$pr_url" --add-reviewer "$DESTINATION_REVIEWER"
 
       - name: Upload latest change log
         if: always()
@@ -165,3 +172,36 @@ jobs:
           name: latest-change-log
           path: data/processed/latest_change_log.md
           if-no-files-found: ignore
+
+  rebuild-route-summary:
+    if: github.event.pull_request.merged && startsWith(github.event.pull_request.head.ref, 'data/destination-review-')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout merged destination review
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.ref }}
+          token: ${{ secrets.ROUTEMAPSTER_PR_TOKEN || github.token }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r scripts/requirements-dev.txt
+
+      - name: Rebuild and commit route summary
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "routemapster-bot"
+          git config user.email "routemapster-bot@users.noreply.github.com"
+          python scripts/build_route_summary.py
+          if git diff --quiet -- data/processed/route_summary.csv; then
+            echo "Route summary is already current."
+            exit 0
+          fi
+          git add data/processed/route_summary.csv
+          git commit -m "Rebuild route summary after destination review"
+          git push
