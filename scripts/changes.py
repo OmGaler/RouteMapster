@@ -283,11 +283,66 @@ def normalise_route_geometry(payload: Optional[dict]) -> List[dict]:
     )
 
 
+def route_terminal_signature(payload: Optional[dict], precision: int = 4) -> List[dict]:
+    """Return stable route termini, ignoring non-terminal geometry variations.
+
+    TfL can reorder, duplicate, or make small edits to intermediate geometry
+    segments between refreshes. Those changes do not affect a passenger-facing
+    destination, so they must not trigger a destination API lookup.
+    """
+    if not isinstance(payload, dict):
+        return []
+
+    normalised: List[dict] = []
+    for feature in payload.get("features", []):
+        if not isinstance(feature, dict):
+            continue
+        properties = feature.get("properties")
+        geometry = feature.get("geometry")
+        if not isinstance(properties, dict) or not isinstance(geometry, dict):
+            continue
+
+        coordinates = geometry.get("coordinates")
+        geometry_type = geometry.get("type")
+        if geometry_type == "LineString":
+            segments = [coordinates]
+        elif geometry_type == "MultiLineString":
+            segments = coordinates
+        else:
+            continue
+
+        terminals = set()
+        for segment in segments if isinstance(segments, list) else []:
+            if not isinstance(segment, list) or len(segment) < 2:
+                continue
+            try:
+                start = tuple(round(float(value), precision) for value in segment[0][:2])
+                end = tuple(round(float(value), precision) for value in segment[-1][:2])
+            except (IndexError, TypeError, ValueError):
+                continue
+            terminals.add(tuple(sorted((start, end))))
+
+        if not terminals:
+            continue
+
+        normalised.append(
+            {
+                "direction": str(properties.get("direction") or ""),
+                "terminals": sorted(terminals),
+            }
+        )
+
+    return sorted(
+        normalised,
+        key=lambda feature: json.dumps(feature, sort_keys=True, separators=(",", ":")),
+    )
+
+
 def route_geometry_changed(route_id: str) -> bool:
     path = ROUTES_DIR / f"{route_id}.geojson"
     old_payload = load_json_from_git("HEAD", path)
     new_payload = load_json_from_fs(path)
-    return normalise_route_geometry(old_payload) != normalise_route_geometry(new_payload)
+    return route_terminal_signature(old_payload) != route_terminal_signature(new_payload)
 
 
 route_changed_files = [
