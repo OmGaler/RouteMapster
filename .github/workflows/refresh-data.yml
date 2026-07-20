@@ -26,6 +26,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Synchronise checkout with the target branch
+        shell: bash
+        run: git pull --rebase origin "$GITHUB_REF_NAME"
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
