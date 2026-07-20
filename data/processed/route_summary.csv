@@ -3,7 +3,7 @@ route,route_type,garage_code,garage_name,operator,vehicle,destination_outbound,d
 2,regular,N,Norwood,Arriva,DD,West Norwood,Marylebone,Norwood Bus Garage,Marylebone Station,"West Norwood, Norwood Bus Garage",Marylebone,,7.0,7.0,7.0,0.0,6.0,13.197,8.2
 3,regular,WL,Walworth,Transport UK,DD,Crystal Palace,Victoria,,Victoria Bus Station,Crystal Palace,Victoria,,5.0,5.0,5.0,0.0,5.0,12.871,7.998
 4,regular,HT,Holloway,Metroline,DD,Blackfriars Station,Archway,,Archway Station,Blackfriars Station,Archway,,6.5,6.0,6.0,0.0,5.0,13.288,8.257
-5,regular,DS; RR,Henley Road; River Road,Go-Ahead,DD,Canning Town,Romford Market,Canning Town Bus Station,,Canning Town,Romford Market,,9.0,8.5,9.0,0.0,7.5,17.441,10.837
+5,regular,DS; RR,Henley Road; River Road,Go-Ahead,DD,Canning Town,Romford Market,Canning Town Station,,Canning Town,Romford Market,,9.0,8.5,9.0,0.0,7.5,17.441,10.837
 6,twentyfour,AC,Willesden,Metroline,DD,Victoria,"Willesden, Bus Garage",Victoria Station,Pound Lane / Willesden Bus Garage,Victoria,"Willesden, Bus Garage",,6.5,7.0,7.0,2.5,5.5,11.187,6.952
 7,regular,PV,Perivale [East],Metroline,DD,Oxford Circus,East Acton,Oxford Circus Station / John Lewis,Brunel Road,Oxford Circus,"East Acton, Brunel Road",,5.0,5.0,5.0,0.0,5.0,10.188,6.33
 8,regular,BW,Bow,Stagecoach London,DD,Tottenham Court Road,Bow Church,St Giles High Street,Bow Bus Garage,"Tottenham Court Road, St Giles High Street","Bow Church, Bow Bus Garage",,7.5,7.5,7.5,0.0,6.0,10.31,6.407
