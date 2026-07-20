@@ -2,7 +2,7 @@ route,route_type,garage_code,garage_name,operator,vehicle,destination_outbound,d
 1,regular,Q,Camberwell,Go-Ahead,DD,Canada Water,Hampstead Heath,Canada Water Bus Station,South End Green,Canada Water,"Hampstead Heath, South End Green",,6.5,5.5,6.0,0.0,4.5,14.808,9.201
 2,regular,N,Norwood,Arriva,DD,West Norwood,Marylebone,Norwood Bus Garage,Marylebone Station,"West Norwood, Norwood Bus Garage",Marylebone,,7.0,7.0,7.0,0.0,6.0,13.197,8.2
 3,regular,WL,Walworth,Transport UK,DD,Crystal Palace,Victoria,,Victoria Bus Station,Crystal Palace,Victoria,,5.0,5.0,5.0,0.0,5.0,12.871,7.998
-4,regular,HT,Holloway,Metroline,DD,Blackfriars Station,Archway,,Archway Station,Blackfriars Station,Archway,,5.5,5.5,5.5,0.0,4.5,13.288,8.257
+4,regular,HT,Holloway,Metroline,DD,Blackfriars Station,Archway,,Archway Station,Blackfriars Station,Archway,,6.5,6.0,6.0,0.0,5.0,13.288,8.257
 5,regular,DS; RR,Henley Road; River Road,Go-Ahead,DD,Canning Town,Romford Market,Canning Town Bus Station,,Canning Town,Romford Market,,9.0,8.5,9.0,0.0,7.5,17.441,10.837
 6,twentyfour,AC,Willesden,Metroline,DD,Victoria,"Willesden, Bus Garage",Victoria Station,Pound Lane / Willesden Bus Garage,Victoria,"Willesden, Bus Garage",,6.5,7.0,7.0,2.5,5.5,11.187,6.952
 7,regular,PV,Perivale [East],Metroline,DD,Oxford Circus,East Acton,Oxford Circus Station / John Lewis,Brunel Road,Oxford Circus,"East Acton, Brunel Road",,5.0,5.0,5.0,0.0,5.0,10.188,6.33
@@ -265,7 +265,7 @@ route,route_type,garage_code,garage_name,operator,vehicle,destination_outbound,d
 272,regular,V,Stamford Brook,First,SD,Shepherd's Bush,"Chiswick, Grove Park",Shepherd's Bush Station,Cavendish Road,Shepherd's Bush,"Chiswick, Grove Park, Cavendish Road",,4.0,4.0,4.0,0.0,4.0,9.523,5.917
 273,regular,TL,Catford,Stagecoach London,SD,Petts Wood,Conington Road,Station Square / Petts Wood Station,,Petts Wood,Conington Road,,3.0,3.0,3.0,0.0,2.0,18.431,11.452
 274,regular,HT; KC,Holloway; King's Cross,Metroline,DD,Lancaster Gate,"Islington, Angel",Lancaster Gate Station,Angel Islington / City Road,Lancaster Gate,"Islington, Angel, Angel Islington / City Road",,4.5,5.0,4.5,0.0,5.5,11.119,6.909
-275,regular,T,Leyton,Stagecoach London,DD,Barkingside,"Walthamstow, St. James's Street Station",Barkingside Tesco,St James Street Station,Barkingside,"Walthamstow, St. James's Street Station, St James Street Station",,4.0,4.5,4.5,0.0,2.5,18.592,11.552
+275,regular,T,Leyton,Stagecoach London,DD,Barkingside,"Walthamstow, St. James's Street Station",Barkingside Tesco,St James Street Station,Barkingside,"Walthamstow, St. James's Street Station, St James Street Station",,4.5,4.0,4.5,0.0,2.5,18.592,11.552
 276,regular,HO,Lea Interchange,Stagecoach London,SD,Stoke Newington,Newham Hospital,Stoke Newington Common,Gateway Surgical Centre,Stoke Newington,"Newham Hospital, Gateway Surgical Centre",,5.0,5.0,5.0,0.0,4.0,17.506,10.878
 277,regular,HK,Ash Grove,Stagecoach London,DD,Crossharbour,Dalston Junction,Isle of Dogs Asda,Forest Road,"Crossharbour, Isle of Dogs Asda","Dalston Junction, Forest Road",,5.0,5.5,5.5,0.0,5.0,12.294,7.639
 278,regular,DH,Hayes,Transport UK,DD,Ruislip,Heathrow Central,Ruislip Station,Heathrow Central Bus Station,Ruislip,Heathrow Central,,4.0,4.0,4.0,0.0,3.0,16.798,10.438
