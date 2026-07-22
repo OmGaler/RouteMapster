@@ -198,7 +198,7 @@ Data is derived from TfL Open Data and the TfL Unified API and public garage ref
 
 While every endeavour has been taken to ensure information is correct, feedback, comments and nitpicks are welcome. Please bring them to attention by opening a [GitHub issue](https://github.com/OmGaler/RouteMapster/issues).
 Please also submit any bug reports or feature requests by opening a GitHub issue at the link above.
-For anything else, please write to route-mapster [a] omergaler [dot] com
+For anything else, please write to omer [a] thundermail [dot] com
 
 ## Licence & attribution
 
