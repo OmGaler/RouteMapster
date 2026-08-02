@@ -1,5 +1,5 @@
 {
-  "generated_at_utc": "2026-07-19T07:10:40Z",
+  "generated_at_utc": "2026-08-02T06:52:31Z",
   "route_count": 676,
   "routes": {
     "1": {
@@ -2674,8 +2674,8 @@
     },
     "263": {
       "inbound": {
-        "destination": "Highbury Barn",
-        "full": "Highbury Barn",
+        "destination": "Holloway, Nags Head",
+        "full": "Holloway, Nags Head",
         "qualifier": ""
       },
       "outbound": {
@@ -2854,9 +2854,9 @@
     },
     "275": {
       "inbound": {
-        "destination": "Walthamstow, St. James's Street Station",
-        "full": "Walthamstow, St. James's Street Station, St James Street Station",
-        "qualifier": "St James Street Station"
+        "destination": "Walthamstow Central",
+        "full": "Walthamstow Central, Walthamstow Bus Station",
+        "qualifier": "Walthamstow Bus Station"
       },
       "outbound": {
         "destination": "Barkingside",
@@ -5874,9 +5874,9 @@
         "qualifier": ""
       },
       "outbound": {
-        "destination": "Walthamstow Central",
-        "full": "Walthamstow Central",
-        "qualifier": "Walthamstow Central Station"
+        "destination": "Walthamstow, South Grove",
+        "full": "Walthamstow, South Grove",
+        "qualifier": "South Grove"
       },
       "service_types": [
         "Regular"
@@ -8296,7 +8296,7 @@
       "outbound": {
         "destination": "Esher",
         "full": "Esher",
-        "qualifier": "Esher High Street"
+        "qualifier": "Esher High School"
       },
       "service_types": [
         "Regular"
@@ -9899,9 +9899,9 @@
         "qualifier": ""
       },
       "outbound": {
-        "destination": "Walthamstow Central",
-        "full": "Walthamstow Central",
-        "qualifier": "Walthamstow Central Station"
+        "destination": "Walthamstow",
+        "full": "Walthamstow",
+        "qualifier": "Walthamstow Bus Station"
       },
       "service_types": [
         "Regular"
