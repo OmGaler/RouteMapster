@@ -85,7 +85,7 @@ route,route_type,garage_code,garage_name,operator,vehicle,destination_outbound,d
 88,twentyfour,SW,Stockwell,Go-Ahead,DD,Clapham Common,Parliament Hill Fields,Omnibus Clapham,,"Clapham Common, Omnibus Clapham",Parliament Hill Fields,,6.0,5.5,5.5,2.0,5.5,14.37,8.929
 89,regular,BX,Bexleyheath,Go-Ahead,DD,Slade Green,Lewisham Station,Forest Road / Slade Green Station,,Slade Green,Lewisham Station,,4.5,5.0,5.0,0.0,3.0,18.077,11.232
 90,regular,PV,Perivale [East],Metroline,DD,"Feltham, Leisure West",Northolt,,Northolt Station,"Feltham, Leisure West",Northolt,,5.5,5.5,5.5,0.0,4.0,18.486,11.487
-91,regular,NP,Northumberland Park,Go-Ahead,DD,Trafalgar Square,Crouch End,Whitehall / Trafalgar Square,Rosebery Gardens,Trafalgar Square,"Crouch End, Rosebery Gardens",,5.5,5.5,5.5,0.0,6.0,13.096,8.137
+91,regular,NP,Northumberland Park,Go-Ahead,DD,Trafalgar Square,Wood Green,Whitehall / Trafalgar Square,Wood Green Station,Trafalgar Square,Wood Green,,5.5,5.5,5.5,0.0,6.0,13.096,8.137
 92,regular,G,Greenford,Metroline,DD,St Raphael's North,Ealing Hospital,Ikea Brent Park,,"St Raphael's North, Ikea Brent Park",Ealing Hospital,,5.5,5.5,5.5,0.0,5.0,15.652,9.726
 93,twentyfour,A,Sutton,Go-Ahead,DD,Putney Bridge,North Cheam,Putney Bridge Station,Priory Road,Putney Bridge,"North Cheam, Priory Road",,8.5,8.0,8.5,2.5,5.5,14.723,9.148
 94,twentyfour,S,Shepherd's Bush,First,DD,Piccadilly Circus,Acton Green,Charles I I Street,,"Piccadilly Circus, Charles I I Street",Acton Green,,6.5,7.0,7.0,2.5,5.5,10.363,6.439
@@ -116,7 +116,7 @@ route,route_type,garage_code,garage_name,operator,vehicle,destination_outbound,d
 120,regular,AH; SG,Brentford; Lampton,Metroline,DD,Northolt,"Hounslow, Bus Station",Northolt Station,,Northolt,"Hounslow, Bus Station",,6.0,6.5,6.0,0.0,5.5,13.207,8.207
 121,regular,E,Enfield,Arriva,DD,Turnpike Lane Station,Enfield Island Village,,,Turnpike Lane Station,Enfield Island Village,,6.5,5.5,6.0,0.0,6.0,19.111,11.875
 122,regular,PD,Plumstead,Stagecoach London,DD,Crystal Palace,"Plumstead, Bus Garage",Crystal Palace Parade,,Crystal Palace,"Plumstead, Bus Garage",,4.0,5.0,5.0,0.0,4.5,18.311,11.378
-123,twentyfour,NP,Northumberland Park,Go-Ahead,DD,Ilford,Wood Green,Hainault Street,Wood Green Station,"Ilford, Hainault Street",Wood Green,,6.0,6.5,6.0,3.0,5.5,18.506,11.499
+123,twentyfour,NP,Northumberland Park,Go-Ahead,DD,Ilford,Turnpike Lane,Hainault Street,Turnpike Lane Station,"Ilford, Hainault Street",Turnpike Lane Station,,6.0,6.5,6.0,3.0,5.5,18.506,11.499
 124,regular,TL,Catford,Stagecoach London,SD,"Eltham, Southend Crescent","Catford, St Dunstan's College",Southend Crescent / Southend Close,Stanstead Road / St Dunstans College,"Eltham, Southend Crescent, Southend Crescent / Southend Close","Catford, St Dunstan's College, Stanstead Road / St Dunstans College",,7.0,6.5,6.0,0.0,5.0,13.582,8.44
 125,regular,BT,Edgware,First,DD,Colindale Station,Winchmore Hill,,Station Road,Colindale Station,"Winchmore Hill, Station Road",,6.0,6.0,6.0,0.0,4.0,16.919,10.513
 126,regular,SM,Sydenham,Go-Ahead,SD,"Eltham, High Street",Ringers Road,Eltham High Street / Foots Cray Road,,"Eltham, High Street",Ringers Road,,6.0,6.5,6.0,0.0,3.0,10.63,6.605
@@ -224,7 +224,7 @@ route,route_type,garage_code,garage_name,operator,vehicle,destination_outbound,d
 229,regular,DT,Dartford,Arriva,DD,Queen Mary's Hospital,Thamesmead,Queen Mary's Hospital / Chislehurst Road,Thamesmead Town Centre,Queen Mary's Hospital,Thamesmead,,5.0,5.0,5.0,0.0,4.0,21.547,13.389
 230,regular,NP,Northumberland Park,Go-Ahead,DD,Wood Green,Fyfield Road,Wood Green Station,,Wood Green,Fyfield Road,,4.0,4.0,4.0,0.0,4.0,12.703,7.893
 231,regular,PB,Potters Bar,Metroline,DD,Turnpike Lane Station,Enfield Chase,Turnpike Lane Bus Station,Enfield Chase Station,"Turnpike Lane Station, Turnpike Lane Bus Station",Enfield Chase,,4.0,4.0,4.0,0.0,3.0,10.243,6.364
-232,regular,NP,Northumberland Park,Go-Ahead,SD,Turnpike Lane Station,St Raphael's,,Mitchell Way,Turnpike Lane Station,"St Raphael's, Mitchell Way",,5.0,5.0,5.0,0.0,4.0,21.563,13.399
+232,regular,NP,Northumberland Park,Go-Ahead,SD,Wood Green,St Raphael's,Coburg Road,Mitchell Way,"Wood Green, Coburg Road","St Raphael's, Mitchell Way",,5.0,5.0,5.0,0.0,4.0,21.563,13.399
 233,regular,MB,Orpington,Go-Ahead,SD,Swanley,Eltham Station,Beechenlea Lane,Eltham Bus Station,"Swanley, Beechenlea Lane","Eltham Station, Eltham Bus Station",,3.0,2.5,2.5,0.0,2.5,14.681,9.122
 234,regular,HT,Holloway,Metroline,SD,Archway Station,"Barnet, The Spires",,The Spires,Archway Station,"Barnet, The Spires",,5.0,5.0,5.0,0.0,3.0,14.921,9.271
 235,regular,WK,Hounslow Heath,First,SD,North Brentford Quarter,Three Fishes,Great West Quarter,,"North Brentford Quarter, Great West Quarter",Three Fishes,,7.5,7.0,7.5,0.0,5.0,15.84,9.843
@@ -435,73 +435,73 @@ route,route_type,garage_code,garage_name,operator,vehicle,destination_outbound,d
 499,regular,RM,Rainham,Stagecoach London,SD,Stansgate Road Shops,"Gallows Corner, Tesco",,,Stansgate Road Shops,"Gallows Corner, Tesco",,3.0,3.0,3.0,0.0,2.5,17.462,10.85
 533,regular,SW,Stockwell,Go-Ahead,SD,"Castelnau, Lonsdale Road",Hammersmith,Lonsdale Road,Hammersmith Bus Station,"Castelnau, Lonsdale Road",Hammersmith,,4.0,4.0,4.0,0.0,4.0,11.314,7.03
 601,school,MG,Morden Wharf (Greenwich),Go-Ahead,DD,Wilmington Schools,Thamesmead,Wilmington Hall School,Thamesmead Town Centre,"Wilmington Schools, Wilmington Hall School",Thamesmead,,,,,,0.0,18.259,11.346
-602,school,PD,Plumstead,Stagecoach London,DD,Townley Grammar School,Thamesmead,,Thamesmead Town Centre,Townley Grammar School,Thamesmead,,,,,,0.0,,
-603,school,HT,Holloway,Metroline,DD,Swiss Cottage,Muswell Hill,Swiss Cottage Station,,Swiss Cottage,Muswell Hill,,,,,,0.0,,
+602,school,PD,Plumstead,Stagecoach London,DD,Townley Grammar School,Thamesmead,,Thamesmead Town Centre,Townley Grammar School,Thamesmead,,,,,,0.0,14.84,9.221
+603,school,HT,Holloway,Metroline,DD,Swiss Cottage,Muswell Hill,Swiss Cottage Station,,Swiss Cottage,Muswell Hill,,,,,,0.0,9.169,5.697
 606,school,EW,Edgware,Metroline,DD,Totteridge Academy,Queensbury,The Totteridge Academy,Queensbury Station,Totteridge Academy,Queensbury,,,,,,0.0,15.486,9.623
 608,school,RR,River Road,Go-Ahead,DD,Shenfield High School,Gallows Corner,,,Shenfield High School,Gallows Corner,,,,,,0.0,11.664,7.248
-612,school,TH,Thornton Heath,Arriva,DD,The Holt,Selsdon,,Farley Road,The Holt,"Selsdon, Farley Road",,,,,,0.0,,
-613,school,TV,Tolworth,First,DD,Glenthorne School,Tolworth,Glenthorne High School,Tolworth Station,"Glenthorne School, Glenthorne High School",Tolworth,,,,,,0.0,,
-616,school,WN,Wood Green,Arriva,DD,Edmonton Green,Winchmore Hill,Edmonton Green Bus Station,Old Park Ridings,Edmonton Green,"Winchmore Hill, Old Park Ridings",,,,,,0.0,,
+612,school,TH,Thornton Heath,Arriva,DD,The Holt,Selsdon,,Farley Road,The Holt,"Selsdon, Farley Road",,,,,,0.0,10.722,6.662
+613,school,TV,Tolworth,First,DD,Glenthorne School,Tolworth,Glenthorne High School,Tolworth Station,"Glenthorne School, Glenthorne High School",Tolworth,,,,,,0.0,13.03,8.097
+616,school,WN,Wood Green,Arriva,DD,Edmonton Green,Winchmore Hill,Edmonton Green Bus Station,Old Park Ridings,Edmonton Green,"Winchmore Hill, Old Park Ridings",,,,,,0.0,11.142,6.923
 617,school,PB,Potters Bar,Metroline,DD,Turkey Street,Turnpike Lane Station,Turkey Street Station,Turnpike Lane Bus Station,Turkey Street,"Turnpike Lane Station, Turnpike Lane Bus Station",,,,,,0.0,10.692,6.644
 618,school,GW,Southall,Transport UK,DD,Bolder Academy,Easedale House,,,Bolder Academy,Easedale House,,,,,,0.0,7.093,4.407
-621,school,TL,Catford,Stagecoach London,DD,Leigh Stationers' Academy,Lewisham,,Lewisham Station,Leigh Stationers' Academy,Lewisham,,,,,,0.0,,
+621,school,TL,Catford,Stagecoach London,DD,Leigh Stationers' Academy,Lewisham,,Lewisham Station,Leigh Stationers' Academy,Lewisham,,,,,,0.0,8.368,5.199
 624,school,MG,Morden Wharf (Greenwich),Go-Ahead,DD,Welling Corner,Grove Park,Welling Library,Grove Park Station,"Welling Corner, Welling Library",Grove Park,,,,,,0.0,9.131,5.674
 625,school,MG,Morden Wharf (Greenwich),Go-Ahead,DD,"Chislehurst, War Memorial",Plumstead Common,Bromley Lane / Chislehurst War Memorial,Warwick Terrace / Plumstead Common Road,"Chislehurst, War Memorial",Plumstead Common,,,,,,0.0,11.474,7.13
 626,school,PB,Potters Bar,Metroline,DD,Dame Alice Owen's School,Finchley Central,,Finchley Central Station,Dame Alice Owen's School,Finchley Central,,,,,,0.0,18.022,11.199
 627,school,N,Norwood,Arriva,DD,Woodcote Green,Worcester Park,,Worcester Park Station,Woodcote Green,Worcester Park,,,,,,0.0,10.322,6.414
-628,school,UB,Hatfield,Uno,DD,Southgate,,Southgate Station,,Southgate,,,,,,,0.0,,
+628,school,UB,Hatfield,Uno,DD,Southgate,,Southgate Station,,Southgate,,,,,,,0.0,18.537,11.519
 629,school,PB,Potters Bar,Metroline,DD,Turkey Street,Wood Green,Turkey Street Station,Wood Green Bus Garage,Turkey Street,Wood Green,,,,,,0.0,11.786,7.324
 631,school,W,Cricklewood,Metroline,SD,Henrietta Barnett School,Golders Green,,Golders Green Station,Henrietta Barnett School,Golders Green,,,,,,0.0,1.857,1.154
 632,school,W,Cricklewood,Metroline,DD,Kilburn Park,"Grahame Park, Corner Mead",Kilburn Park Station,Saracens High School / South Mead,Kilburn Park,"Grahame Park, Corner Mead, Saracens High School / South Mead",,,,,,0.0,10.472,6.507
 633,school,C,Croydon,Go-Ahead,DD,Pollards Hill,Coulsdon South,South Lodge Avenue / Yorkshire Road,Coulsdon South Station,"Pollards Hill, South Lodge Avenue / Yorkshire Road",Coulsdon South,,,,,,0.0,19.699,12.24
 634,school,PB,Potters Bar,Metroline,DD,Galley Lane,Muswell Hill,,,Galley Lane,Muswell Hill,,,,,,0.0,9.648,5.995
 635,school,AH,Brentford,Metroline,DD,"Hounslow, Bus Station",St. Paul's School,,,"Hounslow, Bus Station",St. Paul's School,,,,,,0.0,10.861,6.749
-638,school,TB,Bromley,Stagecoach London,DD,Kemnal Technology College,Coney Hall,,Glebe Way,Kemnal Technology College,"Coney Hall, Glebe Way",,,,,,0.0,,
+638,school,TB,Bromley,Stagecoach London,DD,Kemnal Technology College,Coney Hall,,Glebe Way,Kemnal Technology College,"Coney Hall, Glebe Way",,,,,,0.0,17.036,10.585
 639,school,BC,Beddington,Transport UK,DD,St John Bosco College,Minstead Gardens,,,St John Bosco College,Minstead Gardens,,,,,,0.0,12.459,7.742
 640,school,G,Greenford,Metroline,DD,Bentley Wood School,South Harrow,Bentley Wood High School,South Harrow Bus Station,"Bentley Wood School, Bentley Wood High School",South Harrow,,,,,,0.0,8.434,5.241
 642,school,EW,Edgware,Metroline,DD,London Academy,West Hendon Broadway,,West Hendon Broadway / Herbert Road,London Academy,West Hendon Broadway,,,,,,0.0,10.146,6.305
-643,school,UB,Hatfield,Uno,DD,Christ's College,Brent Cross,,Brent Cross Shopping Centre,Christ's College,Brent Cross,,,,,,0.0,,
-645,school,TC,Croydon,Arriva,DD,Purley Way,Purley,Purley Way / Waddon Road,Purley Cross,Purley Way,Purley,,,,,,0.0,,
+643,school,UB,Hatfield,Uno,DD,Christ's College,Brent Cross,,Brent Cross Shopping Centre,Christ's College,Brent Cross,,,,,,0.0,5.778,3.59
+645,school,TC,Croydon,Arriva,DD,Purley Way,Purley,Purley Way / Waddon Road,Purley Cross,Purley Way,Purley,,,,,,0.0,7.526,4.677
 646,school,RR,River Road,Go-Ahead,SD,Cranham,Noak Hill,Moor Lane,Wincanton Road,"Cranham, Moor Lane","Noak Hill, Wincanton Road",,,,,,0.0,14.009,8.705
-649,school,WH,West Ham,Stagecoach London,DD,Campion School,Cedar Road,The Campion School,,Campion School,Cedar Road,,,,,,0.0,,
-650,school,WH,West Ham,Stagecoach London,DD,Emerson Park School,Cedar Road,Emerson Park Academy,,"Emerson Park School, Emerson Park Academy",Cedar Road,,,,,,0.0,,
-651,school,WH,West Ham,Stagecoach London,DD,Chase Cross,Romford Station,,,Chase Cross,Romford Station,,,,,,0.0,,
+649,school,WH,West Ham,Stagecoach London,DD,Campion School,Cedar Road,The Campion School,,Campion School,Cedar Road,,,,,,0.0,8.872,5.513
+650,school,WH,West Ham,Stagecoach London,DD,Emerson Park School,Cedar Road,Emerson Park Academy,,"Emerson Park School, Emerson Park Academy",Cedar Road,,,,,,0.0,7.809,4.852
+651,school,WH,West Ham,Stagecoach London,DD,Chase Cross,Romford Station,,,Chase Cross,Romford Station,,,,,,0.0,9.538,5.927
 652,school,RR,River Road,Go-Ahead,DD,Upminster,"Rainham, Abbey Wood Lane",Upminster Station,Abbey Wood Lane,Upminster,"Rainham, Abbey Wood Lane",,,,,,0.0,12.205,7.584
-653,school,UB,Hatfield,Uno,DD,"Kingsbury, The Mall",Muswell Hill,Jewish Free School,,"Kingsbury, The Mall, Jewish Free School",Muswell Hill,,,,,,0.0,,
+653,school,UB,Hatfield,Uno,DD,"Kingsbury, The Mall",Muswell Hill,Jewish Free School,,"Kingsbury, The Mall, Jewish Free School",Muswell Hill,,,,,,0.0,12.55,7.798
 655,school,BC,Beddington,Transport UK,DD,Raynes Park High School,Mitcham,,Love Lane,Raynes Park High School,"Mitcham, Love Lane",,,,,,0.0,7.09,4.405
 656,school,RR,River Road,Go-Ahead,DD,"Gallows Corner, Tesco",Emerson Park School,,Emerson Park Academy,"Gallows Corner, Tesco","Emerson Park School, Emerson Park Academy",,,,,,0.0,8.976,5.578
-657,school,T,Leyton,Stagecoach London,DD,Bancroft's School,"Crooked Billet, Sainsbury's",,Salisbury Hall Sainsbury's,Bancroft's School,"Crooked Billet, Sainsbury's, Salisbury Hall Sainsbury's",,,,,,0.0,,
+657,school,T,Leyton,Stagecoach London,DD,Bancroft's School,"Crooked Billet, Sainsbury's",,Salisbury Hall Sainsbury's,Bancroft's School,"Crooked Billet, Sainsbury's, Salisbury Hall Sainsbury's",,,,,,0.0,6.829,4.243
 658,school,MG,Morden Wharf (Greenwich),Go-Ahead,DD,Woolwich,Reinickendorf Avenue,Beresford Sq / Woolwich Arsenal Stn,Bexley Road / Reinickendorf Avenue,Woolwich,Reinickendorf Avenue,,,,,,0.0,9.496,5.901
-660,school,TL,Catford,Stagecoach London,DD,Leigh Stationers' Academy,"Bellingham, Catford Bus Garage",,Catford Garage,Leigh Stationers' Academy,"Bellingham, Catford Bus Garage, Catford Garage",,,,,,0.0,,
-661,school,TL,Catford,Stagecoach London,DD,"Chislehurst, War Memorial",Petts Wood,Centre Common Road / War Memorial,Station Square / Petts Wood Station,"Chislehurst, War Memorial, Centre Common Road / War Memorial",Petts Wood,,,,,,0.0,,
-662,school,TV,Tolworth,First,DD,Holy Cross School,Surbiton,Sandal Road / Holy Cross School,Claremont Road / Surbiton Station,Holy Cross School,Surbiton,,,,,,0.0,,
-663,school,TH,Thornton Heath,Arriva,DD,Regina Coeli School,Thornton Heath Station,,,Regina Coeli School,Thornton Heath Station,,,,,,0.0,,
+660,school,TL,Catford,Stagecoach London,DD,Leigh Stationers' Academy,"Bellingham, Catford Bus Garage",,Catford Garage,Leigh Stationers' Academy,"Bellingham, Catford Bus Garage, Catford Garage",,,,,,0.0,9.3,5.779
+661,school,TL,Catford,Stagecoach London,DD,"Chislehurst, War Memorial",Petts Wood,Centre Common Road / War Memorial,Station Square / Petts Wood Station,"Chislehurst, War Memorial, Centre Common Road / War Memorial",Petts Wood,,,,,,0.0,7.277,4.522
+662,school,TV,Tolworth,First,DD,Holy Cross School,Surbiton,Sandal Road / Holy Cross School,Claremont Road / Surbiton Station,Holy Cross School,Surbiton,,,,,,0.0,6.662,4.139
+663,school,TH,Thornton Heath,Arriva,DD,Regina Coeli School,Thornton Heath Station,,,Regina Coeli School,Thornton Heath Station,,,,,,0.0,6.61,4.107
 664,school,MB,Orpington,Go-Ahead,DD,"New Addington, Homestead Way",Charles Darwin School,Homestead Way / Milne Park,,"New Addington, Homestead Way, Homestead Way / Milne Park",Charles Darwin School,,,,,,0.0,19.916,12.375
-665,school,TV,Tolworth,First,SD,Holy Cross School,Surbiton,Sandal Road / Holy Cross School,Howard Road,Holy Cross School,"Surbiton, Howard Road",,,,,,0.0,,
+665,school,TV,Tolworth,First,SD,Holy Cross School,Surbiton,Sandal Road / Holy Cross School,Howard Road,Holy Cross School,"Surbiton, Howard Road",,,,,,0.0,7.89,4.903
 667,school,BK; WH,Barking; West Ham,Stagecoach London,DD,Club House,Ilford,,Hainault Street,Club House,"Ilford, Hainault Street",,,,,,0.0,9.428,5.858
 669,school,PD,Plumstead,Stagecoach London,DD,Cleeve Park School,Thamesmead,Bexley Lane / Cleeve Park School,Thamesmead Town Centre,Cleeve Park School,Thamesmead,,,,,,0.0,18.51,11.502
 670,school,BC,Beddington,Transport UK,DD,St John Bosco College,Minstead Gardens,,,St John Bosco College,Minstead Gardens,,,,,,0.0,10.03,6.232
 671,school,TF,Fulwell (Twickenham),Transport UK,DD,Chessington South,Tiffin Girls School,Chessington South Station,,Chessington South,Tiffin Girls School,,,,,,0.0,10.787,6.703
-672,school,PD,Plumstead,Stagecoach London,DD,Woolwich,,Beresford Sq / Woolwich Arsenal Stn,,Woolwich,,,,,,,0.0,,
-674,school,RM,Rainham,Stagecoach London,DD,Romford Station,"Harold Hill, Dagnam Park Square",,Dagnam Park Square,Romford Station,"Harold Hill, Dagnam Park Square",,,,,,0.0,,
-675,school,AD,Palmers Green,Arriva,DD,Broadmead Road,St James's Street,,St James Street Station,Broadmead Road,"St James's Street, St James Street Station",,,,,,0.0,,
+672,school,PD,Plumstead,Stagecoach London,DD,Woolwich,,Beresford Sq / Woolwich Arsenal Stn,,Woolwich,,,,,,,0.0,4.575,2.843
+674,school,RM,Rainham,Stagecoach London,DD,Romford Station,"Harold Hill, Dagnam Park Square",,Dagnam Park Square,Romford Station,"Harold Hill, Dagnam Park Square",,,,,,0.0,8.757,5.441
+675,school,AD,Palmers Green,Arriva,DD,Broadmead Road,St James's Street,,St James Street Station,Broadmead Road,"St James's Street, St James Street Station",,,,,,0.0,12.863,7.993
 677,school,NP,Northumberland Park,Go-Ahead,DD,Debden,Ilford,The Broadway,Hainault Street,"Debden, The Broadway","Ilford, Hainault Street",,,,,,0.0,20.526,12.754
-678,unknown,,,,DD,Beckton Station,Stratford,Beckton Bus Station,Stratford Bus Station,"Beckton Station, Beckton Bus Station",Stratford,,,,,,0.0,,
+678,unknown,,,,DD,Beckton Station,Stratford,Beckton Bus Station,Stratford Bus Station,"Beckton Station, Beckton Bus Station",Stratford,,,,,,0.0,9.926,6.168
 679,school,RR,River Road,Go-Ahead,DD,Goodmayes,Woodford Wells,Goodmayes Lane,St Thomas of Canterbury Church,Goodmayes,"Woodford Wells, St Thomas of Canterbury Church",,,,,,0.0,13.091,8.134
-681,school,FW,Fulwell,First,DD,Teddington School,"Hounslow, Bus Station",Broom Road / Teddington School,,Teddington School,"Hounslow, Bus Station",,,,,,0.0,,
-683,school,UB,Hatfield,Uno,DD,"Kingsbury, The Mall",Friern Barnet,Jewish Free School,Colney Hatch Lane,"Kingsbury, The Mall, Jewish Free School","Friern Barnet, Colney Hatch Lane",,,,,,0.0,,
-684,school,TB,Bromley,Stagecoach London,DD,Charles Darwin School,Orpington Station,,,Charles Darwin School,Orpington Station,,,,,,0.0,,
+681,school,FW,Fulwell,First,DD,Teddington School,"Hounslow, Bus Station",Broom Road / Teddington School,,Teddington School,"Hounslow, Bus Station",,,,,,0.0,11.464,7.124
+683,school,UB,Hatfield,Uno,DD,"Kingsbury, The Mall",Friern Barnet,Jewish Free School,Colney Hatch Lane,"Kingsbury, The Mall, Jewish Free School","Friern Barnet, Colney Hatch Lane",,,,,,0.0,11.849,7.363
+684,school,TB,Bromley,Stagecoach London,DD,Charles Darwin School,Orpington Station,,,Charles Darwin School,Orpington Station,,,,,,0.0,15.095,9.38
 685,school,TC,Croydon,Arriva,DD,Farley Road,,,,Farley Road,,,,,,,0.0,3.545,2.203
 686,school,RR,River Road,Go-Ahead,DD,"Harold Hill, Dagnam Park Square",St Edward's School,Stratton Road,,"Harold Hill, Dagnam Park Square, Stratton Road",St Edward's School,,,,,,0.0,6.365,3.955
-687,school,WH,West Ham,Stagecoach London,DD,,,,,,,,,,,,0.0,,
-688,school,UB,Hatfield,Uno,DD,"Kingsbury, The Mall",Southgate,Jewish Free School,Southgate Station,"Kingsbury, The Mall, Jewish Free School",Southgate,,,,,,0.0,,
+687,school,WH,West Ham,Stagecoach London,DD,,,,,,,,,,,,0.0,7.624,4.737
+688,school,UB,Hatfield,Uno,DD,"Kingsbury, The Mall",Southgate,Jewish Free School,Southgate Station,"Kingsbury, The Mall, Jewish Free School",Southgate,,,,,,0.0,19.643,12.205
 689,school,TH,Thornton Heath,Arriva,DD,Glade Gardens,West Croydon,,West Croydon Bus Station,Glade Gardens,West Croydon,,,,,,0.0,6.87,4.269
 690,school,SW,Stockwell,Go-Ahead,DD,Burntwood School,West Norwood,,Norwood Bus Garage,Burntwood School,"West Norwood, Norwood Bus Garage",,,,,,0.0,11.58,7.196
-695,school,AV,Hounslow,First,DD,Douay Martyrs School,West Drayton,Swakeleys Drive,Cherry Lane School,"Douay Martyrs School, Swakeleys Drive","West Drayton, Cherry Lane School",,,,,,0.0,,
-696,school,AV,Hounslow,First,DD,Highgrove Pool & Fitness Centre,Conway Drive,,,Highgrove Pool & Fitness Centre,Conway Drive,,,,,,0.0,,
+695,school,AV,Hounslow,First,DD,Douay Martyrs School,West Drayton,Swakeleys Drive,Cherry Lane School,"Douay Martyrs School, Swakeleys Drive","West Drayton, Cherry Lane School",,,,,,0.0,9.36,5.816
+696,school,AV,Hounslow,First,DD,Highgrove Pool & Fitness Centre,Conway Drive,,,Highgrove Pool & Fitness Centre,Conway Drive,,,,,,0.0,20.155,12.524
 697,school,UX,Uxbridge Industrial Estate,Metroline,DD,Douay Martyrs School,"Hayes End, Lansbury Drive",Swakeleys Drive,Balmoral Drive,"Douay Martyrs School, Swakeleys Drive","Hayes End, Lansbury Drive, Balmoral Drive",,,,,,0.0,11.052,6.867
-698,school,AV,Hounslow,First,DD,Swakeleys Drive,"Hayes, Bourne Avenue",,Conway Drive,Swakeleys Drive,"Hayes, Bourne Avenue, Conway Drive",,,,,,0.0,,
-699,school,UB,Hatfield,Uno,DD,Dame Alice Owen's School,Winchmore Hill,,Green Dragon Lane,Dame Alice Owen's School,"Winchmore Hill, Green Dragon Lane",,,,,,0.0,,
+698,school,AV,Hounslow,First,DD,Swakeleys Drive,"Hayes, Bourne Avenue",,Conway Drive,Swakeleys Drive,"Hayes, Bourne Avenue, Conway Drive",,,,,,0.0,11.342,7.048
+699,school,UB,Hatfield,Uno,DD,Dame Alice Owen's School,Winchmore Hill,,Green Dragon Lane,Dame Alice Owen's School,"Winchmore Hill, Green Dragon Lane",,,,,,0.0,14.557,9.045
 969,school,GW,Southall,Transport UK,SD,Roehampton Vale,"Whitton, Lincoln Avenue",Roehampton Vale / Asda,Selkirk Road,Roehampton Vale,"Whitton, Lincoln Avenue, Selkirk Road",,,,,,0.0,18.619,11.569
 A10,regular,UX,Uxbridge Industrial Estate,Metroline,SD,Heathrow Central,Uxbridge,Heathrow Central Bus Station,Belmont Road,Heathrow Central,"Uxbridge, Belmont Road",,3.0,3.0,3.0,0.0,2.0,12.712,7.899
 B11,regular,BX,Bexleyheath,Go-Ahead,SD,"South Thamesmead, Yarnton Way","Bexleyheath, Bus Garage",St Andrew's Parish Church,,"South Thamesmead, Yarnton Way, St Andrew's Parish Church","Bexleyheath, Bus Garage",,4.0,4.0,4.0,0.0,2.0,11.749,7.3

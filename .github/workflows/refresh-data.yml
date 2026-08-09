@@ -114,6 +114,32 @@ jobs:
           git config user.name "routemapster-bot"
           git config user.email "routemapster-bot@users.noreply.github.com"
 
+          # TfL's geometry feed can temporarily omit live routes. Never apply a
+          # non-UL route removal automatically: put the complete refresh in a
+          # PR so the removal list can be checked first. UL routes are managed
+          # separately and can be removed as part of the normal refresh.
+          removed_route_files=$(git diff --name-only --diff-filter=D HEAD -- ':(glob)data/processed/routes/*.geojson' | grep -Ev '/UL[^/]*\.geojson$' || true)
+          if [ -n "$removed_route_files" ]; then
+            python scripts/changes.py --details | tee data/processed/latest_change_log.md >> "$GITHUB_STEP_SUMMARY"
+
+            removed_routes=$(printf "%s\n" "$removed_route_files" | sed -E 's#data/processed/routes/##; s#\.geojson$##' | paste -sd ',' -)
+            branch="data/route-removal-review-${GITHUB_RUN_ID}"
+            git switch -c "$branch"
+
+            git add data/processed
+            git add -f data/raw/stops/postcode_cache.json
+            git commit -m "Review route removals: $removed_routes"
+            git push --set-upstream origin "$branch"
+
+            pr_url=$(gh pr create \
+              --title "Review route removals" \
+              --body-file data/processed/latest_change_log.md \
+              --base "${GITHUB_REF_NAME}" \
+              --head "$branch")
+            gh pr edit "$pr_url" --add-reviewer "$DESTINATION_REVIEWER"
+            exit 0
+          fi
+
           has_destination_changes=0
           if ! git diff --quiet HEAD -- data/processed/route_destinations.json; then
             has_destination_changes=1

@@ -379,9 +379,9 @@
     },
     "123": {
       "inbound": {
-        "destination": "Wood Green",
-        "full": "Wood Green",
-        "qualifier": "Wood Green Station"
+        "destination": "Turnpike Lane",
+        "full": "Turnpike Lane Station",
+        "qualifier": "Turnpike Lane Station"
       },
       "outbound": {
         "destination": "Ilford",
@@ -2184,9 +2184,9 @@
         "qualifier": "Mitchell Way"
       },
       "outbound": {
-        "destination": "Turnpike Lane Station",
-        "full": "Turnpike Lane Station",
-        "qualifier": ""
+        "destination": "Wood Green",
+        "full": "Wood Green, Coburg Road",
+        "qualifier": "Coburg Road"
       },
       "service_types": [
         "Regular"
@@ -7384,9 +7384,9 @@
     },
     "91": {
       "inbound": {
-        "destination": "Crouch End",
-        "full": "Crouch End, Rosebery Gardens",
-        "qualifier": "Rosebery Gardens"
+        "destination": "Wood Green",
+        "full": "Wood Green",
+        "qualifier": "Wood Green Station"
       },
       "outbound": {
         "destination": "Trafalgar Square",
