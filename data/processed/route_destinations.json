@@ -1,6 +1,6 @@
 {
-  "generated_at_utc": "2026-08-16T04:49:44Z",
-  "route_count": 676,
+  "generated_at_utc": "2026-08-23T05:01:35Z",
+  "route_count": 677,
   "routes": {
     "1": {
       "inbound": {
@@ -5892,6 +5892,21 @@
         "destination": "Smithfield, St Bartholomew's Hospital",
         "full": "Smithfield, St Bartholomew's Hospital",
         "qualifier": "St Bartholomew's Hospital"
+      },
+      "service_types": [
+        "Regular"
+      ]
+    },
+    "592": {
+      "inbound": {
+        "destination": "Sidcup Station",
+        "full": "Sidcup Station",
+        "qualifier": ""
+      },
+      "outbound": {
+        "destination": "Mount Mascal Farm",
+        "full": "Mount Mascal Farm",
+        "qualifier": ""
       },
       "service_types": [
         "Regular"
