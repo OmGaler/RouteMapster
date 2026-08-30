@@ -1,42 +1,49 @@
 ### Data update
-- Routes (+34 -5 ~11) | Stops (+0 -3) | Freq (~27) | Dest (~1)
-
-### Route geometry changes
-- Added routes: 148X, 18X, 295N, 36X, 533, 592, 664, UL25, UL31, UL65, UL66, UL76, UL78, Y13, Y13N, Y18, Y18N, Y218, Y228, Y23, Y23N, Y23X, Y28, Y295, Y31, Y316, Y328, Y36S, Y52C, Y52K, Y52N, Y70, Y7N, Y7X
-- Removed routes: DL11, UL13, UL19, UL19A, UL29
-- Updated route geometries: 100, 160, 205, 259, 279, 357, 382, 492, UL58A, UL63, UL9
+- Stops (+7 -1) | Freq (~133) | Alloc: 119 C -> BC, 157 AL -> C, 395 SO -> WK, 450 C -> SM, 664 MB -> BC, 671 TF -> FW, 690 SW -> BC, 592 allocated to DT
 
 ### Stop changes
-- Removed stops: 1590004501, 1590004701, 1590004801
+- Added stops: 490002507LR, 490002507RL, 490002508LF, 4900043400SW, 4900043401CH, 4900043402KH, 4900043403KH
+- Removed stops: 40004410088B
 
 ### Frequency changes
-- 119 am peak removed (was 5.0 bph)
-- 119 pm peak removed (was 4.5 bph)
-- 119 offpeak removed (was 5.0 bph)
-- 119 overnight removed (was 2.0 bph)
-- 119 weekend removed (was 4.5 bph)
-- 145 am peak increased from 4.5 to 5.0 bph
-- 145 pm peak increased from 4.5 to 5.0 bph
-- 145 offpeak increased from 4.5 to 5.0 bph
-- 145 weekend increased from 4.0 to 4.5 bph
-- 344 am peak increased from 6.0 to 6.5 bph
-- 344 pm peak increased from 6.5 to 7.0 bph
-- 344 offpeak increased from 6.5 to 7.0 bph
-- 424 am peak increased from 1.5 to 2.0 bph
-- 424 weekend increased from 1.5 to 2.0 bph
-- 592 am peak added at 2.0 bph
-- 592 pm peak added at 2.0 bph
-- 592 offpeak added at 2.0 bph
-- 592 overnight added at 0.0 bph
-- 592 weekend added at 2.0 bph
-- 6 am peak increased from 6.5 to 7.0 bph
-- 6 overnight decreased from 2.5 to 2.0 bph
-- N119 am peak removed (was 0.0 bph)
-- N119 pm peak removed (was 0.0 bph)
-- N119 offpeak removed (was 0.0 bph)
-- N119 overnight removed (was 2.5 bph)
-- N119 weekend removed (was 4.5 bph)
-- N344 weekend increased from 6.5 to 7.0 bph
+- 103 am peak decreased from 6.5 to 5.5 bph
+- 103 pm peak decreased from 6.0 to 5.5 bph
+- 103 offpeak decreased from 6.0 to 5.5 bph
+- 119 am peak added at 5.0 bph
+- 119 pm peak added at 5.0 bph
+- 119 offpeak added at 5.0 bph
+- 119 overnight added at 2.0 bph
+- 119 weekend added at 4.0 bph
+- 148 am peak increased from 4.5 to 5.0 bph
+- 155 am peak decreased from 7.5 to 7.0 bph
+- 173 am peak increased from 5.0 to 5.5 bph
+- 173 pm peak increased from 4.5 to 5.0 bph
+- 173 offpeak increased from 5.0 to 5.5 bph
+- 173 weekend decreased from 4.5 to 4.0 bph
+- 174 am peak increased from 8.5 to 9.0 bph
+- 174 pm peak increased from 8.0 to 8.5 bph
+- 174 offpeak increased from 7.5 to 8.5 bph
+- 18 am peak removed (was 11.0 bph)
+- 18 pm peak removed (was 11.0 bph)
+- 18 offpeak removed (was 12.0 bph)
+- 18 overnight removed (was 0.0 bph)
+- 18 weekend removed (was 8.5 bph)
+- 197 am peak decreased from 5.0 to 4.0 bph
+- 197 pm peak decreased from 5.0 to 4.0 bph
+- 197 offpeak decreased from 5.0 to 4.0 bph
+- 205 am peak decreased from 6.5 to 5.0 bph
+- 205 pm peak decreased from 6.0 to 5.0 bph
+- 205 offpeak decreased from 6.0 to 5.0 bph
+- 209 am peak increased from 2.0 to 3.5 bph
+- 209 pm peak increased from 2.0 to 3.5 bph
+- ...and 103 more
 
-### Destination changes
-- 592 destinations added
+### Allocation changes
+- 119 C -> BC
+- 157 AL -> C
+- 395 SO -> WK
+- 450 C -> SM
+- 664 MB -> BC
+- 671 TF -> FW
+- 690 SW -> BC
+- 592 allocated to DT
