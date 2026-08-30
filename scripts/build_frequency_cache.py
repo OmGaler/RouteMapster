@@ -1062,6 +1062,31 @@ def simplify_lines(
     return simplified
 
 
+def retain_cached_frequencies_for_active_routes(
+    frequencies: Dict[str, Dict[str, float]],
+    cached_frequencies: Dict[str, Any],
+    active_routes: Set[str],
+) -> List[str]:
+    """Restore cached entries when an active route has no fresh timetable result.
+
+    Processed route geometry is the deletion source of truth. A missing
+    timetable response must not remove an active route's last known
+    frequencies from the published cache.
+    """
+    retained: List[str] = []
+    for raw_route_id, cached_entry in cached_frequencies.items():
+        route_id = normalize_route_id(raw_route_id)
+        if (
+            route_id
+            and route_id in active_routes
+            and route_id not in frequencies
+            and isinstance(cached_entry, dict)
+        ):
+            frequencies[route_id] = cached_entry
+            retained.append(route_id)
+    return sorted(retained)
+
+
 def cache_key(line_id: str, stop_id: str) -> str:
     return f"{normalize_route_id(line_id)}::{stop_id}"
 
@@ -1225,6 +1250,14 @@ def main() -> int:
 
     cache = load_cache(cache_path)
     entries = cache.setdefault("entries", {})
+    existing_frequencies: Dict[str, Any] = {}
+    if out_path.exists():
+        try:
+            loaded_frequencies = json.loads(out_path.read_text(encoding="utf-8"))
+            if isinstance(loaded_frequencies, dict):
+                existing_frequencies = loaded_frequencies
+        except (OSError, json.JSONDecodeError) as exc:
+            log(f"Could not read existing frequency cache: {exc}", args.verbose, always=True)
     if args.cache_only and not args.lines:
         line_ids = sorted({normalize_route_id(key.split("::")[0]) for key in entries.keys() if "::" in key})
         line_ids = [line_id for line_id in line_ids if not should_skip_frequency(line_id)]
@@ -1386,6 +1419,11 @@ def main() -> int:
 
     route_sets = load_route_sets(garages_path)
     simplified = simplify_lines(lines_out, bands, days, route_sets=route_sets)
+    retained = retain_cached_frequencies_for_active_routes(
+        simplified,
+        existing_frequencies,
+        active_routes,
+    )
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(
@@ -1394,7 +1432,14 @@ def main() -> int:
     )
     save_cache(cache_path, cache)
 
-    log(f"Wrote {len(lines_out)} lines to {out_path}", args.verbose, always=True)
+    log(f"Wrote {len(simplified)} lines to {out_path}", args.verbose, always=True)
+    if retained:
+        log(
+            f"Retained cached frequencies for {len(retained)} active routes without fresh timetable data: "
+            + ", ".join(retained),
+            args.verbose,
+            always=True,
+        )
     if errors:
         log(f"{len(errors)} lines failed; see console output for details.", args.verbose, always=True)
     return 0
