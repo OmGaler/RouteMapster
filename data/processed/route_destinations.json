@@ -1,6 +1,6 @@
 {
-  "generated_at_utc": "2026-07-19T07:10:40Z",
-  "route_count": 676,
+  "generated_at_utc": "2026-08-23T05:01:35Z",
+  "route_count": 677,
   "routes": {
     "1": {
       "inbound": {
@@ -379,12 +379,12 @@
     },
     "123": {
       "inbound": {
-        "destination": "Turnpike Lane",
+        "destination": "Turnpike Lane Station",
         "full": "Turnpike Lane Station",
-        "qualifier": "Turnpike Lane Station"
+        "qualifier": ""
       },
       "outbound": {
-        "destination": "Ilford",
+        "destination": "Ilford, Hainault Street",
         "full": "Ilford, Hainault Street",
         "qualifier": "Hainault Street"
       },
@@ -1789,13 +1789,13 @@
     },
     "209": {
       "inbound": {
-        "destination": "Mortlake",
-        "full": "Mortlake",
+        "destination": "Hammersmith",
+        "full": "Hammersmith, Mortlake Bus Station",
         "qualifier": "Mortlake Bus Station"
       },
       "outbound": {
-        "destination": "Castlenau, Lonsdale Road",
-        "full": "Castlenau, Lonsdale Road",
+        "destination": "Barnes Pond",
+        "full": "Barnes Pond, Lonsdale Road",
         "qualifier": "Lonsdale Road"
       },
       "service_types": [
@@ -2184,8 +2184,8 @@
         "qualifier": "Mitchell Way"
       },
       "outbound": {
-        "destination": "Wood Green",
-        "full": "Wood Green, Coburg Road",
+        "destination": "Wood Green, Haringey Heartlands",
+        "full": "Wood Green, Haringey Heartlands, Coburg Road",
         "qualifier": "Coburg Road"
       },
       "service_types": [
@@ -3850,8 +3850,8 @@
       },
       "outbound": {
         "destination": "Walthamstow Central",
-        "full": "Walthamstow Central",
-        "qualifier": "Walthamstow Central Station"
+        "full": "Walthamstow Central, Walthamstow Bus Station",
+        "qualifier": "Walthamstow Bus Station"
       },
       "service_types": [
         "Regular"
@@ -4361,7 +4361,7 @@
       "outbound": {
         "destination": "Putney Bridge",
         "full": "Putney Bridge",
-        "qualifier": "Putney Bridge Stn / Gonville Street"
+        "qualifier": "Putney Bridge Station"
       },
       "service_types": [
         "Regular"
@@ -5539,9 +5539,9 @@
     },
     "485": {
       "inbound": {
-        "destination": "Castelnau, Lonsdale Road",
-        "full": "Castelnau, Lonsdale Road",
-        "qualifier": "Lonsdale Road"
+        "destination": "Mortlake",
+        "full": "Mortlake",
+        "qualifier": "Mortlake Bus Station"
       },
       "outbound": {
         "destination": "Wandsworth",
@@ -5892,6 +5892,21 @@
         "destination": "Smithfield, St Bartholomew's Hospital",
         "full": "Smithfield, St Bartholomew's Hospital",
         "qualifier": "St Bartholomew's Hospital"
+      },
+      "service_types": [
+        "Regular"
+      ]
+    },
+    "592": {
+      "inbound": {
+        "destination": "Sidcup Station",
+        "full": "Sidcup Station",
+        "qualifier": ""
+      },
+      "outbound": {
+        "destination": "Mount Mascal Farm",
+        "full": "Mount Mascal Farm",
+        "qualifier": ""
       },
       "service_types": [
         "Regular"
@@ -8296,7 +8311,7 @@
       "outbound": {
         "destination": "Esher",
         "full": "Esher",
-        "qualifier": "Esher High Street"
+        "qualifier": "Esher High School"
       },
       "service_types": [
         "Regular"
@@ -9615,8 +9630,8 @@
       },
       "outbound": {
         "destination": "Walthamstow Central",
-        "full": "Walthamstow Central",
-        "qualifier": "Walthamstow Central Station"
+        "full": "Walthamstow Central, Walthamstow Bus Station",
+        "qualifier": "Walthamstow Bus Station"
       },
       "service_types": [
         "Regular"
