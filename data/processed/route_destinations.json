@@ -1,6 +1,6 @@
 {
-  "generated_at_utc": "2026-08-23T05:01:35Z",
-  "route_count": 677,
+  "generated_at_utc": "2026-09-06T08:49:47Z",
+  "route_count": 678,
   "routes": {
     "1": {
       "inbound": {
@@ -1224,9 +1224,9 @@
         "qualifier": ""
       },
       "outbound": {
-        "destination": "Oval Road South",
-        "full": "Oval Road South",
-        "qualifier": ""
+        "destination": "Princess Parade",
+        "full": "Princess Parade",
+        "qualifier": "Ballards Road / Princess Parade"
       },
       "service_types": [
         "Regular"
@@ -3850,8 +3850,8 @@
       },
       "outbound": {
         "destination": "Walthamstow Central",
-        "full": "Walthamstow Central, Walthamstow Bus Station",
-        "qualifier": "Walthamstow Bus Station"
+        "full": "Walthamstow Central",
+        "qualifier": "Walthamstow Central Station"
       },
       "service_types": [
         "Regular"
@@ -9175,8 +9175,8 @@
     "N8": {
       "inbound": {
         "destination": "Hainault, The Lowe",
-        "full": "Hainault, The Lowe",
-        "qualifier": "The Lowe"
+        "full": "Hainault, The Lowe, Stratford Bus Station",
+        "qualifier": "Stratford Bus Station"
       },
       "outbound": {
         "destination": "Oxford Circus",
@@ -9662,6 +9662,21 @@
         "destination": "Gayton Road / Abbey Wood Station",
         "full": "Gayton Road / Abbey Wood Station",
         "qualifier": ""
+      },
+      "service_types": [
+        "Regular"
+      ]
+    },
+    "SL12": {
+      "inbound": {
+        "destination": "Gants Hill",
+        "full": "Gants Hill",
+        "qualifier": "Gants Hill Station / Cranbrook Road"
+      },
+      "outbound": {
+        "destination": "Rainham, Ferry Lane South",
+        "full": "Rainham, Ferry Lane South, Ferry Lane / Coldharbour Lane",
+        "qualifier": "Ferry Lane / Coldharbour Lane"
       },
       "service_types": [
         "Regular"
