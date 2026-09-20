@@ -1,5 +1,5 @@
 {
-  "generated_at_utc": "2026-09-06T08:49:47Z",
+  "generated_at_utc": "2026-09-20T09:28:30Z",
   "route_count": 678,
   "routes": {
     "1": {
@@ -20,8 +20,8 @@
     "100": {
       "inbound": {
         "destination": "St Paul's",
-        "full": "St Paul's",
-        "qualifier": "King Edward Street / St Pauls Station"
+        "full": "St Paul's, St. Bartholomew's Hospital",
+        "qualifier": "St. Bartholomew's Hospital"
       },
       "outbound": {
         "destination": "Shadwell",
@@ -1736,7 +1736,7 @@
       "outbound": {
         "destination": "Bow Church",
         "full": "Bow Church",
-        "qualifier": "Bow Church Station"
+        "qualifier": ""
       },
       "service_types": [
         "Regular"
@@ -2599,14 +2599,14 @@
     },
     "259": {
       "inbound": {
-        "destination": "Edmonton Green",
-        "full": "Edmonton Green",
-        "qualifier": "Edmonton Green Bus Station"
+        "destination": "Glyn Road",
+        "full": "Glyn Road",
+        "qualifier": ""
       },
       "outbound": {
-        "destination": "King's Cross",
-        "full": "King's Cross",
-        "qualifier": "King's Cross Road / Pentonville Road"
+        "destination": "Holloway, Nags Head",
+        "full": "Holloway, Nags Head, Caledonian Road / Camden Road",
+        "qualifier": "Caledonian Road / Camden Road"
       },
       "service_types": [
         "Regular"
@@ -2919,9 +2919,9 @@
         "qualifier": "Waltham Cross Bus Station"
       },
       "outbound": {
-        "destination": "Manor House",
-        "full": "Manor House",
-        "qualifier": "Manor House Station"
+        "destination": "Stamford Hill",
+        "full": "Stamford Hill, Rookwood Road",
+        "qualifier": "Rookwood Road"
       },
       "service_types": [
         "Regular"
@@ -3425,8 +3425,8 @@
     "310": {
       "inbound": {
         "destination": "Stamford Hill",
-        "full": "Stamford Hill",
-        "qualifier": ""
+        "full": "Stamford Hill, Rookwood Road",
+        "qualifier": "Rookwood Road"
       },
       "outbound": {
         "destination": "Golders Green",
@@ -5036,7 +5036,7 @@
       "outbound": {
         "destination": "London Bridge",
         "full": "London Bridge",
-        "qualifier": "London Bridge Station"
+        "qualifier": "London Bridge Bus Station"
       },
       "service_types": [
         "Regular"
