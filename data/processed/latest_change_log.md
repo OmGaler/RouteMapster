@@ -1,40 +1,38 @@
 ### Data update
-- Routes (+5 -5 ~7) | Freq (~69)
-
-### Route geometry changes
-- Added routes: UL40, UL68, UL69, UL89, UL90
-- Removed routes: 592, UL26, UL30, UL7, UL8
-- Updated route geometries: 153, 43, 63, H20, N63, UL63, UL9
+- Freq (~32) | Alloc: 300 SI -> RR
 
 ### Frequency changes
-- 103 am peak increased from 5.5 to 6.5 bph
-- 103 pm peak increased from 5.5 to 6.0 bph
-- 103 offpeak increased from 5.5 to 6.0 bph
-- 112 am peak decreased from 6.5 to 5.0 bph
-- 112 pm peak decreased from 5.5 to 5.0 bph
-- 112 offpeak decreased from 6.0 to 5.0 bph
-- 129 am peak increased from 7.0 to 8.0 bph
-- 129 pm peak increased from 6.5 to 7.5 bph
-- 129 offpeak increased from 6.5 to 7.5 bph
-- 129 weekend decreased from 5.5 to 5.0 bph
-- 133 am peak decreased from 6.5 to 0.0 bph
-- 133 pm peak decreased from 7.0 to 5.0 bph
-- 133 offpeak decreased from 7.0 to 1.0 bph
-- 133 weekend decreased from 4.5 to 1.0 bph
-- 143 weekend increased from 4.0 to 4.5 bph
-- 159 am peak decreased from 6.5 to 0.0 bph
-- 159 pm peak decreased from 6.0 to 5.0 bph
-- 159 offpeak decreased from 6.0 to 1.0 bph
-- 159 weekend decreased from 5.0 to 1.0 bph
-- 16 pm peak decreased from 6.0 to 5.5 bph
-- 16 weekend increased from 5.0 to 5.5 bph
-- 169 am peak increased from 5.5 to 6.0 bph
-- 189 am peak decreased from 6.5 to 5.5 bph
-- 189 pm peak decreased from 6.5 to 5.5 bph
-- 189 offpeak decreased from 6.0 to 5.5 bph
-- 207 am peak increased from 7.5 to 8.0 bph
-- 207 pm peak increased from 7.5 to 8.0 bph
-- 207 offpeak increased from 7.0 to 8.0 bph
-- 207 weekend increased from 5.5 to 6.0 bph
-- 230 weekend increased from 3.5 to 4.0 bph
-- ...and 39 more
+- 133 am peak increased from 0.0 to 6.5 bph
+- 133 pm peak increased from 5.0 to 7.0 bph
+- 133 offpeak increased from 1.0 to 7.0 bph
+- 133 weekend increased from 1.0 to 4.5 bph
+- 159 am peak increased from 0.0 to 6.5 bph
+- 159 pm peak increased from 5.0 to 6.0 bph
+- 159 offpeak increased from 1.0 to 6.0 bph
+- 159 weekend increased from 1.0 to 5.0 bph
+- 211 pm peak decreased from 5.0 to 4.5 bph
+- 211 offpeak decreased from 5.5 to 5.0 bph
+- 220 overnight decreased from 2.5 to 2.0 bph
+- 23 weekend decreased from 5.0 to 4.0 bph
+- 26 am peak increased from 0.0 to 6.0 bph
+- 26 pm peak increased from 5.0 to 6.0 bph
+- 26 offpeak increased from 1.0 to 6.0 bph
+- 26 weekend increased from 1.0 to 5.0 bph
+- 295 am peak increased from 6.5 to 7.0 bph
+- 295 pm peak increased from 6.5 to 7.0 bph
+- 295 offpeak increased from 6.5 to 7.0 bph
+- 377 am peak decreased from 2.0 to 1.5 bph
+- 377 pm peak decreased from 2.0 to 1.5 bph
+- 377 weekend decreased from 2.0 to 1.5 bph
+- 484 am peak decreased from 5.0 to 4.0 bph
+- 484 pm peak decreased from 5.0 to 4.0 bph
+- 484 offpeak decreased from 5.0 to 4.0 bph
+- 49 weekend decreased from 5.5 to 5.0 bph
+- 94 weekend increased from 5.5 to 6.0 bph
+- N220 overnight decreased from 2.5 to 2.0 bph
+- N23 weekend decreased from 5.0 to 4.5 bph
+- N94 overnight increased from 3.0 to 3.5 bph
+- ...and 2 more
+
+### Allocation changes
+- 300 SI -> RR
