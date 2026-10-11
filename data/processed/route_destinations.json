@@ -1,5 +1,5 @@
 {
-  "generated_at_utc": "2026-09-27T10:07:59Z",
+  "generated_at_utc": "2026-10-11T10:57:12Z",
   "route_count": 678,
   "routes": {
     "1": {
@@ -6255,8 +6255,8 @@
     "632": {
       "inbound": {
         "destination": "Grahame Park, Corner Mead",
-        "full": "Grahame Park, Corner Mead, Saracens High School / South Mead",
-        "qualifier": "Saracens High School / South Mead"
+        "full": "Grahame Park, Corner Mead, South Mead",
+        "qualifier": "South Mead"
       },
       "outbound": {
         "destination": "Kilburn Park",
