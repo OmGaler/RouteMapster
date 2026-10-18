@@ -1,3 +1,4 @@
+
 name: Refresh data
 
 on:
@@ -98,6 +99,7 @@ jobs:
 
       - name: Upload test log
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: pytest-log
@@ -197,6 +199,7 @@ jobs:
 
       - name: Upload latest change log
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: latest-change-log
