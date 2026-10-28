@@ -35,7 +35,7 @@ route,route_type,garage_code,garage_name,operator,vehicle,destination_outbound,d
 35,twentyfour,Q,Camberwell,Go-Ahead,DD,Shoreditch,Clapham Junction,,Clapham Junction Stn / the Falcon,Shoreditch,Clapham Junction,,7.0,7.0,7.0,2.5,5.5,13.948,8.667
 36,twentyfour,NX,New Cross,Go-Ahead,DD,New Cross Gate,Queen's Park,New Cross Bus Garage,Queen's Park Station,"New Cross Gate, New Cross Bus Garage",Queen's Park,,8.0,8.0,8.0,3.0,5.0,16.588,10.307
 37,twentyfour,PM,Peckham,Go-Ahead,DD,Peckham,Putney Heath,Peckham Bus Station,Putney Heath / Green Man,Peckham,Putney Heath,,5.5,5.5,5.5,2.5,5.5,15.475,9.616
-38,regular,CT,Clapton,Arriva,DD,Victoria,Clapton Pond,Victoria Bus Station,Lea Bridge Roundabout,Victoria,"Clapton Pond, Lea Bridge Roundabout",,12.0,12.0,12.0,0.0,20.0,13.233,8.223
+38,regular,CT,Clapton,Arriva,DD,Victoria,Clapton Pond,Victoria Bus Station,Lea Bridge Roundabout,Victoria,"Clapton Pond, Lea Bridge Roundabout",,12.0,12.0,12.0,0.0,10.0,13.233,8.223
 39,regular,AF,Putney,Go-Ahead,SD,Clapham Junction,Putney Bridge,Clapham Junction Stn / the Falcon,Putney Bridge Station,Clapham Junction,Putney Bridge,,6.5,6.5,6.5,0.0,5.0,9.954,6.185
 40,regular,Q,Camberwell,Go-Ahead,DD,Clerkenwell Green,Dulwich Library,Clerkenwell Road,Eynella Road / Dulwich Library,"Clerkenwell Green, Clerkenwell Road",Dulwich Library,,7.0,7.0,6.0,0.0,4.0,9.465,5.882
 41,regular,AR,Tottenham,Arriva,DD,Tottenham Hale,Archway,Tottenham Hale Bus Station,Archway Station,Tottenham Hale,Archway,,11.0,10.0,10.0,0.0,7.5,8.066,5.012
@@ -73,7 +73,7 @@ route,route_type,garage_code,garage_name,operator,vehicle,destination_outbound,d
 74,regular,AF,Putney,Go-Ahead,DD,Baker Street Station,"Putney, High Street",,Putney Exchange,Baker Street Station,"Putney, High Street, Putney Exchange",,5.5,5.5,5.5,0.0,5.0,12.037,7.479
 75,regular,TL,Catford,Stagecoach London,DD,Fairfield Halls,Lewisham,,Lewisham Station,Fairfield Halls,Lewisham,,4.5,4.5,4.5,0.0,4.5,14.558,9.046
 76,twentyfour,SF,Stamford Hill,Arriva,DD,"Waterloo, County Hall",Tottenham Hale,Lower Marsh,Tottenham Hale Bus Station,"Waterloo, County Hall, Lower Marsh",Tottenham Hale,,6.5,6.0,6.0,2.0,5.0,15.903,9.881
-77,regular,SW,Stockwell,Go-Ahead,DD,Tooting Station,Waterloo,,Waterloo Station / Upper Taxi Road,Tooting Station,Waterloo,,6.0,6.0,6.0,0.0,11.0,13.484,8.379
+77,regular,SW,Stockwell,Go-Ahead,DD,Tooting Station,Waterloo,,Waterloo Station / Upper Taxi Road,Tooting Station,Waterloo,,6.0,6.0,6.0,0.0,5.0,13.484,8.379
 78,regular,PM,Peckham,Go-Ahead,DD,Nunhead,Shoreditch,St Mary's Road,Curtain Road,"Nunhead, St Mary's Road","Shoreditch, Curtain Road",,6.0,6.0,6.0,0.0,5.0,10.852,6.743
 79,regular,BT,Edgware,First,DD,Edgware,Stonebridge Park,Edgware Station,Stonebridge Park Station,Edgware,Stonebridge Park,,5.0,5.0,5.0,0.0,4.0,13.284,8.254
 80,regular,A; GM,Ellis Road; Sutton,Go-Ahead,DD,"Hackbridge, Reynolds Close","Belmont, High Down & Downview",Reynolds Close,Downview and Highdown Prisons,"Hackbridge, Reynolds Close","Belmont, High Down & Downview, Downview and Highdown Prisons",,6.5,6.5,6.5,0.0,3.5,14.235,8.845
@@ -119,7 +119,7 @@ route,route_type,garage_code,garage_name,operator,vehicle,destination_outbound,d
 123,twentyfour,NP,Northumberland Park,Go-Ahead,DD,"Ilford, Hainault Street",Turnpike Lane Station,Hainault Street,,"Ilford, Hainault Street",Turnpike Lane Station,,6.0,6.5,6.0,3.0,5.5,17.622,10.95
 124,regular,TL,Catford,Stagecoach London,SD,"Eltham, Southend Crescent","Catford, St Dunstan's College",Southend Crescent / Southend Close,Stanstead Road / St Dunstans College,"Eltham, Southend Crescent, Southend Crescent / Southend Close","Catford, St Dunstan's College, Stanstead Road / St Dunstans College",,7.0,6.5,6.0,0.0,5.0,13.582,8.44
 125,regular,BT,Edgware,First,DD,Colindale Station,Winchmore Hill,,Station Road,Colindale Station,"Winchmore Hill, Station Road",,5.5,5.5,5.5,0.0,4.0,16.919,10.513
-126,regular,SM,Sydenham,Go-Ahead,SD,"Eltham, High Street",Ringers Road,Eltham High Street / Foots Cray Road,,"Eltham, High Street",Ringers Road,,6.0,6.5,6.0,0.0,3.0,10.629,6.604
+126,regular,SM,Sydenham,Go-Ahead,SD,"Eltham, High Street",Ringers Road,Eltham High Street / Foots Cray Road,,"Eltham, High Street",Ringers Road,,6.0,6.5,6.0,0.0,6.0,10.629,6.604
 127,regular,C,Croydon,Go-Ahead,DD,Tooting Broadway,Purley,Tooting Broadway Station,Purley Station,Tooting Broadway,Purley,,5.0,5.5,5.5,0.0,4.0,15.564,9.671
 128,twentyfour,NS,Romford,Stagecoach London,DD,Claybury Broadway,Romford Station,,,Claybury Broadway,Romford Station,,5.0,5.0,5.0,2.0,3.0,18.718,11.631
 129,regular,DS,Henley Road,Go-Ahead,DD,Molesworth Street,Magellan Boulevard,,,Molesworth Street,Magellan Boulevard,,8.0,7.5,7.5,0.0,5.0,19.959,12.402
@@ -142,7 +142,7 @@ route,route_type,garage_code,garage_name,operator,vehicle,destination_outbound,d
 146,regular,TB,Bromley,Stagecoach London,SD,Downe,Bromley North,Downe Church,Bromley North Station,Downe,Bromley North,,1.0,1.0,1.0,0.0,1.0,10.067,6.255
 147,regular,RR,River Road,Go-Ahead,DD,Canning Town,Ilford,Canning Town Station,Hainault Street,Canning Town,"Ilford, Hainault Street",,7.5,7.5,7.5,0.0,5.5,10.883,6.763
 148,twentyfour,S,Shepherd's Bush,First,DD,White City,Camberwell Green,White City Bus Station,Denmark Hill / Camberwell Green,White City,Camberwell Green,,4.5,5.0,5.0,3.5,4.5,14.262,8.862
-149,twentyfour,AR,Tottenham,Arriva,DD,London Bridge,Edmonton Green,London Bridge Bus Station,Edmonton Green Bus Station,London Bridge,Edmonton Green,,9.0,8.5,7.5,4.5,6.5,14.182,8.812
+149,twentyfour,AR,Tottenham,Arriva,DD,London Bridge,Edmonton Green,London Bridge Bus Station,Edmonton Green Bus Station,London Bridge,Edmonton Green,,8.5,8.5,7.5,2.5,5.5,14.182,8.812
 150,regular,DX,Barking,Arriva,DD,Chigwell Row,Becontree Heath,Lambourne Road,Becontree Heath Leisure Centre,"Chigwell Row, Lambourne Road",Becontree Heath,,11.0,15.0,8.5,0.0,3.0,15.204,9.448
 151,regular,A,Sutton,Go-Ahead,DD,Worcester Park,Wallington,Worcester Park Station,Shotfield,Worcester Park,"Wallington, Shotfield",,5.0,5.5,5.5,0.0,3.0,15.078,9.369
 152,regular,AL,Merton,Go-Ahead,SD,Walton Avenue,Pollards Hill,,South Lodge Avenue / Yorkshire Road,Walton Avenue,"Pollards Hill, South Lodge Avenue / Yorkshire Road",,5.0,5.0,5.0,0.0,3.0,12.899,8.015
@@ -155,7 +155,7 @@ route,route_type,garage_code,garage_name,operator,vehicle,destination_outbound,d
 159,twentyfour,QB,Battersea,Transport UK,DD,Oxford Circus,Streatham Station,Oxford Circus Station,,Oxford Circus,Streatham Station,,6.5,6.5,6.5,3.0,5.0,11.826,7.348
 160,regular,TL,Catford,Stagecoach London,DD,Sidcup Station,Catford Bridge,,Catford Bridge Station,Sidcup Station,Catford Bridge,,4.0,4.0,4.0,0.0,3.0,17.715,11.007
 161,regular,PD,Plumstead,Stagecoach London,DD,North Greenwich,Chislehurst,North Greenwich Station,Chislehurst War Memorial,North Greenwich,Chislehurst,,5.0,5.5,5.0,0.0,5.0,17.558,10.91
-162,regular,SM,Sydenham,Go-Ahead,SD,Eltham Station,Beckenham Junction,Eltham Bus Station,Beckenham Junction Stn / Rectory Rd,"Eltham Station, Eltham Bus Station",Beckenham Junction,,4.5,4.0,4.0,0.0,3.0,20.155,12.524
+162,regular,SM,Sydenham,Go-Ahead,SD,Eltham Station,Beckenham Junction,Eltham Bus Station,Beckenham Junction Stn / Rectory Rd,"Eltham Station, Eltham Bus Station",Beckenham Junction,,4.5,4.5,4.0,0.0,4.0,20.155,12.524
 163,regular,AL,Merton,Go-Ahead,SD,Wimbledon,Morden,Francis Grove,Morden Station,"Wimbledon, Francis Grove",Morden,163S,6.5,6.0,6.5,0.0,5.0,8.235,5.117
 164,regular,AL,Merton,Go-Ahead,SD,Wimbledon,Sutton Station,Francis Grove,Sutton Station / the Quadrant,"Wimbledon, Francis Grove",Sutton Station,,6.0,6.0,6.0,0.0,4.0,10.749,6.679
 165,regular,RM,Rainham,Stagecoach London,SD,"Rainham, Abbey Wood Lane","Romford, The Brewery",Abbey Wood Lane,The Brewery,"Rainham, Abbey Wood Lane","Romford, The Brewery",,5.0,5.0,5.0,0.0,3.0,17.445,10.84
