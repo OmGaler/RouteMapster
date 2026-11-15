@@ -1,5 +1,5 @@
 {
-  "generated_at_utc": "2026-10-25T09:25:42Z",
+  "generated_at_utc": "2026-11-15T12:17:54Z",
   "route_count": 678,
   "routes": {
     "1": {
@@ -2854,9 +2854,9 @@
     },
     "275": {
       "inbound": {
-        "destination": "Walthamstow, St. James's Street Station",
-        "full": "Walthamstow, St. James's Street Station, St James Street Station",
-        "qualifier": "St James Street Station"
+        "destination": "Walthamstow Central",
+        "full": "Walthamstow Central, Walthamstow Bus Station",
+        "qualifier": "Walthamstow Bus Station"
       },
       "outbound": {
         "destination": "Barkingside",
@@ -5874,9 +5874,9 @@
         "qualifier": ""
       },
       "outbound": {
-        "destination": "Walthamstow Central",
-        "full": "Walthamstow Central",
-        "qualifier": "Walthamstow Central Station"
+        "destination": "Walthamstow, South Grove",
+        "full": "Walthamstow, South Grove",
+        "qualifier": "South Grove"
       },
       "service_types": [
         "Regular"
@@ -9929,9 +9929,9 @@
         "qualifier": ""
       },
       "outbound": {
-        "destination": "Walthamstow Central",
-        "full": "Walthamstow Central",
-        "qualifier": "Walthamstow Central Station"
+        "destination": "Walthamstow",
+        "full": "Walthamstow",
+        "qualifier": "Walthamstow Bus Station"
       },
       "service_types": [
         "Regular"
