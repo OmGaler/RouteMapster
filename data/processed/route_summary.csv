@@ -55,7 +55,7 @@ route,route_type,garage_code,garage_name,operator,vehicle,destination_outbound,d
 55,regular,T,Leyton,Stagecoach London,DD,Oxford Circus,Walthamstow Central,Great Titchfield St / Oxford Circus Stn,Walthamstow Bus Station,Oxford Circus,"Walthamstow Central, Walthamstow Bus Station",,8.0,7.5,7.5,0.0,6.0,15.958,9.916
 56,regular,T,Leyton,Stagecoach London,DD,"Smithfield, St Bartholomew's Hospital",Whipps Cross,St. Bartholomew's Hospital,Whipps Cross Bus Stand,"Smithfield, St Bartholomew's Hospital",Whipps Cross,,5.5,6.0,6.5,0.0,6.0,12.985,8.068
 57,twentyfour,AL,Merton,Go-Ahead,DD,Clapham Park,Kingston,Atkins Road / New Park Road,Fairfield Bus Station,"Clapham Park, Atkins Road / New Park Road","Kingston, Fairfield Bus Station",,5.5,5.0,5.0,2.5,5.0,18.341,11.397
-58,regular,HO,Lea Interchange,Stagecoach London,DD,Walthamstow Central,"East Ham, Central Park",Walthamstow Central Station,,Walthamstow Central,"East Ham, Central Park",,5.0,5.0,5.0,0.0,4.0,12.32,7.655
+58,regular,HO,Lea Interchange,Stagecoach London,DD,"Walthamstow, South Grove","East Ham, Central Park",South Grove,,"Walthamstow, South Grove","East Ham, Central Park",,5.0,5.0,5.0,0.0,4.0,12.32,7.655
 59,regular,BN,Brixton Hill,Arriva,DD,"Smithfield, St Bartholomew's Hospital",Clapham Park,St Bartholomew's Hospital,Atkins Road / New Park Road,"Smithfield, St Bartholomew's Hospital","Clapham Park, Atkins Road / New Park Road",,7.5,8.0,8.0,0.0,5.0,10.899,6.772
 60,regular,TC,Croydon,Arriva,DD,Streatham Station,Old Coulsdon,,Old Coulsdon / Tudor Rose,Streatham Station,Old Coulsdon,60S,6.5,6.5,6.0,0.0,5.0,19.159,11.905
 61,regular,TB,Bromley,Stagecoach London,DD,Bromley North,Chislehurst,Bromley North Station,Chislehurst / Gordon Arms,Bromley North,Chislehurst,,4.0,4.0,4.0,0.0,3.0,16.775,10.423
@@ -266,7 +266,7 @@ route,route_type,garage_code,garage_name,operator,vehicle,destination_outbound,d
 272,regular,V,Stamford Brook,First,SD,Shepherd's Bush,"Chiswick, Grove Park",Shepherd's Bush Station,Cavendish Road,Shepherd's Bush,"Chiswick, Grove Park, Cavendish Road",,4.0,4.0,4.0,0.0,4.0,9.518,5.914
 273,regular,TL,Catford,Stagecoach London,SD,Petts Wood,Conington Road,Station Square / Petts Wood Station,,Petts Wood,Conington Road,,3.0,3.0,3.0,0.0,2.0,18.493,11.491
 274,regular,HT; KC,Holloway; King's Cross,Metroline,DD,Lancaster Gate,"Islington, Angel",Lancaster Gate Station,Angel Islington / City Road,Lancaster Gate,"Islington, Angel, Angel Islington / City Road",,4.5,5.0,4.5,0.0,5.5,11.119,6.909
-275,regular,T,Leyton,Stagecoach London,DD,Barkingside,"Walthamstow, St. James's Street Station",Barkingside Tesco,St James Street Station,Barkingside,"Walthamstow, St. James's Street Station, St James Street Station",,4.5,4.0,4.5,0.0,2.5,18.591,11.552
+275,regular,T,Leyton,Stagecoach London,DD,Barkingside,Walthamstow Central,Barkingside Tesco,Walthamstow Bus Station,Barkingside,"Walthamstow Central, Walthamstow Bus Station",,4.5,4.0,4.5,0.0,2.5,18.591,11.552
 276,regular,HO,Lea Interchange,Stagecoach London,SD,Stoke Newington,Newham Hospital,Stoke Newington Common,Gateway Surgical Centre,Stoke Newington,"Newham Hospital, Gateway Surgical Centre",,5.0,5.0,5.0,0.0,4.0,17.504,10.877
 277,regular,HK,Ash Grove,Stagecoach London,DD,Crossharbour,Dalston Junction,Isle of Dogs Asda,Forest Road,"Crossharbour, Isle of Dogs Asda","Dalston Junction, Forest Road",,5.0,5.5,5.5,0.0,5.0,12.293,7.638
 278,regular,DH,Hayes,Transport UK,DD,Ruislip,Heathrow Central,Ruislip Station,Heathrow Central Bus Station,Ruislip,Heathrow Central,,4.0,4.0,4.0,0.0,3.0,16.801,10.44
@@ -594,7 +594,7 @@ W6,regular,WN,Wood Green,Arriva,SD,Edmonton Green,Southgate,Edmonton Green Bus S
 W7,regular,HT,Holloway,Metroline,DD,Finsbury Park Station,Muswell Hill,,Muswell Hill Broadway,Finsbury Park Station,Muswell Hill,,12.0,12.0,12.0,0.0,8.0,3.958,2.459
 W8,regular,PB,Potters Bar,Metroline,DD,Picketts Lock Centre,Chase Farm Hospital,,Chase Farm Hospital / Main Entrance,Picketts Lock Centre,Chase Farm Hospital,,8.0,7.5,7.5,0.0,5.0,10.156,6.311
 W9,regular,PB,Potters Bar,Metroline,SD,Southgate,Chase Farm Hospital,Southgate Station,Chase Farm Hospital / Main Entrance,Southgate,Chase Farm Hospital,,4.0,4.0,4.0,0.0,2.0,12.538,7.791
-W11,regular,AW,Walthamstow Avenue,Stagecoach London,SD,Walthamstow Central,Chingford Hall Estate,Walthamstow Central Station,,Walthamstow Central,Chingford Hall Estate,,5.0,5.0,5.0,0.0,4.0,7.897,4.907
+W11,regular,AW,Walthamstow Avenue,Stagecoach London,SD,Walthamstow,Chingford Hall Estate,Walthamstow Bus Station,,Walthamstow,Chingford Hall Estate,,5.0,5.0,5.0,0.0,4.0,7.897,4.907
 W12,regular,AW,Walthamstow Avenue,Stagecoach London,SD,Woodford Bridge,"Walthamstow, Coppermill Lane",Cross Road,Rensburg Road,"Woodford Bridge, Cross Road","Walthamstow, Coppermill Lane, Rensburg Road",,4.5,4.0,4.0,0.0,3.0,18.986,11.798
 W13,regular,HO,Lea Interchange,Stagecoach London,SD,Woodford Wells,"Leyton Mills, Retail Park",St Thomas of Canterbury Church,Leyton Mills,"Woodford Wells, St Thomas of Canterbury Church","Leyton Mills, Retail Park",W13S,4.0,4.0,4.0,0.0,3.0,10.833,6.731
 W14,regular,HO,Lea Interchange,Stagecoach London,SD,Loughton,Whipps Cross,Loughton Station,Whipps Cross Bus Stand,Loughton,Whipps Cross,,1.0,1.0,1.0,0.0,1.0,14.418,8.959
