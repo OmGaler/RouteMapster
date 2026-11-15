@@ -1,5 +1,5 @@
 {
-  "generated_at_utc": "2026-11-15T12:17:54Z",
+  "generated_at_utc": "2026-11-15T14:44:59Z",
   "route_count": 678,
   "routes": {
     "1": {
@@ -7074,9 +7074,9 @@
         "qualifier": "Brunel Road"
       },
       "outbound": {
-        "destination": "Oxford Circus",
-        "full": "Oxford Circus",
-        "qualifier": "Oxford Circus Station / John Lewis"
+        "destination": "Marble Arch",
+        "full": "Marble Arch",
+        "qualifier": "Marble Arch"
       },
       "service_types": [
         "Regular"
@@ -7449,9 +7449,9 @@
         "qualifier": ""
       },
       "outbound": {
-        "destination": "Piccadilly Circus",
-        "full": "Piccadilly Circus, Charles I I Street",
-        "qualifier": "Charles I I Street"
+        "destination": "Marble Arch",
+        "full": "Marble Arch",
+        "qualifier": "Marble Arch"
       },
       "service_types": [
         "Regular"
@@ -8399,9 +8399,9 @@
         "qualifier": "Edgware Station"
       },
       "outbound": {
-        "destination": "Trafalgar Square",
-        "full": "Trafalgar Square",
-        "qualifier": "Northumberland Avenue / Trafalgar Square"
+        "destination": "Marble Arch",
+        "full": "Marble Arch",
+        "qualifier": "Marble Arch"
       },
       "service_types": [
         "Regular"
@@ -9119,9 +9119,9 @@
         "qualifier": "Northolt Station"
       },
       "outbound": {
-        "destination": "Oxford Circus",
-        "full": "Oxford Circus",
-        "qualifier": "Oxford Circus Station / John Lewis"
+        "destination": "Marble Arch",
+        "full": "Marble Arch",
+        "qualifier": "Marble Arch"
       },
       "service_types": [
         "Regular"
