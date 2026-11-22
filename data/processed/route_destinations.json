@@ -1,6 +1,6 @@
 {
-  "generated_at_utc": "2026-11-15T14:44:59Z",
-  "route_count": 678,
+  "generated_at_utc": "2026-11-22T12:43:21Z",
+  "route_count": 679,
   "routes": {
     "1": {
       "inbound": {
@@ -12,6 +12,21 @@
         "destination": "Canada Water",
         "full": "Canada Water",
         "qualifier": "Canada Water Bus Station"
+      },
+      "service_types": [
+        "Regular"
+      ]
+    },
+    "10": {
+      "inbound": {
+        "destination": "Newington Green",
+        "full": "Newington Green",
+        "qualifier": ""
+      },
+      "outbound": {
+        "destination": "Parkgate Road",
+        "full": "Parkgate Road",
+        "qualifier": ""
       },
       "service_types": [
         "Regular"
@@ -2674,8 +2689,8 @@
     },
     "263": {
       "inbound": {
-        "destination": "Highbury Barn",
-        "full": "Highbury Barn",
+        "destination": "Holloway, Nags Head",
+        "full": "Holloway, Nags Head",
         "qualifier": ""
       },
       "outbound": {
@@ -2855,8 +2870,8 @@
     "275": {
       "inbound": {
         "destination": "Walthamstow Central",
-        "full": "Walthamstow Central, Walthamstow Bus Station",
-        "qualifier": "Walthamstow Bus Station"
+        "full": "Walthamstow Central, St James Street Station",
+        "qualifier": "St James Street Station"
       },
       "outbound": {
         "destination": "Barkingside",
@@ -4389,9 +4404,9 @@
         "qualifier": "Lea Bridge Roundabout"
       },
       "outbound": {
-        "destination": "Victoria",
-        "full": "Victoria",
-        "qualifier": "Victoria Bus Station"
+        "destination": "Holborn",
+        "full": "Holborn",
+        "qualifier": "High Holborn"
       },
       "service_types": [
         "Regular"
@@ -8926,7 +8941,7 @@
       "outbound": {
         "destination": "Victoria",
         "full": "Victoria",
-        "qualifier": "Victoria Bus Station"
+        "qualifier": "Victoria Station"
       },
       "service_types": [
         "Regular"
@@ -9630,8 +9645,8 @@
       },
       "outbound": {
         "destination": "Walthamstow Central",
-        "full": "Walthamstow Central, Walthamstow Bus Station",
-        "qualifier": "Walthamstow Bus Station"
+        "full": "Walthamstow Central",
+        "qualifier": "Walthamstow Central Station"
       },
       "service_types": [
         "Regular"
@@ -9929,9 +9944,9 @@
         "qualifier": ""
       },
       "outbound": {
-        "destination": "Walthamstow",
-        "full": "Walthamstow",
-        "qualifier": "Walthamstow Bus Station"
+        "destination": "Walthamstow Central",
+        "full": "Walthamstow Central",
+        "qualifier": "Walthamstow Central Station"
       },
       "service_types": [
         "Regular"
